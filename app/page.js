@@ -10,6 +10,8 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceLine,
+  Cell,
 } from 'recharts';
 
 export default function StockValuationCalculator() {
@@ -470,6 +472,141 @@ export default function StockValuationCalculator() {
                     {data.favorites.debtToEbitda?.toFixed(2) || 'N/A'}
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Valuation Chart Section */}
+          {data.dcf && data.dcf.compositeValue && (
+            <div className="mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-sm font-semibold text-gray-700 tracking-wider">VALUATION MODELS</h3>
+                <div className="text-right">
+                  <div className="text-xs text-gray-500">Fair Value Estimate</div>
+                  <div className={`text-2xl font-bold ${data.dcf.upside > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    ${data.dcf.compositeValue?.toFixed(2)}
+                  </div>
+                  <div className={`text-xs ${data.dcf.upside > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {data.dcf.upside > 0 ? '▲' : '▼'} {Math.abs(data.dcf.upside)?.toFixed(1)}% vs Current Price
+                  </div>
+                </div>
+              </div>
+
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart
+                  layout="vertical"
+                  data={[
+                    { name: 'DCF Operating Cash Flow', value: data.dcf.dcfOperatingCashFlow, type: 'dcf' },
+                    { name: 'DCF Free Cash Flow', value: data.dcf.dcfFreeCashFlow, type: 'dcf' },
+                    { name: 'DCF Net Income', value: data.dcf.dcfNetIncome, type: 'dcf' },
+                    { name: 'DCF Terminal (15x FCF)', value: data.dcf.dcfTerminal, type: 'dcf' },
+                    { name: 'Fair Value (P/S)', value: data.dcf.fairValuePS, type: 'relative' },
+                    { name: 'Fair Value (P/E)', value: data.dcf.fairValuePE, type: 'relative' },
+                    { name: 'Fair Value (P/B)', value: data.dcf.fairValuePB, type: 'relative' },
+                    { name: 'Earnings Power Value', value: data.dcf.earningsPowerValue, type: 'relative' },
+                    { name: 'Graham Number', value: data.dcf.grahamNumber, type: 'conservative' },
+                  ].filter(d => d.value && d.value > 0 && isFinite(d.value))}
+                  margin={{ top: 20, right: 60, left: 180, bottom: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    type="number"
+                    domain={[0, 'auto']}
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) => `$${v.toFixed(0)}`}
+                  />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    tick={{ fontSize: 11 }}
+                    width={170}
+                  />
+                  <Tooltip
+                    formatter={(value) => [`$${value?.toFixed(2)}`, 'Fair Value']}
+                    contentStyle={{ fontSize: 12, borderRadius: '8px' }}
+                  />
+                  <ReferenceLine
+                    x={data.dcf.currentPrice}
+                    stroke="#dc2626"
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    label={{
+                      value: `Current: $${data.dcf.currentPrice?.toFixed(2)}`,
+                      position: 'top',
+                      fontSize: 11,
+                      fill: '#dc2626'
+                    }}
+                  />
+                  <ReferenceLine
+                    x={data.dcf.compositeValue}
+                    stroke="#16a34a"
+                    strokeWidth={2}
+                    label={{
+                      value: `Fair Value: $${data.dcf.compositeValue?.toFixed(2)}`,
+                      position: 'top',
+                      fontSize: 11,
+                      fill: '#16a34a'
+                    }}
+                  />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                    {[
+                      { name: 'DCF Operating Cash Flow', type: 'dcf' },
+                      { name: 'DCF Free Cash Flow', type: 'dcf' },
+                      { name: 'DCF Net Income', type: 'dcf' },
+                      { name: 'DCF Terminal (15x FCF)', type: 'dcf' },
+                      { name: 'Fair Value (P/S)', type: 'relative' },
+                      { name: 'Fair Value (P/E)', type: 'relative' },
+                      { name: 'Fair Value (P/B)', type: 'relative' },
+                      { name: 'Earnings Power Value', type: 'relative' },
+                      { name: 'Graham Number', type: 'conservative' },
+                    ].filter(d => {
+                      const val = data.dcf[d.name === 'DCF Operating Cash Flow' ? 'dcfOperatingCashFlow' :
+                        d.name === 'DCF Free Cash Flow' ? 'dcfFreeCashFlow' :
+                        d.name === 'DCF Net Income' ? 'dcfNetIncome' :
+                        d.name === 'DCF Terminal (15x FCF)' ? 'dcfTerminal' :
+                        d.name === 'Fair Value (P/S)' ? 'fairValuePS' :
+                        d.name === 'Fair Value (P/E)' ? 'fairValuePE' :
+                        d.name === 'Fair Value (P/B)' ? 'fairValuePB' :
+                        d.name === 'Earnings Power Value' ? 'earningsPowerValue' :
+                        'grahamNumber'];
+                      return val && val > 0 && isFinite(val);
+                    }).map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={entry.type === 'dcf' ? '#eab308' : entry.type === 'relative' ? '#f97316' : '#6b7280'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+
+              <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-500">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-3 bg-yellow-500 rounded"></div>
+                  <span>DCF Models</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-3 bg-orange-500 rounded"></div>
+                  <span>Relative Valuation</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-3 bg-gray-500 rounded"></div>
+                  <span>Conservative</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-1 bg-red-600"></div>
+                  <span>Current Price</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-1 bg-green-600"></div>
+                  <span>Fair Value</span>
+                </div>
+              </div>
+
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg text-xs text-gray-600">
+                <strong>Assumptions:</strong> Discount Rate: {data.dcf.discountRate?.toFixed(1)}% (CAPM-based) •
+                Terminal Growth: {data.dcf.terminalGrowth?.toFixed(1)}% •
+                Projection Period: 10 years
               </div>
             </div>
           )}

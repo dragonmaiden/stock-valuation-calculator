@@ -294,8 +294,127 @@ export async function GET(request) {
       }
     }
 
-    // Simple DCF placeholder
-    const dcf = null;
+    // Calculate comprehensive valuations
+    const sharesOutstanding = favorites.sharesOutstanding || 1;
+    const currentPrice = quote.price || 1;
+
+    // Get historical data for calculations
+    const recentIncome = income.slice(-5);
+    const recentCashflow = cashflow.slice(-5);
+    const recentBalance = balance.slice(-5);
+
+    // Calculate average growth rates
+    const calcGrowthRate = (data, key) => {
+      if (data.length < 2) return 0.05; // Default 5%
+      const values = data.map(d => d[key]).filter(v => v > 0);
+      if (values.length < 2) return 0.05;
+      const growthRates = [];
+      for (let i = 1; i < values.length; i++) {
+        if (values[i-1] > 0) {
+          growthRates.push((values[i] - values[i-1]) / values[i-1]);
+        }
+      }
+      const avg = growthRates.length > 0 ? growthRates.reduce((a,b) => a+b, 0) / growthRates.length : 0.05;
+      return Math.min(Math.max(avg, -0.1), 0.25); // Cap between -10% and 25%
+    };
+
+    const revenueGrowth = calcGrowthRate(recentIncome, 'revenue');
+    const netIncomeGrowth = calcGrowthRate(recentIncome, 'netIncome');
+    const fcfGrowth = calcGrowthRate(recentCashflow, 'freeCashFlow');
+
+    // Latest values
+    const latestRevenue = recentIncome[recentIncome.length - 1]?.revenue || 0;
+    const latestNetIncome = recentIncome[recentIncome.length - 1]?.netIncome || 0;
+    const latestFCF = recentCashflow[recentCashflow.length - 1]?.freeCashFlow || 0;
+    const latestOCF = recentCashflow[recentCashflow.length - 1]?.operatingCashFlow || 0;
+    const latestEquity = recentBalance[recentBalance.length - 1]?.totalEquity || 0;
+
+    // Discount rate (WACC approximation)
+    const riskFreeRate = 0.04; // 4%
+    const marketRiskPremium = 0.05; // 5%
+    const beta = favorites.beta || 1;
+    const discountRate = riskFreeRate + beta * marketRiskPremium;
+    const terminalGrowth = 0.025; // 2.5% perpetual growth
+
+    // DCF calculation helper
+    const calcDCF = (initialValue, growthRate, years, terminalMultiple = null) => {
+      if (initialValue <= 0) return null;
+      let totalPV = 0;
+      let projectedValue = initialValue;
+
+      for (let year = 1; year <= years; year++) {
+        projectedValue *= (1 + Math.min(growthRate, 0.15)); // Cap growth at 15%
+        totalPV += projectedValue / Math.pow(1 + discountRate, year);
+      }
+
+      // Terminal value
+      if (terminalMultiple) {
+        const terminalValue = projectedValue * terminalMultiple;
+        totalPV += terminalValue / Math.pow(1 + discountRate, years);
+      } else {
+        const terminalValue = projectedValue * (1 + terminalGrowth) / (discountRate - terminalGrowth);
+        totalPV += terminalValue / Math.pow(1 + discountRate, years);
+      }
+
+      return totalPV / sharesOutstanding;
+    };
+
+    // Calculate average multiples from historical data
+    const avgPS = recentIncome.length > 0 && latestRevenue > 0
+      ? (favorites.psRatio || (quote.marketCap / latestRevenue))
+      : null;
+    const avgPE = favorites.peRatio || null;
+    const avgPB = latestEquity > 0 ? quote.marketCap / latestEquity : null;
+
+    // Calculate valuations
+    const valuations = {
+      // DCF Models (10-year projections)
+      dcfOperatingCashFlow: calcDCF(latestOCF, fcfGrowth * 0.8, 10),
+      dcfFreeCashFlow: calcDCF(latestFCF, fcfGrowth, 10),
+      dcfNetIncome: calcDCF(latestNetIncome, netIncomeGrowth, 10),
+      dcfTerminal: latestFCF > 0 ? (latestFCF * 15) / sharesOutstanding : null, // Simple 15x FCF multiple
+
+      // Relative Valuations
+      fairValuePS: avgPS && latestRevenue > 0 ? (latestRevenue * avgPS * 0.9) / sharesOutstanding : null, // 10% margin of safety
+      fairValuePE: avgPE && latestNetIncome > 0 ? (latestNetIncome * avgPE * 0.9) / sharesOutstanding : null,
+      fairValuePB: avgPB && latestEquity > 0 ? (latestEquity * avgPB * 0.8) / sharesOutstanding : null, // 20% margin of safety
+
+      // Growth-adjusted valuations
+      pegValue: avgPE && netIncomeGrowth > 0
+        ? (latestNetIncome * (avgPE / (netIncomeGrowth * 100 + 1))) / sharesOutstanding
+        : null,
+      psgValue: avgPS && revenueGrowth > 0
+        ? (latestRevenue * (avgPS / (revenueGrowth * 100 + 1))) / sharesOutstanding
+        : null,
+
+      // Graham Number (conservative)
+      grahamNumber: latestNetIncome > 0 && latestEquity > 0
+        ? Math.sqrt(22.5 * (latestNetIncome / sharesOutstanding) * (latestEquity / sharesOutstanding))
+        : null,
+
+      // Earnings Power Value
+      earningsPowerValue: latestNetIncome > 0 && discountRate > 0
+        ? (latestNetIncome / discountRate) / sharesOutstanding
+        : null,
+    };
+
+    // Calculate composite fair value (weighted average of valid methods)
+    const validValuations = Object.entries(valuations)
+      .filter(([_, v]) => v !== null && v > 0 && isFinite(v))
+      .map(([k, v]) => ({ method: k, value: v }));
+
+    const compositeValue = validValuations.length > 0
+      ? validValuations.reduce((sum, v) => sum + v.value, 0) / validValuations.length
+      : null;
+
+    const dcf = {
+      ...valuations,
+      compositeValue,
+      currentPrice,
+      upside: compositeValue ? ((compositeValue - currentPrice) / currentPrice) * 100 : null,
+      discountRate: discountRate * 100,
+      terminalGrowth: terminalGrowth * 100,
+    };
 
     return NextResponse.json({
       profile,
