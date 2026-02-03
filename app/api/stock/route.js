@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import YahooFinance from 'yahoo-finance2';
 
+const yahooFinance = new YahooFinance();
 const SEC_BASE = 'https://data.sec.gov';
 const USER_AGENT = 'StockValuationCalculator/1.0 (contact@example.com)';
 
@@ -77,14 +79,15 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Ticker not found' }, { status: 404 });
     }
 
-    // Fetch company facts (financial data)
-    const [factsRes, submissionsRes] = await Promise.all([
+    // Fetch company facts (financial data) from SEC and price from Yahoo
+    const [factsRes, submissionsRes, yahooQuote] = await Promise.all([
       fetch(`${SEC_BASE}/api/xbrl/companyfacts/CIK${cik}.json`, {
         headers: { 'User-Agent': USER_AGENT },
       }),
       fetch(`${SEC_BASE}/submissions/CIK${cik}.json`, {
         headers: { 'User-Agent': USER_AGENT },
       }),
+      yahooFinance.quote(ticker.toUpperCase()).catch(() => null),
     ]);
 
     if (!factsRes.ok) {
@@ -242,16 +245,13 @@ export async function GET(request) {
       };
     });
 
-    // Build quote (basic info - SEC doesn't have real-time prices)
-    const latestRevenue = income[income.length - 1]?.revenue || 0;
-    const latestNetIncome = income[income.length - 1]?.netIncome || 0;
-
+    // Build quote from Yahoo Finance (live prices)
     const quote = {
-      price: 0, // SEC doesn't provide real-time prices
-      change: 0,
-      changesPercentage: 0,
-      marketCap: 0,
-      pe: null,
+      price: yahooQuote?.regularMarketPrice || 0,
+      change: yahooQuote?.regularMarketChange || 0,
+      changesPercentage: yahooQuote?.regularMarketChangePercent || 0,
+      marketCap: yahooQuote?.marketCap || 0,
+      pe: yahooQuote?.trailingPE || null,
     };
 
     // Simple DCF placeholder
