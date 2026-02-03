@@ -1,6 +1,66 @@
 import { NextResponse } from 'next/server';
 
-const API_BASE = 'https://financialmodelingprep.com/stable';
+const SEC_BASE = 'https://data.sec.gov';
+const USER_AGENT = 'StockValuationCalculator/1.0 (contact@example.com)';
+
+// Map common tickers to CIK numbers
+async function getCIK(ticker) {
+  const response = await fetch(`https://www.sec.gov/files/company_tickers.json`, {
+    headers: { 'User-Agent': USER_AGENT },
+  });
+  const data = await response.json();
+
+  const upperTicker = ticker.toUpperCase();
+  for (const entry of Object.values(data)) {
+    if (entry.ticker === upperTicker) {
+      return String(entry.cik_str).padStart(10, '0');
+    }
+  }
+  return null;
+}
+
+// Get the best available value for a metric from multiple possible field names
+function getMetricValues(facts, fieldNames, period = 'FY', limit = 10) {
+  for (const fieldName of fieldNames) {
+    const data = facts?.[fieldName]?.units?.USD || [];
+
+    // Filter by period type and only get quarterly-specific data (not cumulative YTD)
+    let filtered;
+    if (period === 'Q') {
+      // For quarterly, only get entries where the duration is roughly 3 months (quarterly, not cumulative)
+      filtered = data.filter(d => {
+        if (!['Q1','Q2','Q3','Q4'].includes(d.fp)) return false;
+        // Check if it's a single quarter (not cumulative) by looking at start/end dates
+        if (d.start && d.end) {
+          const startDate = new Date(d.start);
+          const endDate = new Date(d.end);
+          const months = (endDate - startDate) / (1000 * 60 * 60 * 24 * 30);
+          return months < 5; // Single quarter should be ~3 months
+        }
+        return true;
+      });
+    } else {
+      filtered = data.filter(d => d.fp === period);
+    }
+
+    // Deduplicate by fiscal year + period, keeping the most recent filing
+    const seen = new Map();
+    for (const entry of filtered) {
+      const key = `${entry.fy}-${entry.fp}`;
+      const existing = seen.get(key);
+      if (!existing || new Date(entry.filed) > new Date(existing.filed)) {
+        seen.set(key, entry);
+      }
+    }
+
+    const result = Array.from(seen.values())
+      .sort((a, b) => b.fy - a.fy || b.fp?.localeCompare(a.fp))
+      .slice(0, limit);
+
+    if (result.length > 0) return result;
+  }
+  return [];
+}
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -10,55 +70,209 @@ export async function GET(request) {
     return NextResponse.json({ error: 'Ticker symbol is required' }, { status: 400 });
   }
 
-  const apiKey = process.env.FMP_API_KEY;
-
-  if (!apiKey) {
-    return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
-  }
-
   try {
-    const endpoints = [
-      `${API_BASE}/profile?symbol=${ticker}&apikey=${apiKey}`,
-      `${API_BASE}/income-statement?symbol=${ticker}&limit=5&apikey=${apiKey}`,
-      `${API_BASE}/balance-sheet-statement?symbol=${ticker}&limit=5&apikey=${apiKey}`,
-      `${API_BASE}/cash-flow-statement?symbol=${ticker}&limit=5&apikey=${apiKey}`,
-      `${API_BASE}/ratios?symbol=${ticker}&limit=5&apikey=${apiKey}`,
-      `${API_BASE}/key-metrics?symbol=${ticker}&limit=5&apikey=${apiKey}`,
-      `${API_BASE}/quote?symbol=${ticker}&apikey=${apiKey}`,
-      `${API_BASE}/discounted-cash-flow?symbol=${ticker}&apikey=${apiKey}`,
-      `${API_BASE}/income-statement?symbol=${ticker}&period=quarter&limit=5&apikey=${apiKey}`,
-      `${API_BASE}/balance-sheet-statement?symbol=${ticker}&period=quarter&limit=5&apikey=${apiKey}`,
-      `${API_BASE}/cash-flow-statement?symbol=${ticker}&period=quarter&limit=5&apikey=${apiKey}`,
-    ];
-
-    const responses = await Promise.all(
-      endpoints.map(url => fetch(url, { next: { revalidate: 300 } }))
-    );
-
-    const [profile, income, balance, cashflow, ratios, metrics, quote, dcf, incomeQ, balanceQ, cashflowQ] = await Promise.all(
-      responses.map(res => res.json())
-    );
-
-    if (!profile || profile.length === 0 || profile['Error Message']) {
-      return NextResponse.json({ error: 'Invalid ticker or no data available' }, { status: 404 });
+    // Get CIK from ticker
+    const cik = await getCIK(ticker);
+    if (!cik) {
+      return NextResponse.json({ error: 'Ticker not found' }, { status: 404 });
     }
 
+    // Fetch company facts (financial data)
+    const [factsRes, submissionsRes] = await Promise.all([
+      fetch(`${SEC_BASE}/api/xbrl/companyfacts/CIK${cik}.json`, {
+        headers: { 'User-Agent': USER_AGENT },
+      }),
+      fetch(`${SEC_BASE}/submissions/CIK${cik}.json`, {
+        headers: { 'User-Agent': USER_AGENT },
+      }),
+    ]);
+
+    if (!factsRes.ok) {
+      return NextResponse.json({ error: 'Failed to fetch financial data' }, { status: 500 });
+    }
+
+    const facts = await factsRes.json();
+    const submissions = await submissionsRes.json();
+    const usGaap = facts?.facts?.['us-gaap'] || {};
+
+    // Build profile
+    const profile = {
+      symbol: ticker.toUpperCase(),
+      companyName: facts.entityName || submissions.name || ticker,
+      exchangeShortName: submissions.exchanges?.[0] || '',
+      sector: submissions.sicDescription || '',
+      industry: submissions.sicDescription || '',
+      description: '',
+      ceo: '',
+      fullTimeEmployees: 0,
+      website: submissions.website || '',
+    };
+
+    // Field mappings for different metrics
+    const revenueFields = ['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues', 'SalesRevenueNet', 'SalesRevenueGoodsNet'];
+    const netIncomeFields = ['NetIncomeLoss', 'ProfitLoss', 'NetIncomeLossAvailableToCommonStockholdersBasic'];
+    const grossProfitFields = ['GrossProfit'];
+    const operatingIncomeFields = ['OperatingIncomeLoss'];
+    const totalAssetsFields = ['Assets'];
+    const totalLiabilitiesFields = ['Liabilities', 'LiabilitiesAndStockholdersEquity'];
+    const totalEquityFields = ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'];
+    const cashFields = ['CashAndCashEquivalentsAtCarryingValue', 'Cash'];
+    const debtFields = ['LongTermDebt', 'LongTermDebtNoncurrent'];
+    const operatingCashFlowFields = ['NetCashProvidedByUsedInOperatingActivities'];
+    const capexFields = ['PaymentsToAcquirePropertyPlantAndEquipment'];
+
+    // Get annual data (10 years)
+    const revenueAnnual = getMetricValues(usGaap, revenueFields, 'FY', 10);
+    const netIncomeAnnual = getMetricValues(usGaap, netIncomeFields, 'FY', 10);
+    const grossProfitAnnual = getMetricValues(usGaap, grossProfitFields, 'FY', 10);
+    const operatingIncomeAnnual = getMetricValues(usGaap, operatingIncomeFields, 'FY', 10);
+    const assetsAnnual = getMetricValues(usGaap, totalAssetsFields, 'FY', 10);
+    const equityAnnual = getMetricValues(usGaap, totalEquityFields, 'FY', 10);
+    const cashAnnual = getMetricValues(usGaap, cashFields, 'FY', 10);
+    const debtAnnual = getMetricValues(usGaap, debtFields, 'FY', 10);
+    const opCashFlowAnnual = getMetricValues(usGaap, operatingCashFlowFields, 'FY', 10);
+    const capexAnnual = getMetricValues(usGaap, capexFields, 'FY', 10);
+
+    // Get quarterly data (20 quarters = 5 years)
+    const revenueQuarterly = getMetricValues(usGaap, revenueFields, 'Q', 20);
+    const netIncomeQuarterly = getMetricValues(usGaap, netIncomeFields, 'Q', 20);
+    const grossProfitQuarterly = getMetricValues(usGaap, grossProfitFields, 'Q', 20);
+    const operatingIncomeQuarterly = getMetricValues(usGaap, operatingIncomeFields, 'Q', 20);
+    const assetsQuarterly = getMetricValues(usGaap, totalAssetsFields, 'Q', 20);
+    const equityQuarterly = getMetricValues(usGaap, totalEquityFields, 'Q', 20);
+    const cashQuarterly = getMetricValues(usGaap, cashFields, 'Q', 20);
+    const debtQuarterly = getMetricValues(usGaap, debtFields, 'Q', 20);
+    const opCashFlowQuarterly = getMetricValues(usGaap, operatingCashFlowFields, 'Q', 20);
+    const capexQuarterly = getMetricValues(usGaap, capexFields, 'Q', 20);
+
+    // Build income statement data (annual)
+    const income = revenueAnnual.map((rev, i) => ({
+      date: rev.end,
+      calendarYear: String(rev.fy),
+      revenue: rev.val || 0,
+      grossProfit: grossProfitAnnual[i]?.val || 0,
+      operatingIncome: operatingIncomeAnnual[i]?.val || 0,
+      netIncome: netIncomeAnnual.find(n => n.fy === rev.fy)?.val || 0,
+    })).reverse();
+
+    // Build income statement data (quarterly)
+    const incomeQ = revenueQuarterly.map((rev) => ({
+      date: rev.end,
+      fiscalYear: String(rev.fy),
+      period: rev.fp,
+      revenue: rev.val || 0,
+      grossProfit: grossProfitQuarterly.find(g => g.end === rev.end)?.val || 0,
+      operatingIncome: operatingIncomeQuarterly.find(o => o.end === rev.end)?.val || 0,
+      netIncome: netIncomeQuarterly.find(n => n.end === rev.end)?.val || 0,
+    })).reverse();
+
+    // Build balance sheet data (annual)
+    const balance = assetsAnnual.map((asset, i) => ({
+      date: asset.end,
+      calendarYear: String(asset.fy),
+      totalAssets: asset.val || 0,
+      totalEquity: equityAnnual.find(e => e.fy === asset.fy)?.val || 0,
+      cashAndCashEquivalents: cashAnnual.find(c => c.fy === asset.fy)?.val || 0,
+      shortTermInvestments: 0,
+      totalDebt: debtAnnual.find(d => d.fy === asset.fy)?.val || 0,
+    })).reverse();
+
+    // Build balance sheet data (quarterly)
+    const balanceQ = assetsQuarterly.map((asset) => ({
+      date: asset.end,
+      fiscalYear: String(asset.fy),
+      period: asset.fp,
+      totalAssets: asset.val || 0,
+      totalEquity: equityQuarterly.find(e => e.end === asset.end)?.val || 0,
+      cashAndCashEquivalents: cashQuarterly.find(c => c.end === asset.end)?.val || 0,
+      shortTermInvestments: 0,
+      totalDebt: debtQuarterly.find(d => d.end === asset.end)?.val || 0,
+    })).reverse();
+
+    // Build cash flow data (annual)
+    const cashflow = opCashFlowAnnual.map((ocf) => ({
+      date: ocf.end,
+      calendarYear: String(ocf.fy),
+      operatingCashFlow: ocf.val || 0,
+      capitalExpenditure: -(capexAnnual.find(c => c.fy === ocf.fy)?.val || 0),
+      freeCashFlow: (ocf.val || 0) - (capexAnnual.find(c => c.fy === ocf.fy)?.val || 0),
+    })).reverse();
+
+    // Build cash flow data (quarterly)
+    const cashflowQ = opCashFlowQuarterly.map((ocf) => ({
+      date: ocf.end,
+      fiscalYear: String(ocf.fy),
+      period: ocf.fp,
+      operatingCashFlow: ocf.val || 0,
+      capitalExpenditure: -(capexQuarterly.find(c => c.end === ocf.end)?.val || 0),
+      freeCashFlow: (ocf.val || 0) - (capexQuarterly.find(c => c.end === ocf.end)?.val || 0),
+    })).reverse();
+
+    // Build ratios (calculated from data)
+    const ratios = income.map((inc, i) => {
+      const bal = balance[i] || {};
+      return {
+        date: inc.date,
+        calendarYear: inc.calendarYear,
+        grossProfitMargin: inc.revenue ? inc.grossProfit / inc.revenue : null,
+        operatingProfitMargin: inc.revenue ? inc.operatingIncome / inc.revenue : null,
+        netProfitMargin: inc.revenue ? inc.netIncome / inc.revenue : null,
+        returnOnEquity: bal.totalEquity ? inc.netIncome / bal.totalEquity : null,
+        returnOnAssets: bal.totalAssets ? inc.netIncome / bal.totalAssets : null,
+        returnOnCapitalEmployed: bal.totalAssets && bal.totalEquity
+          ? inc.operatingIncome / (bal.totalAssets - (bal.totalAssets - bal.totalEquity - bal.totalDebt))
+          : null,
+        debtToEquityRatio: bal.totalEquity ? bal.totalDebt / bal.totalEquity : null,
+        currentRatio: null,
+      };
+    });
+
+    // Build metrics
+    const metrics = income.map((inc, i) => {
+      const bal = balance[i] || {};
+      return {
+        date: inc.date,
+        calendarYear: inc.calendarYear,
+        enterpriseValue: null,
+        evToEBITDA: null,
+        freeCashFlowYield: null,
+        earningsYield: null,
+        bookValuePerShare: null,
+        netIncomePerShare: null,
+      };
+    });
+
+    // Build quote (basic info - SEC doesn't have real-time prices)
+    const latestRevenue = income[income.length - 1]?.revenue || 0;
+    const latestNetIncome = income[income.length - 1]?.netIncome || 0;
+
+    const quote = {
+      price: 0, // SEC doesn't provide real-time prices
+      change: 0,
+      changesPercentage: 0,
+      marketCap: 0,
+      pe: null,
+    };
+
+    // Simple DCF placeholder
+    const dcf = null;
+
     return NextResponse.json({
-      profile: profile[0],
-      income: income.reverse(),
-      balance: balance.reverse(),
-      cashflow: cashflow.reverse(),
-      ratios: ratios.reverse(),
-      metrics: metrics.reverse(),
-      quote: quote[0],
-      dcf: dcf[0],
-      incomeQ: incomeQ.reverse(),
-      balanceQ: balanceQ.reverse(),
-      cashflowQ: cashflowQ.reverse(),
+      profile,
+      quote,
+      income,
+      incomeQ,
+      balance,
+      balanceQ,
+      cashflow,
+      cashflowQ,
+      ratios,
+      metrics,
+      dcf,
     });
 
   } catch (error) {
     console.error('API Error:', error);
-    return NextResponse.json({ error: 'Failed to fetch stock data' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch stock data: ' + error.message }, { status: 500 });
   }
 }
