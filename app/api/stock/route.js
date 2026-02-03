@@ -477,6 +477,85 @@ export async function GET(request) {
       return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
     };
 
+    // Calculate median
+    const calcMedian = (arr, key) => {
+      const valid = arr.map(a => a[key]).filter(v => v !== null && isFinite(v) && v > 0).sort((a, b) => a - b);
+      if (valid.length === 0) return null;
+      const mid = Math.floor(valid.length / 2);
+      return valid.length % 2 !== 0 ? valid[mid] : (valid[mid - 1] + valid[mid]) / 2;
+    };
+
+    // Calculate additional metrics
+    const latestOperatingIncome = latestIncome?.operatingIncome || 0;
+    const depreciation = Math.abs(latestCashflow?.capitalExpenditure || 0) * 0.7; // Estimate D&A
+    const ebitda = latestOperatingIncome + depreciation;
+    const ebit = latestOperatingIncome;
+
+    // Enterprise Value calculation
+    const enterpriseValue = currentMarketCap + (latestBalance?.totalDebt || 0) - (latestBalance?.cashAndCashEquivalents || 0);
+
+    // Mean and Median calculations from historical data
+    const meanPE = calcAvg(valuationRatios, 'peRatio');
+    const meanPS = calcAvg(valuationRatios, 'psRatio');
+    const meanPB = calcAvg(valuationRatios, 'pbRatio');
+    const medianPE = calcMedian(valuationRatios, 'peRatio');
+    const medianPS = calcMedian(valuationRatios, 'psRatio');
+    const medianPB = calcMedian(valuationRatios, 'pbRatio');
+
+    // EPS for value calculations
+    const currentEPS = latestNetIncome / currentShares;
+    const salesPerShare = latestRevenue / currentShares;
+    const bookValuePerShare = latestEquity / currentShares;
+
+    // Rule of 40 (Revenue Growth % + Profit Margin %)
+    const profitMargin = latestRevenue > 0 ? (latestNetIncome / latestRevenue) * 100 : 0;
+    const ruleOf40 = (revenueGrowth * 100) + profitMargin;
+
+    // Forward P/E (estimate using growth)
+    const forwardEPS = currentEPS * (1 + Math.min(netIncomeGrowth, 0.2));
+    const forwardPE = forwardEPS > 0 ? currentPrice / forwardEPS : null;
+
+    const otherValuationRatios = {
+      // Per Share Metrics
+      ebitdaPerShare: ebitda / currentShares,
+      earningsYield: currentEPS > 0 ? (currentEPS / currentPrice) * 100 : null,
+
+      // Enterprise Value Metrics
+      enterpriseValue,
+      evToFCF: latestFCF > 0 ? enterpriseValue / latestFCF : null,
+      evToEBIT: ebit > 0 ? enterpriseValue / ebit : null,
+      evToEBITDA: ebitda > 0 ? enterpriseValue / ebitda : null,
+      evToRevenue: latestRevenue > 0 ? enterpriseValue / latestRevenue : null,
+
+      // Forward Metrics
+      forwardPE,
+
+      // Mean Ratios and Values
+      meanPE,
+      meanPEValue: meanPE && currentEPS > 0 ? meanPE * currentEPS : null,
+      meanPS,
+      meanPSValue: meanPS && salesPerShare > 0 ? meanPS * salesPerShare : null,
+      meanPB,
+      meanPBValue: meanPB && bookValuePerShare > 0 ? meanPB * bookValuePerShare : null,
+
+      // Median Ratios and Values
+      medianPE,
+      medianPEValue: medianPE && currentEPS > 0 ? medianPE * currentEPS : null,
+      medianPS,
+      medianPSValue: medianPS && salesPerShare > 0 ? medianPS * salesPerShare : null,
+      medianPB,
+      medianPBValue: medianPB && bookValuePerShare > 0 ? medianPB * bookValuePerShare : null,
+
+      // DCF Values (20-year projections)
+      dcf20Year: calcDCF(latestOCF, fcfGrowth * 0.6, 20),
+      dfcf20Year: calcDCF(latestFCF, fcfGrowth * 0.7, 20),
+      dni20Year: calcDCF(latestNetIncome, netIncomeGrowth * 0.6, 20),
+      dfcfTerminal: latestFCF > 0 ? (latestFCF * (1 + terminalGrowth) / (discountRate - terminalGrowth)) / currentShares : null,
+
+      // Rule of 40
+      ruleOf40,
+    };
+
     const valuationRatiosSummary = {
       historical: valuationRatios,
       current: {
@@ -493,6 +572,7 @@ export async function GET(request) {
         pegRatio: calcAvg(valuationRatios, 'pegRatio'),
         psgRatio: calcAvg(valuationRatios, 'psgRatio'),
       },
+      other: otherValuationRatios,
     };
 
     return NextResponse.json({

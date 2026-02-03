@@ -735,6 +735,146 @@ export default function StockValuationCalculator() {
             </div>
           )}
 
+          {/* Other Valuation Ratios */}
+          {data.valuationRatios?.other && (
+            <div className="mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="text-sm font-semibold mb-4 text-gray-700 tracking-wider">OTHER VALUATION RATIOS</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Per Share & Yield Metrics */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b pb-2">Per Share & Yield</h4>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">EBITDA per Share</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.ebitdaPerShare?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Earnings Yield</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.earningsYield?.toFixed(2) || 'N/A'}%</span>
+                  </div>
+                </div>
+
+                {/* Enterprise Value Metrics */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b pb-2">Enterprise Value</h4>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Enterprise Value</span>
+                    <span className="text-sm font-semibold">${(data.valuationRatios.other.enterpriseValue / 1e9)?.toFixed(2) || 'N/A'}B</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">EV / Free Cash Flow</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.evToFCF?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">EV / EBIT</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.evToEBIT?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">EV / EBITDA</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.evToEBITDA?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">EV / Revenue</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.evToRevenue?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                </div>
+
+                {/* Forward Metrics */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b pb-2">Forward Metrics</h4>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Forward P/E (Next Year)</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.forwardPE?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Rule of 40</span>
+                    <span className={`text-sm font-semibold ${data.valuationRatios.other.ruleOf40 >= 40 ? 'text-green-600' : 'text-orange-500'}`}>
+                      {data.valuationRatios.other.ruleOf40?.toFixed(2) || 'N/A'}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Mean Valuations */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b pb-2">Mean Valuations</h4>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Mean P/E Ratio</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.meanPE?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Mean P/E Value</span>
+                    <span className="text-sm font-semibold text-green-600">${data.valuationRatios.other.meanPEValue?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Mean P/S Ratio</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.meanPS?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Mean P/S Value</span>
+                    <span className="text-sm font-semibold text-green-600">${data.valuationRatios.other.meanPSValue?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Mean P/B Ratio</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.meanPB?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Mean P/B Value</span>
+                    <span className="text-sm font-semibold text-green-600">${data.valuationRatios.other.meanPBValue?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                </div>
+
+                {/* Median Valuations */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b pb-2">Median Valuations</h4>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Median P/E Ratio</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.medianPE?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Median P/E Value</span>
+                    <span className="text-sm font-semibold text-green-600">${data.valuationRatios.other.medianPEValue?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Median P/S Ratio</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.medianPS?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Median P/S Value</span>
+                    <span className="text-sm font-semibold text-green-600">${data.valuationRatios.other.medianPSValue?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Median P/B Ratio</span>
+                    <span className="text-sm font-semibold">{data.valuationRatios.other.medianPB?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Median P/B Value</span>
+                    <span className="text-sm font-semibold text-green-600">${data.valuationRatios.other.medianPBValue?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                </div>
+
+                {/* DCF Valuations */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b pb-2">DCF Valuations (20-Year)</h4>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">DCF-20 Value</span>
+                    <span className="text-sm font-semibold text-blue-600">${data.valuationRatios.other.dcf20Year?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">DFCF-20 Value</span>
+                    <span className="text-sm font-semibold text-blue-600">${data.valuationRatios.other.dfcf20Year?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">DNI-20 Value</span>
+                    <span className="text-sm font-semibold text-blue-600">${data.valuationRatios.other.dni20Year?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">DFCF-Terminal Value</span>
+                    <span className="text-sm font-semibold text-blue-600">${data.valuationRatios.other.dfcfTerminal?.toFixed(2) || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Key Metrics Grid */}
           <div className="mb-8">
             <h3 className="text-sm font-semibold mb-4 text-gray-700 tracking-wider">KEY METRICS</h3>
