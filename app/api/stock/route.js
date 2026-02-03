@@ -26,13 +26,16 @@ export async function GET(request) {
       `${API_BASE}/key-metrics?symbol=${ticker}&limit=5&apikey=${apiKey}`,
       `${API_BASE}/quote?symbol=${ticker}&apikey=${apiKey}`,
       `${API_BASE}/discounted-cash-flow?symbol=${ticker}&apikey=${apiKey}`,
+      `${API_BASE}/income-statement?symbol=${ticker}&period=quarter&limit=5&apikey=${apiKey}`,
+      `${API_BASE}/balance-sheet-statement?symbol=${ticker}&period=quarter&limit=5&apikey=${apiKey}`,
+      `${API_BASE}/cash-flow-statement?symbol=${ticker}&period=quarter&limit=5&apikey=${apiKey}`,
     ];
 
     const responses = await Promise.all(
       endpoints.map(url => fetch(url, { next: { revalidate: 300 } }))
     );
 
-    const [profile, income, balance, cashflow, ratios, metrics, quote, dcf] = await Promise.all(
+    const [profile, income, balance, cashflow, ratios, metrics, quote, dcf, incomeQ, balanceQ, cashflowQ] = await Promise.all(
       responses.map(res => res.json())
     );
 
@@ -48,7 +51,10 @@ export async function GET(request) {
       ratios: ratios.reverse(),
       metrics: metrics.reverse(),
       quote: quote[0],
-      dcf: dcf[0]
+      dcf: dcf[0],
+      incomeQ: incomeQ.reverse(),
+      balanceQ: balanceQ.reverse(),
+      cashflowQ: cashflowQ.reverse(),
     });
 
   } catch (error) {

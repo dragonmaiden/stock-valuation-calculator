@@ -169,15 +169,34 @@ export default function StockValuationCalculator() {
     }));
   };
 
+  const prepareQuarterlyIncomeData = () => {
+    if (!data?.incomeQ) return [];
+    return data.incomeQ.map((i) => ({
+      quarter: `${i.fiscalYear || i.date?.slice(0, 4)} ${i.period || ''}`.trim(),
+      Revenue: parseFloat((i.revenue / 1e9).toFixed(2)),
+      'Operating Income': parseFloat((i.operatingIncome / 1e9).toFixed(2)),
+      'Net Income': parseFloat((i.netIncome / 1e9).toFixed(2)),
+    }));
+  };
+
+  const prepareQuarterlyCashFlowData = () => {
+    if (!data?.cashflowQ) return [];
+    return data.cashflowQ.map((c) => ({
+      quarter: `${c.fiscalYear || c.date?.slice(0, 4)} ${c.period || ''}`.trim(),
+      'Operating CF': parseFloat((c.operatingCashFlow / 1e9).toFixed(2)),
+      'Free Cash Flow': parseFloat((c.freeCashFlow / 1e9).toFixed(2)),
+    }));
+  };
+
   const verdict = data ? getValuationVerdict() : null;
 
-  const ChartSection = ({ title, chartData, dataKeys, colors, unit = '' }) => (
+  const ChartSection = ({ title, chartData, dataKeys, colors, unit = '', dataKeyX = 'year' }) => (
     <div className="mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
       <h3 className="text-sm font-semibold mb-4 text-gray-700 tracking-wide">{title}</h3>
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis dataKey="year" tick={{ fontFamily: 'JetBrains Mono', fontSize: 11 }} />
+          <XAxis dataKey={dataKeyX} tick={{ fontFamily: 'JetBrains Mono', fontSize: 11 }} />
           <YAxis tick={{ fontFamily: 'JetBrains Mono', fontSize: 11 }} />
           <Tooltip
             contentStyle={{ fontFamily: 'JetBrains Mono', fontSize: 12, borderRadius: '8px' }}
@@ -416,12 +435,12 @@ export default function StockValuationCalculator() {
               <MetricCard
                 label="EV/EBITDA"
                 value={formatRatio(
-                  data.metrics[data.metrics.length - 1]?.enterpriseValueOverEBITDA
+                  data.metrics[data.metrics.length - 1]?.evToEBITDA
                 )}
               />
               <MetricCard
                 label="DEBT/EQUITY"
-                value={formatRatio(data.ratios[data.ratios.length - 1]?.debtEquityRatio)}
+                value={formatRatio(data.ratios[data.ratios.length - 1]?.debtToEquityRatio)}
               />
               <MetricCard
                 label="CURRENT RATIO"
@@ -446,8 +465,9 @@ export default function StockValuationCalculator() {
             </div>
           </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Annual Charts */}
+          <h3 className="text-sm font-semibold mb-4 text-gray-700 tracking-wider">ANNUAL DATA</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             <ChartSection
               title="PROFITABILITY MARGINS (%)"
               chartData={prepareMarginData()}
@@ -482,6 +502,27 @@ export default function StockValuationCalculator() {
               dataKeys={['Cash & Investments', 'Total Debt']}
               colors={['#22c55e', '#dc2626']}
               unit="B"
+            />
+          </div>
+
+          {/* Quarterly Charts */}
+          <h3 className="text-sm font-semibold mb-4 text-gray-700 tracking-wider">QUARTERLY DATA</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ChartSection
+              title="QUARTERLY REVENUE & INCOME ($B)"
+              chartData={prepareQuarterlyIncomeData()}
+              dataKeys={['Revenue', 'Operating Income', 'Net Income']}
+              colors={['#3b82f6', '#f97316', '#22c55e']}
+              unit="B"
+              dataKeyX="quarter"
+            />
+            <ChartSection
+              title="QUARTERLY CASH FLOW ($B)"
+              chartData={prepareQuarterlyCashFlowData()}
+              dataKeys={['Operating CF', 'Free Cash Flow']}
+              colors={['#f97316', '#166534']}
+              unit="B"
+              dataKeyX="quarter"
             />
           </div>
 
@@ -548,7 +589,7 @@ export default function StockValuationCalculator() {
                         {formatPercent(r.returnOnAssets)}
                       </td>
                       <td className="px-4 py-3 text-right text-gray-600">
-                        {formatRatio(r.debtEquityRatio)}
+                        {formatRatio(r.debtToEquityRatio)}
                       </td>
                       <td className="px-4 py-3 text-right text-gray-600">
                         {formatRatio(r.currentRatio)}
