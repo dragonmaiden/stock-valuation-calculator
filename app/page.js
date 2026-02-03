@@ -22,7 +22,8 @@ export default function StockValuationCalculator() {
   const [viewMode, setViewMode] = useState('annual');
 
   const fetchStockData = async () => {
-    if (!ticker) {
+    const symbol = ticker.trim().toUpperCase();
+    if (!symbol) {
       setError('Please enter a ticker symbol');
       return;
     }
@@ -31,7 +32,8 @@ export default function StockValuationCalculator() {
     setError('');
 
     try {
-      const response = await fetch(`/api/stock?ticker=${ticker.toUpperCase()}`);
+      setTicker(symbol);
+      const response = await fetch(`/api/stock?ticker=${symbol}`);
       const result = await response.json();
 
       if (!response.ok) {
@@ -51,7 +53,8 @@ export default function StockValuationCalculator() {
   };
 
   const calculateGrahamNumber = () => {
-    if (!data?.metrics?.length || !data?.quote) return null;
+    if (data?.dcf?.grahamNumber) return data.dcf.grahamNumber;
+    if (!data?.metrics?.length) return null;
     const latestMetrics = data.metrics[data.metrics.length - 1];
     const eps = latestMetrics.netIncomePerShare || 0;
     const bvps = latestMetrics.bookValuePerShare || 0;
@@ -60,20 +63,7 @@ export default function StockValuationCalculator() {
   };
 
   const calculatePEGValue = () => {
-    if (!data?.quote || !data?.income?.length) return null;
-    const pe = data.quote.pe;
-    const growthRates = data.income.slice(-5).map((inc, i, arr) => {
-      if (i === 0) return null;
-      const prevIncome = arr[i - 1]?.netIncome;
-      const currIncome = inc?.netIncome;
-      if (!prevIncome || !currIncome || prevIncome <= 0) return null;
-      return ((currIncome - prevIncome) / prevIncome) * 100;
-    }).filter(Boolean);
-
-    if (growthRates.length === 0 || !pe) return null;
-    const avgGrowth = growthRates.reduce((a, b) => a + b, 0) / growthRates.length;
-    if (avgGrowth <= 0) return null;
-    return pe / avgGrowth;
+    return data?.valuationRatios?.current?.pegRatio ?? null;
   };
 
   const getValuationVerdict = () => {
@@ -82,8 +72,8 @@ export default function StockValuationCalculator() {
     const currentPrice = data.quote.price;
     const valuations = [];
 
-    const dcfValue = data.dcf?.dcf;
-    if (dcfValue) valuations.push({ method: 'DCF Model', value: dcfValue });
+    const dcfValue = data.dcf?.compositeValue;
+    if (dcfValue) valuations.push({ method: 'DCF Composite', value: dcfValue });
 
     const graham = calculateGrahamNumber();
     if (graham) valuations.push({ method: 'Graham Number', value: graham });
@@ -181,7 +171,25 @@ export default function StockValuationCalculator() {
     }));
   };
 
+  const calcCAGR = (values) => {
+    if (!values || values.length < 2) return null;
+    const start = values[0];
+    const end = values[values.length - 1];
+    if (!start || !end || start <= 0 || end <= 0) return null;
+    const years = values.length - 1;
+    return Math.pow(end / start, 1 / years) - 1;
+  };
   const verdict = data ? getValuationVerdict() : null;
+  const recentIncome = data?.income?.slice(-5) || [];
+  const recentCashflow = data?.cashflow?.slice(-5) || [];
+  const revenueCagr = calcCAGR(recentIncome.map((i) => i.revenue).filter((v) => v > 0));
+  const fcfCagr = calcCAGR(recentCashflow.map((c) => c.freeCashFlow).filter((v) => v > 0));
+  const latestRatio = data?.ratios?.[data?.ratios?.length - 1];
+  const priorRatio = data?.ratios?.[data?.ratios?.length - 2];
+  const netMargin = latestRatio?.netProfitMargin ?? null;
+  const marginDelta = netMargin !== null && priorRatio?.netProfitMargin !== null
+    ? netMargin - priorRatio.netProfitMargin
+    : null;
 
   const ChartSection = ({ title, chartData, dataKeys, colors, unit = '', dataKeyX = 'period' }) => (
     <div className="mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -209,6 +217,21 @@ export default function StockValuationCalculator() {
       <div className="text-xs text-gray-500 mb-1 tracking-wide">{label}</div>
       <div className="text-lg font-semibold text-gray-900">{value}</div>
       {subtext && <div className="text-xs text-gray-400 mt-1">{subtext}</div>}
+    </div>
+  );
+
+  const SignalPill = ({ label, value, tone = 'neutral' }) => (
+    <div
+      className={`px-3 py-2 rounded-lg text-xs font-semibold border ${
+        tone === 'positive'
+          ? 'bg-green-50 text-green-700 border-green-200'
+          : tone === 'negative'
+          ? 'bg-red-50 text-red-700 border-red-200'
+          : 'bg-gray-50 text-gray-700 border-gray-200'
+      }`}
+    >
+      <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">{label}</div>
+      <div>{value}</div>
     </div>
   );
 
@@ -732,12 +755,191 @@ export default function StockValuationCalculator() {
               </div>
 
               <div className="mt-4 p-4 bg-gray-50 rounded-lg text-xs text-gray-600">
-                <strong>Assumptions:</strong> Discount Rate: {data.dcf.discountRate?.toFixed(1)}% (CAPM-based) •
+                <strong>Assumptions:</strong> Discount Rate: {data.dcf.discountRate?.toFixed(1)}% (WACC estimate) •
                 Terminal Growth: {data.dcf.terminalGrowth?.toFixed(1)}% •
                 Projection Period: 10 years
               </div>
             </div>
           )}
+
+          {/* Calculation Trace */}
+          {data.dcf?.assumptions && (
+            <div className="mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-gray-700 tracking-wider">CALCULATION TRACE</h3>
+                <div className="text-xs text-gray-400">Key inputs driving fair value</div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-xs">
+                <MetricCard label="Shares Outstanding" value={formatNumber(data.dcf.assumptions.sharesOutstanding, 0)} />
+                <MetricCard label="Beta" value={formatRatio(data.dcf.assumptions.beta)} />
+                <MetricCard label="Cost of Equity" value={`${data.dcf.assumptions.costOfEquity.toFixed(2)}%`} />
+                <MetricCard label="Cost of Debt" value={`${data.dcf.assumptions.costOfDebt.toFixed(2)}%`} />
+                <MetricCard label="Equity Weight" value={`${data.dcf.assumptions.equityWeight.toFixed(1)}%`} />
+                <MetricCard label="Debt Weight" value={`${data.dcf.assumptions.debtWeight.toFixed(1)}%`} />
+                <MetricCard label="Tax Rate" value={`${data.dcf.assumptions.taxRate.toFixed(1)}%`} />
+                <MetricCard label="Rev Growth" value={`${data.dcf.assumptions.revenueGrowth.toFixed(1)}%`} />
+                <MetricCard label="NI Growth" value={`${data.dcf.assumptions.netIncomeGrowth.toFixed(1)}%`} />
+                <MetricCard label="FCF Growth" value={`${data.dcf.assumptions.fcfGrowth.toFixed(1)}%`} />
+                <MetricCard label="Latest Revenue" value={formatNumber(data.dcf.assumptions.latestRevenue)} />
+                <MetricCard label="Latest Net Income" value={formatNumber(data.dcf.assumptions.latestNetIncome)} />
+                <MetricCard label="Latest FCF" value={formatNumber(data.dcf.assumptions.latestFCF)} />
+                <MetricCard label="Latest OCF" value={formatNumber(data.dcf.assumptions.latestOCF)} />
+                <MetricCard label="Latest Equity" value={formatNumber(data.dcf.assumptions.latestEquity)} />
+              </div>
+            </div>
+          )}
+
+          {/* Financial Charts (Core Focus) */}
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-semibold text-gray-700 tracking-wider">FINANCIAL CHARTS</h3>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('annual')}
+                className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors ${
+                  viewMode === 'annual'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                ANNUAL
+              </button>
+              <button
+                onClick={() => setViewMode('quarterly')}
+                className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors ${
+                  viewMode === 'quarterly'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                QUARTERLY
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {viewMode === 'annual' && (
+              <>
+                <ChartSection
+                  title="PROFITABILITY MARGINS (%)"
+                  chartData={prepareMarginData()}
+                  dataKeys={['Gross Margin', 'Operating Margin', 'Net Margin']}
+                  colors={['#3b82f6', '#f97316', '#22c55e']}
+                  unit="%"
+                  dataKeyX="year"
+                />
+                <ChartSection
+                  title="RETURN ON CAPITAL (%)"
+                  chartData={prepareReturnData()}
+                  dataKeys={['ROE', 'ROIC', 'ROA']}
+                  colors={['#3b82f6', '#f97316', '#92400e']}
+                  unit="%"
+                  dataKeyX="year"
+                />
+              </>
+            )}
+            <ChartSection
+              title="INCOME STATEMENT ($B)"
+              chartData={prepareIncomeData()}
+              dataKeys={['Revenue', 'Operating Income', 'Net Income']}
+              colors={['#3b82f6', '#f97316', '#22c55e']}
+              unit="B"
+            />
+            <ChartSection
+              title="CASH FLOW ($B)"
+              chartData={prepareCashFlowData()}
+              dataKeys={['Operating CF', 'Free Cash Flow', 'CapEx']}
+              colors={['#f97316', '#166534', '#ec4899']}
+              unit="B"
+            />
+            <ChartSection
+              title="BALANCE SHEET ($B)"
+              chartData={prepareBalanceData()}
+              dataKeys={['Cash & Investments', 'Total Debt']}
+              colors={['#22c55e', '#dc2626']}
+              unit="B"
+            />
+          </div>
+
+          {/* Insight Dashboard */}
+          <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+              <div className="text-xs text-gray-500 tracking-wider mb-2">VALUATION SNAPSHOT</div>
+              <div className="text-xl font-bold text-gray-900 mb-1">
+                {verdict ? verdict.verdict : 'N/A'}
+              </div>
+              <div className="text-sm text-gray-600 mb-4">
+                {verdict
+                  ? `${verdict.upside >= 0 ? 'Upside' : 'Downside'} ${Math.abs(
+                      verdict.upside
+                    ).toFixed(1)}% vs fair value`
+                  : 'Run analysis to generate a verdict'}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <SignalPill
+                  label="Current Price"
+                  value={verdict ? `$${verdict.currentPrice.toFixed(2)}` : 'N/A'}
+                />
+                <SignalPill
+                  label="Fair Value"
+                  value={verdict ? `$${verdict.avgFairValue.toFixed(2)}` : 'N/A'}
+                  tone={verdict && verdict.upside > 0 ? 'positive' : verdict && verdict.upside < 0 ? 'negative' : 'neutral'}
+                />
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+              <div className="text-xs text-gray-500 tracking-wider mb-2">GROWTH & MOMENTUM</div>
+              <div className="text-sm text-gray-600 mb-4">5Y pace and profitability drift</div>
+              <div className="grid grid-cols-2 gap-3">
+                <SignalPill
+                  label="Revenue CAGR"
+                  value={revenueCagr !== null ? `${(revenueCagr * 100).toFixed(1)}%` : 'N/A'}
+                  tone={revenueCagr > 0.08 ? 'positive' : revenueCagr < 0 ? 'negative' : 'neutral'}
+                />
+                <SignalPill
+                  label="FCF CAGR"
+                  value={fcfCagr !== null ? `${(fcfCagr * 100).toFixed(1)}%` : 'N/A'}
+                  tone={fcfCagr > 0.08 ? 'positive' : fcfCagr < 0 ? 'negative' : 'neutral'}
+                />
+                <SignalPill
+                  label="Net Margin"
+                  value={netMargin !== null ? `${(netMargin * 100).toFixed(1)}%` : 'N/A'}
+                  tone={netMargin > 0.15 ? 'positive' : netMargin < 0.05 ? 'negative' : 'neutral'}
+                />
+                <SignalPill
+                  label="Margin Drift"
+                  value={marginDelta !== null ? `${(marginDelta * 100).toFixed(1)}%` : 'N/A'}
+                  tone={marginDelta > 0 ? 'positive' : marginDelta < 0 ? 'negative' : 'neutral'}
+                />
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+              <div className="text-xs text-gray-500 tracking-wider mb-2">QUALITY & STRENGTH</div>
+              <div className="text-sm text-gray-600 mb-4">Returns, leverage, predictability</div>
+              <div className="grid grid-cols-2 gap-3">
+                <SignalPill
+                  label="ROIC"
+                  value={data.favorites?.roic ? `${(data.favorites.roic * 100).toFixed(1)}%` : 'N/A'}
+                  tone={data.favorites?.roic > 0.12 ? 'positive' : data.favorites?.roic < 0.06 ? 'negative' : 'neutral'}
+                />
+                <SignalPill
+                  label="ROE"
+                  value={data.favorites?.roe ? `${(data.favorites.roe * 100).toFixed(1)}%` : 'N/A'}
+                  tone={data.favorites?.roe > 0.15 ? 'positive' : data.favorites?.roe < 0.08 ? 'negative' : 'neutral'}
+                />
+                <SignalPill
+                  label="Debt / EBITDA"
+                  value={data.favorites?.debtToEbitda ? data.favorites.debtToEbitda.toFixed(2) : 'N/A'}
+                  tone={data.favorites?.debtToEbitda < 2 ? 'positive' : data.favorites?.debtToEbitda > 3 ? 'negative' : 'neutral'}
+                />
+                <SignalPill
+                  label="Predictability"
+                  value={data.factorRankings?.predictability?.rank || 'N/A'}
+                  tone={data.factorRankings?.predictability?.rank === 'High' ? 'positive' : data.factorRankings?.predictability?.rank === 'Low' ? 'negative' : 'neutral'}
+                />
+              </div>
+            </div>
+          </div>
 
           {/* Valuation Ratios Table */}
           {data.valuationRatios && data.valuationRatios.historical?.length > 0 && (
@@ -1052,76 +1254,6 @@ export default function StockValuationCalculator() {
                 value={formatPercent(data.metrics[data.metrics.length - 1]?.earningsYield)}
               />
             </div>
-          </div>
-
-          {/* Charts Section with Toggle */}
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-sm font-semibold text-gray-700 tracking-wider">FINANCIAL CHARTS</h3>
-            <div className="flex bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode('annual')}
-                className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors ${
-                  viewMode === 'annual'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                ANNUAL
-              </button>
-              <button
-                onClick={() => setViewMode('quarterly')}
-                className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors ${
-                  viewMode === 'quarterly'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                QUARTERLY
-              </button>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {viewMode === 'annual' && (
-              <>
-                <ChartSection
-                  title="PROFITABILITY MARGINS (%)"
-                  chartData={prepareMarginData()}
-                  dataKeys={['Gross Margin', 'Operating Margin', 'Net Margin']}
-                  colors={['#3b82f6', '#f97316', '#22c55e']}
-                  unit="%"
-                  dataKeyX="year"
-                />
-                <ChartSection
-                  title="RETURN ON CAPITAL (%)"
-                  chartData={prepareReturnData()}
-                  dataKeys={['ROE', 'ROIC', 'ROA']}
-                  colors={['#3b82f6', '#f97316', '#92400e']}
-                  unit="%"
-                  dataKeyX="year"
-                />
-              </>
-            )}
-            <ChartSection
-              title="INCOME STATEMENT ($B)"
-              chartData={prepareIncomeData()}
-              dataKeys={['Revenue', 'Operating Income', 'Net Income']}
-              colors={['#3b82f6', '#f97316', '#22c55e']}
-              unit="B"
-            />
-            <ChartSection
-              title="CASH FLOW ($B)"
-              chartData={prepareCashFlowData()}
-              dataKeys={['Operating CF', 'Free Cash Flow', 'CapEx']}
-              colors={['#f97316', '#166534', '#ec4899']}
-              unit="B"
-            />
-            <ChartSection
-              title="BALANCE SHEET ($B)"
-              chartData={prepareBalanceData()}
-              dataKeys={['Cash & Investments', 'Total Debt']}
-              colors={['#22c55e', '#dc2626']}
-              unit="B"
-            />
           </div>
 
           {/* Historical Ratios Table */}

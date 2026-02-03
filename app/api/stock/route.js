@@ -123,6 +123,11 @@ export async function GET(request) {
     const debtFields = ['LongTermDebt', 'LongTermDebtNoncurrent'];
     const operatingCashFlowFields = ['NetCashProvidedByUsedInOperatingActivities'];
     const capexFields = ['PaymentsToAcquirePropertyPlantAndEquipment'];
+    const depreciationFields = [
+      'DepreciationAndAmortization',
+      'DepreciationDepletionAndAmortization',
+      'DepreciationAmortizationAndAccretionNet',
+    ];
 
     // Get annual data (10 years)
     const revenueAnnual = getMetricValues(usGaap, revenueFields, 'FY', 10);
@@ -135,6 +140,7 @@ export async function GET(request) {
     const debtAnnual = getMetricValues(usGaap, debtFields, 'FY', 10);
     const opCashFlowAnnual = getMetricValues(usGaap, operatingCashFlowFields, 'FY', 10);
     const capexAnnual = getMetricValues(usGaap, capexFields, 'FY', 10);
+    const depreciationAnnual = getMetricValues(usGaap, depreciationFields, 'FY', 10);
 
     // Get quarterly data (20 quarters = 5 years)
     const revenueQuarterly = getMetricValues(usGaap, revenueFields, 'Q', 20);
@@ -222,15 +228,15 @@ export async function GET(request) {
         netProfitMargin: inc.revenue ? inc.netIncome / inc.revenue : null,
         returnOnEquity: bal.totalEquity ? inc.netIncome / bal.totalEquity : null,
         returnOnAssets: bal.totalAssets ? inc.netIncome / bal.totalAssets : null,
-        returnOnCapitalEmployed: bal.totalAssets && bal.totalEquity
-          ? inc.operatingIncome / (bal.totalAssets - (bal.totalAssets - bal.totalEquity - bal.totalDebt))
+        returnOnCapitalEmployed: bal.totalEquity || bal.totalDebt
+          ? inc.operatingIncome / ((bal.totalEquity || 0) + (bal.totalDebt || 0))
           : null,
         debtToEquityRatio: bal.totalEquity ? bal.totalDebt / bal.totalEquity : null,
         currentRatio: null,
       };
     });
 
-    // Build metrics
+    // Build metrics (per-share where possible)
     const metrics = income.map((inc, i) => {
       const bal = balance[i] || {};
       return {
@@ -276,22 +282,22 @@ export async function GET(request) {
     const latestIncome = income[income.length - 1];
     const latestBalance = balance[balance.length - 1];
     const latestCashflow = cashflow[cashflow.length - 1];
+    const latestDepreciation = depreciationAnnual[depreciationAnnual.length - 1]?.val || null;
 
     if (latestIncome && latestBalance) {
-      const nopat = latestIncome.operatingIncome * 0.75; // Approximate after-tax
+      const taxRate = 0.21;
+      const nopat = latestIncome.operatingIncome * (1 - taxRate);
       const investedCapital = (latestBalance.totalEquity || 0) + (latestBalance.totalDebt || 0) - (latestBalance.cashAndCashEquivalents || 0);
       if (investedCapital > 0) {
         favorites.roic = nopat / investedCapital;
       }
     }
 
-    if (latestIncome && latestBalance && latestCashflow) {
-      // EBITDA = Operating Income + Depreciation (approximated from cashflow)
-      const depreciation = Math.abs(latestCashflow.capitalExpenditure || 0) * 0.5; // Rough estimate
-      const ebitda = latestIncome.operatingIncome + depreciation;
-      if (ebitda > 0) {
-        favorites.debtToEbitda = (latestBalance.totalDebt || 0) / ebitda;
-      }
+    const ebitda = latestIncome && latestDepreciation !== null
+      ? latestIncome.operatingIncome + latestDepreciation
+      : null;
+    if (latestBalance && ebitda && ebitda > 0) {
+      favorites.debtToEbitda = (latestBalance.totalDebt || 0) / ebitda;
     }
 
     // Calculate comprehensive valuations
@@ -305,22 +311,23 @@ export async function GET(request) {
 
     // Calculate average growth rates
     const calcGrowthRate = (data, key) => {
-      if (data.length < 2) return 0.05; // Default 5%
-      const values = data.map(d => d[key]).filter(v => v > 0);
-      if (values.length < 2) return 0.05;
+      if (data.length < 2) return null;
+      const values = data.map(d => d[key]).filter(v => v !== null && v !== undefined);
+      if (values.length < 2) return null;
       const growthRates = [];
       for (let i = 1; i < values.length; i++) {
-        if (values[i-1] > 0) {
-          growthRates.push((values[i] - values[i-1]) / values[i-1]);
+        if (values[i - 1] !== 0) {
+          growthRates.push((values[i] - values[i - 1]) / values[i - 1]);
         }
       }
-      const avg = growthRates.length > 0 ? growthRates.reduce((a,b) => a+b, 0) / growthRates.length : 0.05;
-      return Math.min(Math.max(avg, -0.1), 0.25); // Cap between -10% and 25%
+      if (growthRates.length === 0) return null;
+      const avg = growthRates.reduce((a, b) => a + b, 0) / growthRates.length;
+      return Math.min(Math.max(avg, -0.3), 0.3);
     };
 
-    const revenueGrowth = calcGrowthRate(recentIncome, 'revenue');
-    const netIncomeGrowth = calcGrowthRate(recentIncome, 'netIncome');
-    const fcfGrowth = calcGrowthRate(recentCashflow, 'freeCashFlow');
+    const revenueGrowth = calcGrowthRate(recentIncome, 'revenue') ?? 0;
+    const netIncomeGrowth = calcGrowthRate(recentIncome, 'netIncome') ?? 0;
+    const fcfGrowth = calcGrowthRate(recentCashflow, 'freeCashFlow') ?? 0;
 
     // Latest values
     const latestRevenue = recentIncome[recentIncome.length - 1]?.revenue || 0;
@@ -329,11 +336,27 @@ export async function GET(request) {
     const latestOCF = recentCashflow[recentCashflow.length - 1]?.operatingCashFlow || 0;
     const latestEquity = recentBalance[recentBalance.length - 1]?.totalEquity || 0;
 
+    // Populate per-share metrics now that sharesOutstanding is known
+    for (let i = 0; i < metrics.length; i++) {
+      const inc = income[i] || {};
+      const bal = balance[i] || {};
+      metrics[i].netIncomePerShare = inc.netIncome ? inc.netIncome / sharesOutstanding : null;
+      metrics[i].bookValuePerShare = bal.totalEquity ? bal.totalEquity / sharesOutstanding : null;
+    }
+
     // Discount rate (WACC approximation)
     const riskFreeRate = 0.04; // 4%
     const marketRiskPremium = 0.05; // 5%
     const beta = favorites.beta || 1;
-    const discountRate = riskFreeRate + beta * marketRiskPremium;
+    const costOfEquity = riskFreeRate + beta * marketRiskPremium;
+    const defaultDebtCost = 0.05;
+    const taxRate = 0.21;
+    const totalDebt = latestBalance?.totalDebt || 0;
+    const marketCap = quote.marketCap || 0;
+    const totalCapital = marketCap + totalDebt;
+    const equityWeight = totalCapital > 0 ? marketCap / totalCapital : 1;
+    const debtWeight = totalCapital > 0 ? totalDebt / totalCapital : 0;
+    const discountRate = (equityWeight * costOfEquity) + (debtWeight * defaultDebtCost * (1 - taxRate));
     const terminalGrowth = 0.025; // 2.5% perpetual growth
 
     // DCF calculation helper
@@ -343,7 +366,8 @@ export async function GET(request) {
       let projectedValue = initialValue;
 
       for (let year = 1; year <= years; year++) {
-        projectedValue *= (1 + Math.min(growthRate, 0.15)); // Cap growth at 15%
+        const cappedGrowth = Math.min(Math.max(growthRate, -0.15), 0.15);
+        projectedValue *= (1 + cappedGrowth);
         totalPV += projectedValue / Math.pow(1 + discountRate, year);
       }
 
@@ -372,7 +396,9 @@ export async function GET(request) {
       dcfOperatingCashFlow: calcDCF(latestOCF, fcfGrowth * 0.8, 10),
       dcfFreeCashFlow: calcDCF(latestFCF, fcfGrowth, 10),
       dcfNetIncome: calcDCF(latestNetIncome, netIncomeGrowth, 10),
-      dcfTerminal: latestFCF > 0 ? (latestFCF * 15) / sharesOutstanding : null, // Simple 15x FCF multiple
+      dcfTerminal: latestFCF > 0
+        ? ((latestFCF * 15) / sharesOutstanding) / Math.pow(1 + discountRate, 10)
+        : null,
 
       // Relative Valuations
       fairValuePS: avgPS && latestRevenue > 0 ? (latestRevenue * avgPS * 0.9) / sharesOutstanding : null, // 10% margin of safety
@@ -414,6 +440,23 @@ export async function GET(request) {
       upside: compositeValue ? ((compositeValue - currentPrice) / currentPrice) * 100 : null,
       discountRate: discountRate * 100,
       terminalGrowth: terminalGrowth * 100,
+      assumptions: {
+        sharesOutstanding,
+        beta,
+        costOfEquity: costOfEquity * 100,
+        costOfDebt: defaultDebtCost * 100,
+        equityWeight: equityWeight * 100,
+        debtWeight: debtWeight * 100,
+        taxRate: taxRate * 100,
+        revenueGrowth: revenueGrowth * 100,
+        netIncomeGrowth: netIncomeGrowth * 100,
+        fcfGrowth: fcfGrowth * 100,
+        latestRevenue,
+        latestNetIncome,
+        latestFCF,
+        latestOCF,
+        latestEquity,
+      },
     };
 
     // Calculate historical valuation ratios
@@ -436,8 +479,9 @@ export async function GET(request) {
 
       // Calculate growth rates for PEG/PSG
       const prevIncome = income[i - 1];
-      const epsGrowth = prevIncome && prevIncome.netIncome > 0
-        ? (inc.netIncome - prevIncome.netIncome) / prevIncome.netIncome
+      const prevEps = prevIncome ? (prevIncome.netIncome / currentShares) : null;
+      const epsGrowth = prevEps && prevEps !== 0
+        ? (eps - prevEps) / prevEps
         : null;
       const revenueGrowthRate = prevIncome && prevIncome.revenue > 0
         ? (inc.revenue - prevIncome.revenue) / prevIncome.revenue
@@ -487,9 +531,8 @@ export async function GET(request) {
 
     // Calculate additional metrics
     const latestOperatingIncome = latestIncome?.operatingIncome || 0;
-    const depreciation = Math.abs(latestCashflow?.capitalExpenditure || 0) * 0.7; // Estimate D&A
-    const ebitda = latestOperatingIncome + depreciation;
     const ebit = latestOperatingIncome;
+    const ebitdaForRatios = ebitda;
 
     // Enterprise Value calculation
     const enterpriseValue = currentMarketCap + (latestBalance?.totalDebt || 0) - (latestBalance?.cashAndCashEquivalents || 0);
@@ -517,14 +560,14 @@ export async function GET(request) {
 
     const otherValuationRatios = {
       // Per Share Metrics
-      ebitdaPerShare: ebitda / currentShares,
+      ebitdaPerShare: ebitdaForRatios ? ebitdaForRatios / currentShares : null,
       earningsYield: currentEPS > 0 ? (currentEPS / currentPrice) * 100 : null,
 
       // Enterprise Value Metrics
       enterpriseValue,
       evToFCF: latestFCF > 0 ? enterpriseValue / latestFCF : null,
       evToEBIT: ebit > 0 ? enterpriseValue / ebit : null,
-      evToEBITDA: ebitda > 0 ? enterpriseValue / ebitda : null,
+      evToEBITDA: ebitdaForRatios && ebitdaForRatios > 0 ? enterpriseValue / ebitdaForRatios : null,
       evToRevenue: latestRevenue > 0 ? enterpriseValue / latestRevenue : null,
 
       // Forward Metrics
@@ -556,13 +599,20 @@ export async function GET(request) {
       ruleOf40,
     };
 
+    const latestEps = currentShares > 0 ? latestNetIncome / currentShares : null;
+    const prevNetIncome = income[income.length - 2]?.netIncome;
+    const prevEps = currentShares > 0 && prevNetIncome ? prevNetIncome / currentShares : null;
+    const currentEpsGrowth = prevEps && prevEps !== 0 ? (latestEps - prevEps) / prevEps : null;
+
     const valuationRatiosSummary = {
       historical: valuationRatios,
       current: {
         peRatio: currentPE,
         psRatio: currentPS,
         pbRatio: currentPB,
-        pegRatio: currentPE && netIncomeGrowth > 0 ? currentPE / (netIncomeGrowth * 100) : null,
+        pegRatio: currentPE && currentEpsGrowth && currentEpsGrowth > 0
+          ? currentPE / (currentEpsGrowth * 100)
+          : null,
         psgRatio: currentPS && revenueGrowth > 0 ? currentPS / (revenueGrowth * 100) : null,
       },
       tenYearAvg: {
