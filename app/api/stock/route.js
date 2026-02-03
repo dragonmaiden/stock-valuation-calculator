@@ -19,11 +19,11 @@ export async function GET(request) {
   try {
     const endpoints = [
       `${API_BASE}/profile?symbol=${ticker}&apikey=${apiKey}`,
-      `${API_BASE}/income-statement?symbol=${ticker}&period=annual&limit=10&apikey=${apiKey}`,
-      `${API_BASE}/balance-sheet-statement?symbol=${ticker}&period=annual&limit=10&apikey=${apiKey}`,
-      `${API_BASE}/cash-flow-statement?symbol=${ticker}&period=annual&limit=10&apikey=${apiKey}`,
-      `${API_BASE}/ratios?symbol=${ticker}&period=annual&limit=10&apikey=${apiKey}`,
-      `${API_BASE}/key-metrics?symbol=${ticker}&period=annual&limit=10&apikey=${apiKey}`,
+      `${API_BASE}/income-statement?symbol=${ticker}&limit=5&apikey=${apiKey}`,
+      `${API_BASE}/balance-sheet-statement?symbol=${ticker}&limit=5&apikey=${apiKey}`,
+      `${API_BASE}/cash-flow-statement?symbol=${ticker}&limit=5&apikey=${apiKey}`,
+      `${API_BASE}/ratios?symbol=${ticker}&limit=5&apikey=${apiKey}`,
+      `${API_BASE}/key-metrics?symbol=${ticker}&limit=5&apikey=${apiKey}`,
       `${API_BASE}/quote?symbol=${ticker}&apikey=${apiKey}`,
       `${API_BASE}/discounted-cash-flow?symbol=${ticker}&apikey=${apiKey}`,
     ];
