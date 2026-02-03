@@ -407,6 +407,134 @@ export default function StockValuationCalculator() {
             </div>
           )}
 
+          {/* Factor Rankings Section */}
+          {data.factorRankings && (
+            <div className="mb-6 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="text-sm font-semibold mb-4 text-gray-700 tracking-wider">FACTOR RANKINGS</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                {/* Predictability */}
+                <div className="text-center p-4 rounded-lg bg-gradient-to-b from-gray-50 to-white border border-gray-100">
+                  <div className="text-xs text-gray-500 mb-2 font-medium">Predictability</div>
+                  <div className={`text-lg font-bold ${
+                    data.factorRankings.predictability.rank === 'High' ? 'text-green-600' :
+                    data.factorRankings.predictability.rank === 'Medium' ? 'text-yellow-600' : 'text-red-500'
+                  }`}>
+                    {data.factorRankings.predictability.rank}
+                  </div>
+                  <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        data.factorRankings.predictability.rank === 'High' ? 'bg-green-500' :
+                        data.factorRankings.predictability.rank === 'Medium' ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${data.factorRankings.predictability.score}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Profitability */}
+                <div className="text-center p-4 rounded-lg bg-gradient-to-b from-gray-50 to-white border border-gray-100">
+                  <div className="text-xs text-gray-500 mb-2 font-medium">Profitability</div>
+                  <div className={`text-lg font-bold ${
+                    data.factorRankings.profitability.rank === 'High' ? 'text-green-600' :
+                    data.factorRankings.profitability.rank === 'Medium' ? 'text-yellow-600' : 'text-red-500'
+                  }`}>
+                    {data.factorRankings.profitability.rank}
+                  </div>
+                  <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        data.factorRankings.profitability.rank === 'High' ? 'bg-green-500' :
+                        data.factorRankings.profitability.rank === 'Medium' ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${data.factorRankings.profitability.score}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Growth */}
+                <div className="text-center p-4 rounded-lg bg-gradient-to-b from-gray-50 to-white border border-gray-100">
+                  <div className="text-xs text-gray-500 mb-2 font-medium">Growth</div>
+                  <div className={`text-lg font-bold ${
+                    data.factorRankings.growth.rank === 'High' ? 'text-green-600' :
+                    data.factorRankings.growth.rank === 'Medium' ? 'text-yellow-600' : 'text-red-500'
+                  }`}>
+                    {data.factorRankings.growth.rank}
+                  </div>
+                  <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        data.factorRankings.growth.rank === 'High' ? 'bg-green-500' :
+                        data.factorRankings.growth.rank === 'Medium' ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${data.factorRankings.growth.score}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Moat */}
+                <div className="text-center p-4 rounded-lg bg-gradient-to-b from-gray-50 to-white border border-gray-100">
+                  <div className="text-xs text-gray-500 mb-2 font-medium">Moat</div>
+                  <div className={`text-lg font-bold ${
+                    data.factorRankings.moat.rank === 'Wide' ? 'text-green-600' :
+                    data.factorRankings.moat.rank === 'Narrow' ? 'text-yellow-600' : 'text-red-500'
+                  }`}>
+                    {data.factorRankings.moat.rank}
+                  </div>
+                  <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        data.factorRankings.moat.rank === 'Wide' ? 'bg-green-500' :
+                        data.factorRankings.moat.rank === 'Narrow' ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${data.factorRankings.moat.score}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Financial Strength */}
+                <div className="text-center p-4 rounded-lg bg-gradient-to-b from-gray-50 to-white border border-gray-100">
+                  <div className="text-xs text-gray-500 mb-2 font-medium">Financial Strength</div>
+                  <div className={`text-lg font-bold ${
+                    data.factorRankings.financialStrength.rank === 'High' ? 'text-green-600' :
+                    data.factorRankings.financialStrength.rank === 'Medium' ? 'text-yellow-600' : 'text-red-500'
+                  }`}>
+                    {data.factorRankings.financialStrength.rank}
+                  </div>
+                  <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        data.factorRankings.financialStrength.rank === 'High' ? 'bg-green-500' :
+                        data.factorRankings.financialStrength.rank === 'Medium' ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${data.factorRankings.financialStrength.score}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* Valuation */}
+                <div className="text-center p-4 rounded-lg bg-gradient-to-b from-gray-50 to-white border border-gray-100">
+                  <div className="text-xs text-gray-500 mb-2 font-medium">Valuation</div>
+                  <div className={`text-lg font-bold ${
+                    data.factorRankings.valuation.rank === 'Undervalued' ? 'text-green-600' :
+                    data.factorRankings.valuation.rank === 'Fairly Valued' ? 'text-yellow-600' : 'text-red-500'
+                  }`}>
+                    {data.factorRankings.valuation.rank}
+                  </div>
+                  <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        data.factorRankings.valuation.rank === 'Undervalued' ? 'bg-green-500' :
+                        data.factorRankings.valuation.rank === 'Fairly Valued' ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(0, data.factorRankings.valuation.score))}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* My Favorites Section */}
           {data.favorites && (
             <div className="mb-8 bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-xl border border-indigo-100">

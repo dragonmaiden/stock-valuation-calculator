@@ -575,6 +575,97 @@ export async function GET(request) {
       other: otherValuationRatios,
     };
 
+    // Calculate Factor Rankings (Low, Medium, High)
+    const getRank = (score) => {
+      if (score >= 70) return 'High';
+      if (score >= 40) return 'Medium';
+      return 'Low';
+    };
+
+    const getMoatRank = (score) => {
+      if (score >= 75) return 'Wide';
+      if (score >= 50) return 'Narrow';
+      return 'None';
+    };
+
+    const getValuationRank = (upside) => {
+      if (upside > 20) return 'Undervalued';
+      if (upside > -10) return 'Fairly Valued';
+      return 'Overvalued';
+    };
+
+    // 1. Predictability Rank - Based on earnings consistency
+    const earningsValues = recentIncome.map(i => i.netIncome).filter(v => v > 0);
+    const earningsVariance = earningsValues.length > 1
+      ? Math.sqrt(earningsValues.reduce((sum, v, _, arr) => {
+          const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+          return sum + Math.pow(v - mean, 2);
+        }, 0) / earningsValues.length) / (earningsValues.reduce((a, b) => a + b, 0) / earningsValues.length)
+      : 1;
+    const predictabilityScore = Math.max(0, Math.min(100, 100 - (earningsVariance * 200)));
+
+    // 2. Profitability Rank - Based on margins and returns
+    const netMargin = latestRevenue > 0 ? (latestNetIncome / latestRevenue) : 0;
+    const roe = favorites.roe || 0;
+    const roic = favorites.roic || 0;
+    const profitabilityScore = Math.min(100, (
+      (netMargin > 0.20 ? 40 : netMargin > 0.10 ? 25 : netMargin > 0.05 ? 15 : 5) +
+      (roe > 0.25 ? 30 : roe > 0.15 ? 20 : roe > 0.10 ? 10 : 5) +
+      (roic > 0.20 ? 30 : roic > 0.12 ? 20 : roic > 0.08 ? 10 : 5)
+    ));
+
+    // 3. Growth Rank - Based on revenue and earnings growth
+    const growthScore = Math.min(100, (
+      (revenueGrowth > 0.20 ? 50 : revenueGrowth > 0.10 ? 35 : revenueGrowth > 0.05 ? 20 : revenueGrowth > 0 ? 10 : 0) +
+      (netIncomeGrowth > 0.20 ? 50 : netIncomeGrowth > 0.10 ? 35 : netIncomeGrowth > 0.05 ? 20 : netIncomeGrowth > 0 ? 10 : 0)
+    ));
+
+    // 4. Moat Rank - Based on sustained margins, ROIC, and consistency
+    const moatScore = Math.min(100, (
+      (netMargin > 0.15 ? 25 : netMargin > 0.08 ? 15 : 5) +
+      (roic > 0.15 ? 25 : roic > 0.10 ? 15 : 5) +
+      (predictabilityScore > 60 ? 25 : predictabilityScore > 40 ? 15 : 5) +
+      (revenueGrowth > 0.05 ? 25 : revenueGrowth > 0 ? 15 : 5)
+    ));
+
+    // 5. Financial Strength Rank - Based on debt levels and coverage
+    const debtToEquity = favorites.debtToEbitda || 0;
+    const financialStrengthScore = Math.min(100, (
+      (debtToEquity < 1 ? 50 : debtToEquity < 2 ? 35 : debtToEquity < 3 ? 20 : 10) +
+      (latestBalance?.cashAndCashEquivalents > latestBalance?.totalDebt ? 50 :
+       latestBalance?.cashAndCashEquivalents > latestBalance?.totalDebt * 0.5 ? 35 : 20)
+    ));
+
+    // 6. Valuation Rank - Based on upside potential
+    const valuationUpside = dcf.upside || 0;
+
+    const factorRankings = {
+      predictability: {
+        score: Math.round(predictabilityScore),
+        rank: getRank(predictabilityScore),
+      },
+      profitability: {
+        score: Math.round(profitabilityScore),
+        rank: getRank(profitabilityScore),
+      },
+      growth: {
+        score: Math.round(growthScore),
+        rank: getRank(growthScore),
+      },
+      moat: {
+        score: Math.round(moatScore),
+        rank: getMoatRank(moatScore),
+      },
+      financialStrength: {
+        score: Math.round(financialStrengthScore),
+        rank: getRank(financialStrengthScore),
+      },
+      valuation: {
+        score: Math.round(50 + valuationUpside), // Center around 50
+        rank: getValuationRank(valuationUpside),
+      },
+    };
+
     return NextResponse.json({
       profile,
       quote,
@@ -589,6 +680,7 @@ export async function GET(request) {
       metrics,
       dcf,
       valuationRatios: valuationRatiosSummary,
+      factorRankings,
     });
 
   } catch (error) {
