@@ -17,6 +17,7 @@ export default function StockValuationCalculator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [data, setData] = useState(null);
+  const [viewMode, setViewMode] = useState('annual');
 
   const fetchStockData = async () => {
     if (!ticker) {
@@ -139,9 +140,12 @@ export default function StockValuationCalculator() {
   };
 
   const prepareIncomeData = () => {
-    if (!data?.income) return [];
-    return data.income.map((i) => ({
-      year: i.calendarYear || i.date?.slice(0, 4),
+    const source = viewMode === 'quarterly' ? data?.incomeQ : data?.income;
+    if (!source) return [];
+    return source.map((i) => ({
+      period: viewMode === 'quarterly'
+        ? `${i.fiscalYear || i.date?.slice(0, 4)} ${i.period || ''}`.trim()
+        : i.calendarYear || i.date?.slice(0, 4),
       Revenue: parseFloat((i.revenue / 1e9).toFixed(2)),
       'Operating Income': parseFloat((i.operatingIncome / 1e9).toFixed(2)),
       'Net Income': parseFloat((i.netIncome / 1e9).toFixed(2)),
@@ -149,9 +153,12 @@ export default function StockValuationCalculator() {
   };
 
   const prepareCashFlowData = () => {
-    if (!data?.cashflow) return [];
-    return data.cashflow.map((c) => ({
-      year: c.calendarYear || c.date?.slice(0, 4),
+    const source = viewMode === 'quarterly' ? data?.cashflowQ : data?.cashflow;
+    if (!source) return [];
+    return source.map((c) => ({
+      period: viewMode === 'quarterly'
+        ? `${c.fiscalYear || c.date?.slice(0, 4)} ${c.period || ''}`.trim()
+        : c.calendarYear || c.date?.slice(0, 4),
       'Operating CF': parseFloat((c.operatingCashFlow / 1e9).toFixed(2)),
       'Free Cash Flow': parseFloat((c.freeCashFlow / 1e9).toFixed(2)),
       CapEx: parseFloat((Math.abs(c.capitalExpenditure || 0) / 1e9).toFixed(2)),
@@ -159,9 +166,12 @@ export default function StockValuationCalculator() {
   };
 
   const prepareBalanceData = () => {
-    if (!data?.balance) return [];
-    return data.balance.map((b) => ({
-      year: b.calendarYear || b.date?.slice(0, 4),
+    const source = viewMode === 'quarterly' ? data?.balanceQ : data?.balance;
+    if (!source) return [];
+    return source.map((b) => ({
+      period: viewMode === 'quarterly'
+        ? `${b.fiscalYear || b.date?.slice(0, 4)} ${b.period || ''}`.trim()
+        : b.calendarYear || b.date?.slice(0, 4),
       'Cash & Investments': parseFloat(
         ((b.cashAndCashEquivalents + (b.shortTermInvestments || 0)) / 1e9).toFixed(2)
       ),
@@ -169,28 +179,9 @@ export default function StockValuationCalculator() {
     }));
   };
 
-  const prepareQuarterlyIncomeData = () => {
-    if (!data?.incomeQ) return [];
-    return data.incomeQ.map((i) => ({
-      quarter: `${i.fiscalYear || i.date?.slice(0, 4)} ${i.period || ''}`.trim(),
-      Revenue: parseFloat((i.revenue / 1e9).toFixed(2)),
-      'Operating Income': parseFloat((i.operatingIncome / 1e9).toFixed(2)),
-      'Net Income': parseFloat((i.netIncome / 1e9).toFixed(2)),
-    }));
-  };
-
-  const prepareQuarterlyCashFlowData = () => {
-    if (!data?.cashflowQ) return [];
-    return data.cashflowQ.map((c) => ({
-      quarter: `${c.fiscalYear || c.date?.slice(0, 4)} ${c.period || ''}`.trim(),
-      'Operating CF': parseFloat((c.operatingCashFlow / 1e9).toFixed(2)),
-      'Free Cash Flow': parseFloat((c.freeCashFlow / 1e9).toFixed(2)),
-    }));
-  };
-
   const verdict = data ? getValuationVerdict() : null;
 
-  const ChartSection = ({ title, chartData, dataKeys, colors, unit = '', dataKeyX = 'year' }) => (
+  const ChartSection = ({ title, chartData, dataKeys, colors, unit = '', dataKeyX = 'period' }) => (
     <div className="mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
       <h3 className="text-sm font-semibold mb-4 text-gray-700 tracking-wide">{title}</h3>
       <ResponsiveContainer width="100%" height={280}>
@@ -465,23 +456,53 @@ export default function StockValuationCalculator() {
             </div>
           </div>
 
-          {/* Annual Charts */}
-          <h3 className="text-sm font-semibold mb-4 text-gray-700 tracking-wider">ANNUAL DATA</h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <ChartSection
-              title="PROFITABILITY MARGINS (%)"
-              chartData={prepareMarginData()}
-              dataKeys={['Gross Margin', 'Operating Margin', 'Net Margin']}
-              colors={['#3b82f6', '#f97316', '#22c55e']}
-              unit="%"
-            />
-            <ChartSection
-              title="RETURN ON CAPITAL (%)"
-              chartData={prepareReturnData()}
-              dataKeys={['ROE', 'ROIC', 'ROA']}
-              colors={['#3b82f6', '#f97316', '#92400e']}
-              unit="%"
-            />
+          {/* Charts Section with Toggle */}
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-semibold text-gray-700 tracking-wider">FINANCIAL CHARTS</h3>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('annual')}
+                className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors ${
+                  viewMode === 'annual'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                ANNUAL
+              </button>
+              <button
+                onClick={() => setViewMode('quarterly')}
+                className={`px-4 py-2 text-xs font-semibold rounded-md transition-colors ${
+                  viewMode === 'quarterly'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                QUARTERLY
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {viewMode === 'annual' && (
+              <>
+                <ChartSection
+                  title="PROFITABILITY MARGINS (%)"
+                  chartData={prepareMarginData()}
+                  dataKeys={['Gross Margin', 'Operating Margin', 'Net Margin']}
+                  colors={['#3b82f6', '#f97316', '#22c55e']}
+                  unit="%"
+                  dataKeyX="year"
+                />
+                <ChartSection
+                  title="RETURN ON CAPITAL (%)"
+                  chartData={prepareReturnData()}
+                  dataKeys={['ROE', 'ROIC', 'ROA']}
+                  colors={['#3b82f6', '#f97316', '#92400e']}
+                  unit="%"
+                  dataKeyX="year"
+                />
+              </>
+            )}
             <ChartSection
               title="INCOME STATEMENT ($B)"
               chartData={prepareIncomeData()}
@@ -502,27 +523,6 @@ export default function StockValuationCalculator() {
               dataKeys={['Cash & Investments', 'Total Debt']}
               colors={['#22c55e', '#dc2626']}
               unit="B"
-            />
-          </div>
-
-          {/* Quarterly Charts */}
-          <h3 className="text-sm font-semibold mb-4 text-gray-700 tracking-wider">QUARTERLY DATA</h3>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ChartSection
-              title="QUARTERLY REVENUE & INCOME ($B)"
-              chartData={prepareQuarterlyIncomeData()}
-              dataKeys={['Revenue', 'Operating Income', 'Net Income']}
-              colors={['#3b82f6', '#f97316', '#22c55e']}
-              unit="B"
-              dataKeyX="quarter"
-            />
-            <ChartSection
-              title="QUARTERLY CASH FLOW ($B)"
-              chartData={prepareQuarterlyCashFlowData()}
-              dataKeys={['Operating CF', 'Free Cash Flow']}
-              colors={['#f97316', '#166534']}
-              unit="B"
-              dataKeyX="quarter"
             />
           </div>
 
