@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const API_BASE = 'https://financialmodelingprep.com/api/v3';
+const API_BASE = 'https://financialmodelingprep.com/stable';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -18,14 +18,14 @@ export async function GET(request) {
 
   try {
     const endpoints = [
-      `${API_BASE}/profile/${ticker}?apikey=${apiKey}`,
-      `${API_BASE}/income-statement/${ticker}?period=annual&limit=10&apikey=${apiKey}`,
-      `${API_BASE}/balance-sheet-statement/${ticker}?period=annual&limit=10&apikey=${apiKey}`,
-      `${API_BASE}/cash-flow-statement/${ticker}?period=annual&limit=10&apikey=${apiKey}`,
-      `${API_BASE}/ratios/${ticker}?period=annual&limit=10&apikey=${apiKey}`,
-      `${API_BASE}/key-metrics/${ticker}?period=annual&limit=10&apikey=${apiKey}`,
-      `${API_BASE}/quote/${ticker}?apikey=${apiKey}`,
-      `${API_BASE}/discounted-cash-flow/${ticker}?apikey=${apiKey}`,
+      `${API_BASE}/profile?symbol=${ticker}&apikey=${apiKey}`,
+      `${API_BASE}/income-statement?symbol=${ticker}&period=annual&limit=10&apikey=${apiKey}`,
+      `${API_BASE}/balance-sheet-statement?symbol=${ticker}&period=annual&limit=10&apikey=${apiKey}`,
+      `${API_BASE}/cash-flow-statement?symbol=${ticker}&period=annual&limit=10&apikey=${apiKey}`,
+      `${API_BASE}/ratios?symbol=${ticker}&period=annual&limit=10&apikey=${apiKey}`,
+      `${API_BASE}/key-metrics?symbol=${ticker}&period=annual&limit=10&apikey=${apiKey}`,
+      `${API_BASE}/quote?symbol=${ticker}&apikey=${apiKey}`,
+      `${API_BASE}/discounted-cash-flow?symbol=${ticker}&apikey=${apiKey}`,
     ];
 
     const responses = await Promise.all(
