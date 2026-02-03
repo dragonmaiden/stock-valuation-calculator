@@ -21,23 +21,24 @@ async function getCIK(ticker) {
   return null;
 }
 
-// Get the best available value for a metric from multiple possible field names
-function getMetricValues(facts, fieldNames, period = 'FY', limit = 10) {
+// Get metric values, combining data from multiple field names for full history
+function getMetricValues(facts, fieldNames, period = 'FY', limit = 20) {
+  const seen = new Map();
+
+  // Collect data from ALL matching field names to get complete history
   for (const fieldName of fieldNames) {
     const data = facts?.[fieldName]?.units?.USD || [];
 
-    // Filter by period type and only get quarterly-specific data (not cumulative YTD)
+    // Filter by period type
     let filtered;
     if (period === 'Q') {
-      // For quarterly, only get entries where the duration is roughly 3 months (quarterly, not cumulative)
       filtered = data.filter(d => {
         if (!['Q1','Q2','Q3','Q4'].includes(d.fp)) return false;
-        // Check if it's a single quarter (not cumulative) by looking at start/end dates
         if (d.start && d.end) {
           const startDate = new Date(d.start);
           const endDate = new Date(d.end);
           const months = (endDate - startDate) / (1000 * 60 * 60 * 24 * 30);
-          return months < 5; // Single quarter should be ~3 months
+          return months < 5;
         }
         return true;
       });
@@ -45,8 +46,7 @@ function getMetricValues(facts, fieldNames, period = 'FY', limit = 10) {
       filtered = data.filter(d => d.fp === period);
     }
 
-    // Deduplicate by fiscal year + period, keeping the most recent filing
-    const seen = new Map();
+    // Add to seen map, preferring newer filings
     for (const entry of filtered) {
       const key = `${entry.fy}-${entry.fp}`;
       const existing = seen.get(key);
@@ -54,14 +54,11 @@ function getMetricValues(facts, fieldNames, period = 'FY', limit = 10) {
         seen.set(key, entry);
       }
     }
-
-    const result = Array.from(seen.values())
-      .sort((a, b) => b.fy - a.fy || b.fp?.localeCompare(a.fp))
-      .slice(0, limit);
-
-    if (result.length > 0) return result;
   }
-  return [];
+
+  return Array.from(seen.values())
+    .sort((a, b) => b.fy - a.fy || b.fp?.localeCompare(a.fp))
+    .slice(0, limit);
 }
 
 export async function GET(request) {
