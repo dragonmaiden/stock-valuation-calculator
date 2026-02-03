@@ -405,6 +405,75 @@ export default function StockValuationCalculator() {
             </div>
           )}
 
+          {/* My Favorites Section */}
+          {data.favorites && (
+            <div className="mb-8 bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-xl border border-indigo-100">
+              <h3 className="text-sm font-semibold mb-4 text-indigo-800 tracking-wider">MY FAVORITES</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500 mb-1">P/E Ratio (TTM)</div>
+                  <div className="text-xl font-bold text-gray-900">
+                    {data.favorites.peRatio?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500 mb-1">P/S Ratio (TTM)</div>
+                  <div className="text-xl font-bold text-gray-900">
+                    {data.favorites.psRatio?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500 mb-1">EPS Growth Rate</div>
+                  <div className="text-xl font-bold text-gray-900">
+                    {data.favorites.epsGrowth ? `${(data.favorites.epsGrowth * 100).toFixed(2)}%` : 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500 mb-1">Dividend Yield (TTM)</div>
+                  <div className="text-xl font-bold text-gray-900">
+                    {data.favorites.dividendYield ? `${(data.favorites.dividendYield * 100).toFixed(2)}%` : 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500 mb-1">Market Cap</div>
+                  <div className="text-xl font-bold text-gray-900">
+                    {data.favorites.marketCap ? `$${(data.favorites.marketCap / 1e9).toFixed(2)}B` : 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500 mb-1">Shares Outstanding</div>
+                  <div className="text-xl font-bold text-gray-900">
+                    {data.favorites.sharesOutstanding ? `${(data.favorites.sharesOutstanding / 1e9).toFixed(2)}B` : 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500 mb-1">Beta</div>
+                  <div className="text-xl font-bold text-gray-900">
+                    {data.favorites.beta?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500 mb-1">Return on Equity (TTM)</div>
+                  <div className="text-xl font-bold text-gray-900">
+                    {data.favorites.roe ? `${(data.favorites.roe * 100).toFixed(2)}%` : 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500 mb-1">ROIC (TTM)</div>
+                  <div className="text-xl font-bold text-gray-900">
+                    {data.favorites.roic ? `${(data.favorites.roic * 100).toFixed(2)}%` : 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="text-xs text-gray-500 mb-1">Debt / EBITDA (TTM)</div>
+                  <div className="text-xl font-bold text-gray-900">
+                    {data.favorites.debtToEbitda?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Key Metrics Grid */}
           <div className="mb-8">
             <h3 className="text-sm font-semibold mb-4 text-gray-700 tracking-wider">KEY METRICS</h3>

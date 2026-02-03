@@ -76,8 +76,8 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Ticker not found' }, { status: 404 });
     }
 
-    // Fetch company facts (financial data) from SEC and price from Yahoo
-    const [factsRes, submissionsRes, yahooQuote] = await Promise.all([
+    // Fetch company facts (financial data) from SEC and price/stats from Yahoo
+    const [factsRes, submissionsRes, yahooQuote, yahooStats] = await Promise.all([
       fetch(`${SEC_BASE}/api/xbrl/companyfacts/CIK${cik}.json`, {
         headers: { 'User-Agent': USER_AGENT },
       }),
@@ -85,6 +85,9 @@ export async function GET(request) {
         headers: { 'User-Agent': USER_AGENT },
       }),
       yahooFinance.quote(ticker.toUpperCase()).catch(() => null),
+      yahooFinance.quoteSummary(ticker.toUpperCase(), {
+        modules: ['summaryDetail', 'defaultKeyStatistics', 'financialData'],
+      }).catch(() => null),
     ]);
 
     if (!factsRes.ok) {
@@ -251,12 +254,53 @@ export async function GET(request) {
       pe: yahooQuote?.trailingPE || null,
     };
 
+    // Build favorites metrics
+    const summaryDetail = yahooStats?.summaryDetail || {};
+    const keyStats = yahooStats?.defaultKeyStatistics || {};
+    const financialData = yahooStats?.financialData || {};
+
+    const favorites = {
+      peRatio: yahooQuote?.trailingPE || null,
+      psRatio: summaryDetail?.priceToSalesTrailing12Months || null,
+      epsGrowth: keyStats?.earningsQuarterlyGrowth || financialData?.earningsGrowth || null,
+      dividendYield: summaryDetail?.dividendYield || null,
+      marketCap: yahooQuote?.marketCap || null,
+      sharesOutstanding: keyStats?.sharesOutstanding || null,
+      beta: yahooQuote?.beta || keyStats?.beta || null,
+      roe: financialData?.returnOnEquity || null,
+      roic: null, // Will calculate from SEC data
+      debtToEbitda: null, // Will calculate from SEC data
+    };
+
+    // Calculate ROIC and Debt/EBITDA from SEC data if available
+    const latestIncome = income[income.length - 1];
+    const latestBalance = balance[balance.length - 1];
+    const latestCashflow = cashflow[cashflow.length - 1];
+
+    if (latestIncome && latestBalance) {
+      const nopat = latestIncome.operatingIncome * 0.75; // Approximate after-tax
+      const investedCapital = (latestBalance.totalEquity || 0) + (latestBalance.totalDebt || 0) - (latestBalance.cashAndCashEquivalents || 0);
+      if (investedCapital > 0) {
+        favorites.roic = nopat / investedCapital;
+      }
+    }
+
+    if (latestIncome && latestBalance && latestCashflow) {
+      // EBITDA = Operating Income + Depreciation (approximated from cashflow)
+      const depreciation = Math.abs(latestCashflow.capitalExpenditure || 0) * 0.5; // Rough estimate
+      const ebitda = latestIncome.operatingIncome + depreciation;
+      if (ebitda > 0) {
+        favorites.debtToEbitda = (latestBalance.totalDebt || 0) / ebitda;
+      }
+    }
+
     // Simple DCF placeholder
     const dcf = null;
 
     return NextResponse.json({
       profile,
       quote,
+      favorites,
       income,
       incomeQ,
       balance,
