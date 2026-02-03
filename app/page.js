@@ -611,6 +611,130 @@ export default function StockValuationCalculator() {
             </div>
           )}
 
+          {/* Valuation Ratios Table */}
+          {data.valuationRatios && data.valuationRatios.historical?.length > 0 && (
+            <div className="mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+              <h3 className="text-sm font-semibold mb-4 text-gray-700 tracking-wider">VALUATION RATIOS</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="px-3 py-3 text-left font-semibold text-gray-600 border-b-2 border-gray-200 sticky left-0 bg-gray-50">
+                        Metric
+                      </th>
+                      {data.valuationRatios.historical.map((h) => (
+                        <th key={h.year} className="px-3 py-3 text-right font-semibold text-gray-600 border-b-2 border-gray-200 min-w-[70px]">
+                          {h.year}
+                        </th>
+                      ))}
+                      <th className="px-3 py-3 text-right font-semibold text-blue-600 border-b-2 border-gray-200 bg-blue-50 min-w-[80px]">
+                        Current
+                      </th>
+                      <th className="px-3 py-3 text-right font-semibold text-purple-600 border-b-2 border-gray-200 bg-purple-50 min-w-[80px]">
+                        10Y Avg
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-3 py-3 font-medium text-gray-900 sticky left-0 bg-white">Price to Earnings (PE) Ratio</td>
+                      {data.valuationRatios.historical.map((h) => (
+                        <td key={h.year} className="px-3 py-3 text-right text-gray-600">
+                          {h.peRatio?.toFixed(2) || '-'}
+                        </td>
+                      ))}
+                      <td className="px-3 py-3 text-right font-semibold text-blue-600 bg-blue-50">
+                        {data.valuationRatios.current?.peRatio?.toFixed(2) || '-'}
+                      </td>
+                      <td className="px-3 py-3 text-right font-semibold text-purple-600 bg-purple-50">
+                        {data.valuationRatios.tenYearAvg?.peRatio?.toFixed(2) || '-'}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-3 py-3 font-medium text-gray-900 sticky left-0 bg-white">Price to Sales (PS) Ratio</td>
+                      {data.valuationRatios.historical.map((h) => (
+                        <td key={h.year} className="px-3 py-3 text-right text-gray-600">
+                          {h.psRatio?.toFixed(2) || '-'}
+                        </td>
+                      ))}
+                      <td className="px-3 py-3 text-right font-semibold text-blue-600 bg-blue-50">
+                        {data.valuationRatios.current?.psRatio?.toFixed(2) || '-'}
+                      </td>
+                      <td className="px-3 py-3 text-right font-semibold text-purple-600 bg-purple-50">
+                        {data.valuationRatios.tenYearAvg?.psRatio?.toFixed(2) || '-'}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-3 py-3 font-medium text-gray-900 sticky left-0 bg-white">Price to Book (PB) Ratio</td>
+                      {data.valuationRatios.historical.map((h) => (
+                        <td key={h.year} className="px-3 py-3 text-right text-gray-600">
+                          {h.pbRatio?.toFixed(2) || '-'}
+                        </td>
+                      ))}
+                      <td className="px-3 py-3 text-right font-semibold text-blue-600 bg-blue-50">
+                        {data.valuationRatios.current?.pbRatio?.toFixed(2) || '-'}
+                      </td>
+                      <td className="px-3 py-3 text-right font-semibold text-purple-600 bg-purple-50">
+                        {data.valuationRatios.tenYearAvg?.pbRatio?.toFixed(2) || '-'}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-3 py-3 font-medium text-gray-900 sticky left-0 bg-white">PEG Ratio (PE/Growth)</td>
+                      {data.valuationRatios.historical.map((h) => (
+                        <td key={h.year} className="px-3 py-3 text-right text-gray-600">
+                          {h.pegRatio?.toFixed(2) || '-'}
+                        </td>
+                      ))}
+                      <td className="px-3 py-3 text-right font-semibold text-blue-600 bg-blue-50">
+                        {data.valuationRatios.current?.pegRatio?.toFixed(2) || '-'}
+                      </td>
+                      <td className="px-3 py-3 text-right font-semibold text-purple-600 bg-purple-50">
+                        {data.valuationRatios.tenYearAvg?.pegRatio?.toFixed(2) || '-'}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="px-3 py-3 font-medium text-gray-900 sticky left-0 bg-white">PSG Ratio (PS/Growth)</td>
+                      {data.valuationRatios.historical.map((h) => (
+                        <td key={h.year} className="px-3 py-3 text-right text-gray-600">
+                          {h.psgRatio?.toFixed(2) || '-'}
+                        </td>
+                      ))}
+                      <td className="px-3 py-3 text-right font-semibold text-blue-600 bg-blue-50">
+                        {data.valuationRatios.current?.psgRatio?.toFixed(2) || '-'}
+                      </td>
+                      <td className="px-3 py-3 text-right font-semibold text-purple-600 bg-purple-50">
+                        {data.valuationRatios.tenYearAvg?.psgRatio?.toFixed(2) || '-'}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-gray-100 hover:bg-gray-50 bg-gray-25">
+                      <td className="px-3 py-3 font-medium text-gray-700 sticky left-0 bg-white">EPS Growth (%)</td>
+                      {data.valuationRatios.historical.map((h) => (
+                        <td key={h.year} className={`px-3 py-3 text-right ${h.epsGrowth >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                          {h.epsGrowth !== null ? `${h.epsGrowth.toFixed(1)}%` : '-'}
+                        </td>
+                      ))}
+                      <td className="px-3 py-3 text-right text-gray-400 bg-blue-50">-</td>
+                      <td className="px-3 py-3 text-right text-gray-400 bg-purple-50">-</td>
+                    </tr>
+                    <tr className="hover:bg-gray-50 bg-gray-25">
+                      <td className="px-3 py-3 font-medium text-gray-700 sticky left-0 bg-white">Revenue Growth (%)</td>
+                      {data.valuationRatios.historical.map((h) => (
+                        <td key={h.year} className={`px-3 py-3 text-right ${h.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                          {h.revenueGrowth !== null ? `${h.revenueGrowth.toFixed(1)}%` : '-'}
+                        </td>
+                      ))}
+                      <td className="px-3 py-3 text-right text-gray-400 bg-blue-50">-</td>
+                      <td className="px-3 py-3 text-right text-gray-400 bg-purple-50">-</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 text-xs text-gray-500">
+                Note: Historical ratios calculated using current price vs historical earnings/sales/book value to show relative valuation trends.
+              </div>
+            </div>
+          )}
+
           {/* Key Metrics Grid */}
           <div className="mb-8">
             <h3 className="text-sm font-semibold mb-4 text-gray-700 tracking-wider">KEY METRICS</h3>

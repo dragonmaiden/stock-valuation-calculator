@@ -416,6 +416,85 @@ export async function GET(request) {
       terminalGrowth: terminalGrowth * 100,
     };
 
+    // Calculate historical valuation ratios
+    const currentMarketCap = quote.marketCap || 0;
+    const currentShares = favorites.sharesOutstanding || 1;
+    const currentPE = favorites.peRatio;
+    const currentPS = favorites.psRatio;
+    const currentPB = latestEquity > 0 ? currentMarketCap / latestEquity : null;
+
+    // Calculate historical ratios (using current price as approximation for trend analysis)
+    const valuationRatios = income.map((inc, i) => {
+      const bal = balance[i] || {};
+      const cf = cashflow[i] || {};
+      const year = inc.calendarYear;
+
+      // EPS and per-share metrics
+      const eps = inc.netIncome / currentShares;
+      const salesPerShare = inc.revenue / currentShares;
+      const bookValuePerShare = (bal.totalEquity || 0) / currentShares;
+
+      // Calculate growth rates for PEG/PSG
+      const prevIncome = income[i - 1];
+      const epsGrowth = prevIncome && prevIncome.netIncome > 0
+        ? (inc.netIncome - prevIncome.netIncome) / prevIncome.netIncome
+        : null;
+      const revenueGrowthRate = prevIncome && prevIncome.revenue > 0
+        ? (inc.revenue - prevIncome.revenue) / prevIncome.revenue
+        : null;
+
+      // Historical P/E (using that year's earnings with current price as reference)
+      const peRatio = eps > 0 ? currentPrice / eps : null;
+      const psRatio = salesPerShare > 0 ? currentPrice / salesPerShare : null;
+      const pbRatio = bookValuePerShare > 0 ? currentPrice / bookValuePerShare : null;
+
+      // PEG ratio (P/E divided by growth rate)
+      const pegRatio = peRatio && epsGrowth && epsGrowth > 0
+        ? peRatio / (epsGrowth * 100)
+        : null;
+
+      // PSG ratio (P/S divided by growth rate)
+      const psgRatio = psRatio && revenueGrowthRate && revenueGrowthRate > 0
+        ? psRatio / (revenueGrowthRate * 100)
+        : null;
+
+      return {
+        year,
+        peRatio,
+        psRatio,
+        pbRatio,
+        pegRatio,
+        psgRatio,
+        eps,
+        epsGrowth: epsGrowth ? epsGrowth * 100 : null,
+        revenueGrowth: revenueGrowthRate ? revenueGrowthRate * 100 : null,
+      };
+    });
+
+    // Calculate 10-year averages
+    const calcAvg = (arr, key) => {
+      const valid = arr.map(a => a[key]).filter(v => v !== null && isFinite(v) && v > 0);
+      return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
+    };
+
+    const valuationRatiosSummary = {
+      historical: valuationRatios,
+      current: {
+        peRatio: currentPE,
+        psRatio: currentPS,
+        pbRatio: currentPB,
+        pegRatio: currentPE && netIncomeGrowth > 0 ? currentPE / (netIncomeGrowth * 100) : null,
+        psgRatio: currentPS && revenueGrowth > 0 ? currentPS / (revenueGrowth * 100) : null,
+      },
+      tenYearAvg: {
+        peRatio: calcAvg(valuationRatios, 'peRatio'),
+        psRatio: calcAvg(valuationRatios, 'psRatio'),
+        pbRatio: calcAvg(valuationRatios, 'pbRatio'),
+        pegRatio: calcAvg(valuationRatios, 'pegRatio'),
+        psgRatio: calcAvg(valuationRatios, 'psgRatio'),
+      },
+    };
+
     return NextResponse.json({
       profile,
       quote,
@@ -429,6 +508,7 @@ export async function GET(request) {
       ratios,
       metrics,
       dcf,
+      valuationRatios: valuationRatiosSummary,
     });
 
   } catch (error) {
