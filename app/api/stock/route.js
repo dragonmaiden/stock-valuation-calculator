@@ -341,6 +341,24 @@ export async function GET(request) {
       const years = values.length - 1;
       return Math.pow(end / start, 1 / years) - 1;
     };
+
+    // Simple DCF helper for 20-year projections
+    const calcDCF = (baseValue, growthRate, years, shares) => {
+      if (!baseValue || baseValue <= 0 || !isFinite(baseValue)) return null;
+      const dr = discountRate || 0.10;
+      const gr = Math.min(growthRate || 0, 0.15); // Cap growth at 15%
+      let totalPV = 0;
+      for (let i = 1; i <= years; i++) {
+        const cfVal = baseValue * Math.pow(1 + gr, i);
+        totalPV += cfVal / Math.pow(1 + dr, i);
+      }
+      // Add terminal value
+      const terminalCF = baseValue * Math.pow(1 + gr, years) * (1 + 0.025);
+      const terminalValue = terminalCF / (dr - 0.025);
+      const pvTerminal = terminalValue / Math.pow(1 + dr, years);
+      return (totalPV + pvTerminal) / (shares || 1);
+    };
+
     const revenueSeries = recentIncome.map(d => d.revenue).filter(v => v > 0);
     const revenueCagr = calcCAGR(revenueSeries);
     const revenueGrowth = revenueCagr !== null ? revenueCagr : 0;
@@ -496,15 +514,15 @@ export async function GET(request) {
       if (vals.length === 0) return null;
       return vals.reduce((a, b) => a + b, 0) / vals.length;
     };
-    const ratios = {
+    const dcfRatios = {
       opMargin: avg(ratiosSample, 'opMargin'),
       capexRatio: avg(ratiosSample, 'capexRatio'),
       daRatio: avg(ratiosSample, 'daRatio'),
       nwcRatio: avg(ratiosSample, 'nwcRatio'),
       latestNwc: ratiosSample.length > 0 ? ratiosSample[ratiosSample.length - 1].latestNwc : null,
     };
-    const currentOpMargin = latestRevenue ? (latestIncome?.operatingIncome || 0) / latestRevenue : ratios.opMargin;
-    const dcfValue = calcMultiStageDCF(latestRevenue, currentOpMargin, ratios);
+    const currentOpMargin = latestRevenue ? (latestIncome?.operatingIncome || 0) / latestRevenue : dcfRatios.opMargin;
+    const dcfValue = calcMultiStageDCF(latestRevenue, currentOpMargin, dcfRatios);
 
     // Calculate valuations
     const valuations = {
@@ -708,9 +726,9 @@ export async function GET(request) {
       medianPBValue: medianPB && bookValuePerShare > 0 ? medianPB * bookValuePerShare : null,
 
       // DCF Values (20-year projections)
-      dcf20Year: calcDCF(latestOCF, fcfGrowth * 0.6, 20),
-      dfcf20Year: calcDCF(latestFCF, fcfGrowth * 0.7, 20),
-      dni20Year: calcDCF(latestNetIncome, netIncomeGrowth * 0.6, 20),
+      dcf20Year: calcDCF(latestOCF, fcfGrowth * 0.6, 20, currentShares),
+      dfcf20Year: calcDCF(latestFCF, fcfGrowth * 0.7, 20, currentShares),
+      dni20Year: calcDCF(latestNetIncome, netIncomeGrowth * 0.6, 20, currentShares),
       dfcfTerminal: latestFCF > 0 ? (latestFCF * (1 + terminalGrowth) / (discountRate - terminalGrowth)) / currentShares : null,
 
       // Rule of 40
