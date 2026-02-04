@@ -647,9 +647,7 @@ export default function StockValuationCalculator() {
                 <BarChart
                   layout="vertical"
                   data={[
-                    { name: 'DCF Operating Cash Flow', value: data.dcf.dcfOperatingCashFlow, type: 'dcf' },
-                    { name: 'DCF Free Cash Flow', value: data.dcf.dcfFreeCashFlow, type: 'dcf' },
-                    { name: 'DCF Net Income', value: data.dcf.dcfNetIncome, type: 'dcf' },
+                    { name: 'DCF (Unlevered FCF)', value: data.dcf.dcfOperatingCashFlow, type: 'dcf' },
                     { name: 'DCF Terminal (15x FCF)', value: data.dcf.dcfTerminal, type: 'dcf' },
                     { name: 'Fair Value (P/S)', value: data.dcf.fairValuePS, type: 'relative' },
                     { name: 'Fair Value (P/E)', value: data.dcf.fairValuePE, type: 'relative' },
@@ -701,23 +699,19 @@ export default function StockValuationCalculator() {
                   />
                   <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                     {[
-                      { name: 'DCF Operating Cash Flow', type: 'dcf' },
-                      { name: 'DCF Free Cash Flow', type: 'dcf' },
-                      { name: 'DCF Net Income', type: 'dcf' },
-                      { name: 'DCF Terminal (15x FCF)', type: 'dcf' },
-                      { name: 'Fair Value (P/S)', type: 'relative' },
-                      { name: 'Fair Value (P/E)', type: 'relative' },
-                      { name: 'Fair Value (P/B)', type: 'relative' },
-                      { name: 'Earnings Power Value', type: 'relative' },
-                      { name: 'Graham Number', type: 'conservative' },
-                    ].filter(d => {
-                      const val = data.dcf[d.name === 'DCF Operating Cash Flow' ? 'dcfOperatingCashFlow' :
-                        d.name === 'DCF Free Cash Flow' ? 'dcfFreeCashFlow' :
-                        d.name === 'DCF Net Income' ? 'dcfNetIncome' :
-                        d.name === 'DCF Terminal (15x FCF)' ? 'dcfTerminal' :
-                        d.name === 'Fair Value (P/S)' ? 'fairValuePS' :
-                        d.name === 'Fair Value (P/E)' ? 'fairValuePE' :
-                        d.name === 'Fair Value (P/B)' ? 'fairValuePB' :
+                    { name: 'DCF (Unlevered FCF)', type: 'dcf' },
+                    { name: 'DCF Terminal (15x FCF)', type: 'dcf' },
+                    { name: 'Fair Value (P/S)', type: 'relative' },
+                    { name: 'Fair Value (P/E)', type: 'relative' },
+                    { name: 'Fair Value (P/B)', type: 'relative' },
+                    { name: 'Earnings Power Value', type: 'relative' },
+                    { name: 'Graham Number', type: 'conservative' },
+                  ].filter(d => {
+                    const val = data.dcf[d.name === 'DCF (Unlevered FCF)' ? 'dcfOperatingCashFlow' :
+                      d.name === 'DCF Terminal (15x FCF)' ? 'dcfTerminal' :
+                      d.name === 'Fair Value (P/S)' ? 'fairValuePS' :
+                      d.name === 'Fair Value (P/E)' ? 'fairValuePE' :
+                      d.name === 'Fair Value (P/B)' ? 'fairValuePB' :
                         d.name === 'Earnings Power Value' ? 'earningsPowerValue' :
                         'grahamNumber'];
                       return val && val > 0 && isFinite(val);
@@ -769,21 +763,25 @@ export default function StockValuationCalculator() {
                 <h3 className="text-sm font-semibold text-gray-700 tracking-wider">CALCULATION TRACE</h3>
                 <div className="text-xs text-gray-400">Key inputs driving fair value</div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-xs">
-                <MetricCard label="Shares Outstanding" value={formatNumber(data.dcf.assumptions.sharesOutstanding, 0)} />
-                <MetricCard label="Beta" value={formatRatio(data.dcf.assumptions.beta)} />
-                <MetricCard label="Cost of Equity" value={`${data.dcf.assumptions.costOfEquity.toFixed(2)}%`} />
-                <MetricCard label="Cost of Debt" value={`${data.dcf.assumptions.costOfDebt.toFixed(2)}%`} />
-                <MetricCard label="Equity Weight" value={`${data.dcf.assumptions.equityWeight.toFixed(1)}%`} />
-                <MetricCard label="Debt Weight" value={`${data.dcf.assumptions.debtWeight.toFixed(1)}%`} />
-                <MetricCard label="Tax Rate" value={`${data.dcf.assumptions.taxRate.toFixed(1)}%`} />
-                <MetricCard label="Rev Growth" value={`${data.dcf.assumptions.revenueGrowth.toFixed(1)}%`} />
-                <MetricCard label="NI Growth" value={`${data.dcf.assumptions.netIncomeGrowth.toFixed(1)}%`} />
-                <MetricCard label="FCF Growth" value={`${data.dcf.assumptions.fcfGrowth.toFixed(1)}%`} />
-                <MetricCard label="Latest Revenue" value={formatNumber(data.dcf.assumptions.latestRevenue)} />
-                <MetricCard label="Latest Net Income" value={formatNumber(data.dcf.assumptions.latestNetIncome)} />
-                <MetricCard label="Latest FCF" value={formatNumber(data.dcf.assumptions.latestFCF)} />
-                <MetricCard label="Latest OCF" value={formatNumber(data.dcf.assumptions.latestOCF)} />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-xs">
+        <MetricCard label="Shares Outstanding" value={formatNumber(data.dcf.assumptions.sharesOutstanding, 0)} />
+        <MetricCard label="Beta" value={formatRatio(data.dcf.assumptions.beta)} />
+        <MetricCard label="Cost of Equity" value={`${data.dcf.assumptions.costOfEquity.toFixed(2)}%`} />
+        <MetricCard label="Cost of Debt" value={`${data.dcf.assumptions.costOfDebt.toFixed(2)}%`} />
+        <MetricCard label="Equity Weight" value={`${data.dcf.assumptions.equityWeight.toFixed(1)}%`} />
+        <MetricCard label="Debt Weight" value={`${data.dcf.assumptions.debtWeight.toFixed(1)}%`} />
+        <MetricCard label="Tax Rate" value={`${data.dcf.assumptions.taxRate.toFixed(1)}%`} />
+        <MetricCard label="Rev Growth" value={`${data.dcf.assumptions.revenueGrowth.toFixed(1)}%`} />
+        <MetricCard label="NI Growth" value={`${data.dcf.assumptions.netIncomeGrowth.toFixed(1)}%`} />
+        <MetricCard label="FCF Growth" value={`${data.dcf.assumptions.fcfGrowth.toFixed(1)}%`} />
+        <MetricCard label="Op Margin" value={data.dcf.assumptions.operatingMargin !== null ? `${data.dcf.assumptions.operatingMargin.toFixed(1)}%` : 'N/A'} />
+        <MetricCard label="CapEx %" value={data.dcf.assumptions.capexRatio !== null ? `${data.dcf.assumptions.capexRatio.toFixed(1)}%` : 'N/A'} />
+        <MetricCard label="D&A %" value={data.dcf.assumptions.daRatio !== null ? `${data.dcf.assumptions.daRatio.toFixed(1)}%` : 'N/A'} />
+        <MetricCard label="NWC %" value={data.dcf.assumptions.nwcRatio !== null ? `${data.dcf.assumptions.nwcRatio.toFixed(1)}%` : 'N/A'} />
+        <MetricCard label="Latest Revenue" value={formatNumber(data.dcf.assumptions.latestRevenue)} />
+        <MetricCard label="Latest Net Income" value={formatNumber(data.dcf.assumptions.latestNetIncome)} />
+        <MetricCard label="Latest FCF" value={formatNumber(data.dcf.assumptions.latestFCF)} />
+        <MetricCard label="Latest OCF" value={formatNumber(data.dcf.assumptions.latestOCF)} />
                 <MetricCard label="Latest Equity" value={formatNumber(data.dcf.assumptions.latestEquity)} />
               </div>
             </div>

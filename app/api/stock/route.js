@@ -122,12 +122,22 @@ export async function GET(request) {
     const cashFields = ['CashAndCashEquivalentsAtCarryingValue', 'Cash'];
     const debtFields = ['LongTermDebt', 'LongTermDebtNoncurrent'];
     const operatingCashFlowFields = ['NetCashProvidedByUsedInOperatingActivities'];
-    const capexFields = ['PaymentsToAcquirePropertyPlantAndEquipment'];
+    const capexFields = [
+      'PaymentsToAcquirePropertyPlantAndEquipment',
+      'CapitalExpenditures',
+    ];
     const depreciationFields = [
       'DepreciationAndAmortization',
       'DepreciationDepletionAndAmortization',
       'DepreciationAmortizationAndAccretionNet',
     ];
+    const currentAssetsFields = ['AssetsCurrent'];
+    const currentLiabilitiesFields = ['LiabilitiesCurrent'];
+    const interestExpenseFields = ['InterestExpense'];
+    const pretaxIncomeFields = ['IncomeBeforeTax'];
+    const incomeTaxFields = ['IncomeTaxExpenseBenefit'];
+    const sharesDilutedFields = ['WeightedAverageNumberOfDilutedSharesOutstanding'];
+    const sharesBasicFields = ['WeightedAverageNumberOfSharesOutstandingBasic'];
 
     // Get annual data (10 years)
     const revenueAnnual = getMetricValues(usGaap, revenueFields, 'FY', 10);
@@ -141,6 +151,13 @@ export async function GET(request) {
     const opCashFlowAnnual = getMetricValues(usGaap, operatingCashFlowFields, 'FY', 10);
     const capexAnnual = getMetricValues(usGaap, capexFields, 'FY', 10);
     const depreciationAnnual = getMetricValues(usGaap, depreciationFields, 'FY', 10);
+    const currentAssetsAnnual = getMetricValues(usGaap, currentAssetsFields, 'FY', 10);
+    const currentLiabilitiesAnnual = getMetricValues(usGaap, currentLiabilitiesFields, 'FY', 10);
+    const interestExpenseAnnual = getMetricValues(usGaap, interestExpenseFields, 'FY', 10);
+    const pretaxIncomeAnnual = getMetricValues(usGaap, pretaxIncomeFields, 'FY', 10);
+    const incomeTaxAnnual = getMetricValues(usGaap, incomeTaxFields, 'FY', 10);
+    const sharesDilutedAnnual = getMetricValues(usGaap, sharesDilutedFields, 'FY', 10);
+    const sharesBasicAnnual = getMetricValues(usGaap, sharesBasicFields, 'FY', 10);
 
     // Get quarterly data (20 quarters = 5 years)
     const revenueQuarterly = getMetricValues(usGaap, revenueFields, 'Q', 20);
@@ -183,6 +200,8 @@ export async function GET(request) {
       totalEquity: equityAnnual.find(e => e.fy === asset.fy)?.val || 0,
       cashAndCashEquivalents: cashAnnual.find(c => c.fy === asset.fy)?.val || 0,
       shortTermInvestments: 0,
+      currentAssets: currentAssetsAnnual.find(ca => ca.fy === asset.fy)?.val || null,
+      currentLiabilities: currentLiabilitiesAnnual.find(cl => cl.fy === asset.fy)?.val || null,
       totalDebt: debtAnnual.find(d => d.fy === asset.fy)?.val || 0,
     })).reverse();
 
@@ -195,6 +214,8 @@ export async function GET(request) {
       totalEquity: equityQuarterly.find(e => e.end === asset.end)?.val || 0,
       cashAndCashEquivalents: cashQuarterly.find(c => c.end === asset.end)?.val || 0,
       shortTermInvestments: 0,
+      currentAssets: null,
+      currentLiabilities: null,
       totalDebt: debtQuarterly.find(d => d.end === asset.end)?.val || 0,
     })).reverse();
 
@@ -301,7 +322,9 @@ export async function GET(request) {
     }
 
     // Calculate comprehensive valuations
-    const sharesOutstanding = favorites.sharesOutstanding || 1;
+    const latestDilutedShares = sharesDilutedAnnual[0]?.val;
+    const latestBasicShares = sharesBasicAnnual[0]?.val;
+    const sharesOutstanding = latestDilutedShares || latestBasicShares || favorites.sharesOutstanding || 1;
     const currentPrice = quote.price || 1;
 
     // Get historical data for calculations
@@ -309,25 +332,20 @@ export async function GET(request) {
     const recentCashflow = cashflow.slice(-5);
     const recentBalance = balance.slice(-5);
 
-    // Calculate average growth rates
-    const calcGrowthRate = (data, key) => {
-      if (data.length < 2) return null;
-      const values = data.map(d => d[key]).filter(v => v !== null && v !== undefined);
-      if (values.length < 2) return null;
-      const growthRates = [];
-      for (let i = 1; i < values.length; i++) {
-        if (values[i - 1] !== 0) {
-          growthRates.push((values[i] - values[i - 1]) / values[i - 1]);
-        }
-      }
-      if (growthRates.length === 0) return null;
-      const avg = growthRates.reduce((a, b) => a + b, 0) / growthRates.length;
-      return Math.min(Math.max(avg, -0.3), 0.3);
+    // Growth helpers
+    const calcCAGR = (values) => {
+      if (!values || values.length < 2) return null;
+      const start = values[0];
+      const end = values[values.length - 1];
+      if (!start || !end || start <= 0 || end <= 0) return null;
+      const years = values.length - 1;
+      return Math.pow(end / start, 1 / years) - 1;
     };
-
-    const revenueGrowth = calcGrowthRate(recentIncome, 'revenue') ?? 0;
-    const netIncomeGrowth = calcGrowthRate(recentIncome, 'netIncome') ?? 0;
-    const fcfGrowth = calcGrowthRate(recentCashflow, 'freeCashFlow') ?? 0;
+    const revenueSeries = recentIncome.map(d => d.revenue).filter(v => v > 0);
+    const revenueCagr = calcCAGR(revenueSeries);
+    const revenueGrowth = revenueCagr !== null ? revenueCagr : 0;
+    const netIncomeGrowth = calcCAGR(recentIncome.map(d => d.netIncome).filter(v => v > 0)) ?? 0;
+    const fcfGrowth = calcCAGR(recentCashflow.map(d => d.freeCashFlow).filter(v => v > 0)) ?? 0;
 
     // Latest values
     const latestRevenue = recentIncome[recentIncome.length - 1]?.revenue || 0;
@@ -349,36 +367,95 @@ export async function GET(request) {
     const marketRiskPremium = 0.05; // 5%
     const beta = favorites.beta || 1;
     const costOfEquity = riskFreeRate + beta * marketRiskPremium;
-    const defaultDebtCost = 0.05;
-    const taxRate = 0.21;
     const totalDebt = latestBalance?.totalDebt || 0;
     const marketCap = quote.marketCap || 0;
+    const latestInterest = Math.abs(interestExpenseAnnual[0]?.val || 0);
+    const costOfDebt = totalDebt > 0 && latestInterest > 0 ? (latestInterest / totalDebt) : 0.05;
+    const latestPretax = pretaxIncomeAnnual[0]?.val || 0;
+    const latestTax = incomeTaxAnnual[0]?.val || 0;
+    const effectiveTax = latestPretax !== 0 ? (latestTax / latestPretax) : null;
+    const taxRate = effectiveTax !== null && isFinite(effectiveTax)
+      ? Math.min(Math.max(effectiveTax, 0), 0.35)
+      : 0.21;
     const totalCapital = marketCap + totalDebt;
     const equityWeight = totalCapital > 0 ? marketCap / totalCapital : 1;
     const debtWeight = totalCapital > 0 ? totalDebt / totalCapital : 0;
-    const discountRate = (equityWeight * costOfEquity) + (debtWeight * defaultDebtCost * (1 - taxRate));
+    const discountRate = (equityWeight * costOfEquity) + (debtWeight * costOfDebt * (1 - taxRate));
     const terminalGrowth = 0.025; // 2.5% perpetual growth
 
-    // DCF calculation helper
-    const calcDCF = (initialValue, growthRate, years, terminalMultiple = null) => {
-      if (initialValue <= 0) return null;
+    const getTerminalMargin = (sectorName, fallback) => {
+      const sector = (sectorName || '').toLowerCase();
+      const map = [
+        { key: ['software', 'technology', 'semiconductor'], margin: 0.18 },
+        { key: ['health', 'biotech', 'pharma'], margin: 0.14 },
+        { key: ['financial', 'bank', 'insurance'], margin: 0.22 },
+        { key: ['industrial', 'machinery', 'transport'], margin: 0.10 },
+        { key: ['energy', 'oil', 'gas'], margin: 0.10 },
+        { key: ['utility'], margin: 0.09 },
+        { key: ['consumer', 'retail', 'discretionary'], margin: 0.10 },
+        { key: ['staple', 'food', 'beverage'], margin: 0.09 },
+        { key: ['communication', 'media', 'telecom'], margin: 0.12 },
+        { key: ['real estate'], margin: 0.12 },
+        { key: ['materials', 'chemical', 'mining'], margin: 0.08 },
+      ];
+      for (const entry of map) {
+        if (entry.key.some(k => sector.includes(k))) return entry.margin;
+      }
+      return fallback ?? 0.10;
+    };
+
+    // DCF using revenue + unlevered FCF (multi-stage with working capital)
+    const calcMultiStageDCF = (startRevenue, startOpMargin, ratios) => {
+      if (!startRevenue || !isFinite(startRevenue)) return null;
+      const safetySpread = 0.01;
+      if (discountRate <= terminalGrowth + safetySpread) return null;
+      const highGrowth = Math.min(Math.max(revenueGrowth, -0.05), 0.25);
+      const years = 10;
+      const fadeStart = 6;
+      const terminal = terminalGrowth;
+
+      const histMargin = ratios?.opMargin;
+      const sectorMargin = getTerminalMargin(profile.sector || profile.industry, histMargin);
+      const terminalMargin = Math.min(Math.max(sectorMargin, 0.02), 0.20);
+      const initialMargin = isFinite(startOpMargin) ? startOpMargin : (histMargin ?? terminalMargin);
+
+      const capexRatio = ratios?.capexRatio ?? 0.04;
+      const daRatio = ratios?.daRatio ?? 0.03;
+      const nwcRatio = ratios?.nwcRatio ?? 0.05;
+
       let totalPV = 0;
-      let projectedValue = initialValue;
+      let revenue = startRevenue;
+      let prevNwc = (ratios?.latestNwc !== null && ratios?.latestNwc !== undefined)
+        ? ratios.latestNwc
+        : (revenue * nwcRatio);
 
       for (let year = 1; year <= years; year++) {
-        const cappedGrowth = Math.min(Math.max(growthRate, -0.15), 0.15);
-        projectedValue *= (1 + cappedGrowth);
-        totalPV += projectedValue / Math.pow(1 + discountRate, year);
+        const growth = year < fadeStart
+          ? highGrowth
+          : highGrowth + (terminal - highGrowth) * ((year - fadeStart + 1) / (years - fadeStart + 1));
+        const margin = initialMargin + (terminalMargin - initialMargin) * (year / years);
+        revenue *= (1 + growth);
+
+        const ebit = revenue * margin;
+        const nopat = ebit * (1 - taxRate);
+        const da = revenue * daRatio;
+        const capex = revenue * capexRatio;
+        const nwc = revenue * nwcRatio;
+        const deltaNwc = nwc - prevNwc;
+        prevNwc = nwc;
+
+        const fcf = nopat + da - capex - deltaNwc;
+        totalPV += fcf / Math.pow(1 + discountRate, year);
       }
 
-      // Terminal value
-      if (terminalMultiple) {
-        const terminalValue = projectedValue * terminalMultiple;
-        totalPV += terminalValue / Math.pow(1 + discountRate, years);
-      } else {
-        const terminalValue = projectedValue * (1 + terminalGrowth) / (discountRate - terminalGrowth);
-        totalPV += terminalValue / Math.pow(1 + discountRate, years);
-      }
+      const terminalEbit = revenue * terminalMargin;
+      const terminalNopat = terminalEbit * (1 - taxRate);
+      const terminalDa = revenue * daRatio;
+      const terminalCapex = revenue * capexRatio;
+      const terminalFcf = terminalNopat + terminalDa - terminalCapex;
+      if (terminalFcf <= 0) return null;
+      const terminalValue = (terminalFcf * (1 + terminal)) / (discountRate - terminal);
+      totalPV += terminalValue / Math.pow(1 + discountRate, years);
 
       return totalPV / sharesOutstanding;
     };
@@ -390,15 +467,52 @@ export async function GET(request) {
     const avgPE = favorites.peRatio || null;
     const avgPB = latestEquity > 0 ? quote.marketCap / latestEquity : null;
 
+    // Ratios for DCF inputs (working capital + reinvestment)
+    const yearKey = (y) => String(y);
+    const cashflowByYear = new Map(cashflow.map(c => [yearKey(c.calendarYear), c]));
+    const depByYear = new Map(depreciationAnnual.map(d => [yearKey(d.fy), d.val]));
+    const capexByYear = new Map(capexAnnual.map(c => [yearKey(c.fy), Math.abs(c.val || 0)]));
+    const ratiosSample = [];
+    for (const inc of recentIncome) {
+      const yr = yearKey(inc.calendarYear);
+      const rev = inc.revenue;
+      if (!rev || rev === 0) continue;
+      const dep = depByYear.get(yr);
+      const capex = capexByYear.get(yr);
+      const bal = balance.find(b => b.calendarYear === yr);
+      const ca = bal?.currentAssets;
+      const cl = bal?.currentLiabilities;
+      const nwc = (ca !== null && ca !== undefined && cl !== null && cl !== undefined) ? (ca - cl) : null;
+      ratiosSample.push({
+        opMargin: inc.operatingIncome / rev,
+        capexRatio: capex ? (capex / rev) : null,
+        daRatio: dep ? (dep / rev) : null,
+        nwcRatio: nwc !== null ? (nwc / rev) : null,
+        latestNwc: nwc,
+      });
+    }
+    const avg = (arr, key) => {
+      const vals = arr.map(a => a[key]).filter(v => v !== null && isFinite(v));
+      if (vals.length === 0) return null;
+      return vals.reduce((a, b) => a + b, 0) / vals.length;
+    };
+    const ratios = {
+      opMargin: avg(ratiosSample, 'opMargin'),
+      capexRatio: avg(ratiosSample, 'capexRatio'),
+      daRatio: avg(ratiosSample, 'daRatio'),
+      nwcRatio: avg(ratiosSample, 'nwcRatio'),
+      latestNwc: ratiosSample.length > 0 ? ratiosSample[ratiosSample.length - 1].latestNwc : null,
+    };
+    const currentOpMargin = latestRevenue ? (latestIncome?.operatingIncome || 0) / latestRevenue : ratios.opMargin;
+    const dcfValue = calcMultiStageDCF(latestRevenue, currentOpMargin, ratios);
+
     // Calculate valuations
     const valuations = {
       // DCF Models (10-year projections)
-      dcfOperatingCashFlow: calcDCF(latestOCF, fcfGrowth * 0.8, 10),
-      dcfFreeCashFlow: calcDCF(latestFCF, fcfGrowth, 10),
-      dcfNetIncome: calcDCF(latestNetIncome, netIncomeGrowth, 10),
-      dcfTerminal: latestFCF > 0
-        ? ((latestFCF * 15) / sharesOutstanding) / Math.pow(1 + discountRate, 10)
-        : null,
+      dcfOperatingCashFlow: dcfValue,
+      dcfFreeCashFlow: null,
+      dcfNetIncome: null,
+      dcfTerminal: null,
 
       // Relative Valuations
       fairValuePS: avgPS && latestRevenue > 0 ? (latestRevenue * avgPS * 0.9) / sharesOutstanding : null, // 10% margin of safety
@@ -444,13 +558,17 @@ export async function GET(request) {
         sharesOutstanding,
         beta,
         costOfEquity: costOfEquity * 100,
-        costOfDebt: defaultDebtCost * 100,
+        costOfDebt: costOfDebt * 100,
         equityWeight: equityWeight * 100,
         debtWeight: debtWeight * 100,
         taxRate: taxRate * 100,
         revenueGrowth: revenueGrowth * 100,
         netIncomeGrowth: netIncomeGrowth * 100,
         fcfGrowth: fcfGrowth * 100,
+        operatingMargin: ratios.opMargin !== null ? ratios.opMargin * 100 : null,
+        capexRatio: ratios.capexRatio !== null ? ratios.capexRatio * 100 : null,
+        daRatio: ratios.daRatio !== null ? ratios.daRatio * 100 : null,
+        nwcRatio: ratios.nwcRatio !== null ? ratios.nwcRatio * 100 : null,
         latestRevenue,
         latestNetIncome,
         latestFCF,
