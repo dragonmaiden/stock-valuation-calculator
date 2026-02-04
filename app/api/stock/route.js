@@ -404,7 +404,7 @@ export async function GET(request) {
     const getTerminalMargin = (sectorName, fallback) => {
       const sector = (sectorName || '').toLowerCase();
       const map = [
-        { key: ['software', 'technology', 'semiconductor'], margin: 0.18 },
+        { key: ['software', 'technology', 'semiconductor', 'computer'], margin: 0.18 },
         { key: ['health', 'biotech', 'pharma'], margin: 0.14 },
         { key: ['financial', 'bank', 'insurance'], margin: 0.22 },
         { key: ['industrial', 'machinery', 'transport'], margin: 0.10 },
@@ -496,7 +496,7 @@ export async function GET(request) {
       const rev = inc.revenue;
       if (!rev || rev === 0) continue;
       const dep = depByYear.get(yr);
-      const capex = capexByYear.get(yr);
+      const capex = capexByYear.get(yr) ?? Math.abs(cashflowByYear.get(yr)?.capitalExpenditure || 0);
       const bal = balance.find(b => b.calendarYear === yr);
       const ca = bal?.currentAssets;
       const cl = bal?.currentLiabilities;
@@ -565,6 +565,16 @@ export async function GET(request) {
       ? validValuations.reduce((sum, v) => sum + v.value, 0) / validValuations.length
       : null;
 
+    const dcfConfidence = {
+      valid: dcfRatios.opMargin !== null && dcfRatios.capexRatio !== null && dcfRatios.daRatio !== null && dcfRatios.nwcRatio !== null && discountRate > terminalGrowth,
+      missing: [
+        dcfRatios.opMargin === null ? 'operatingMargin' : null,
+        dcfRatios.capexRatio === null ? 'capexRatio' : null,
+        dcfRatios.daRatio === null ? 'daRatio' : null,
+        dcfRatios.nwcRatio === null ? 'nwcRatio' : null,
+      ].filter(Boolean),
+    };
+
     const dcf = {
       ...valuations,
       compositeValue,
@@ -572,6 +582,7 @@ export async function GET(request) {
       upside: compositeValue ? ((compositeValue - currentPrice) / currentPrice) * 100 : null,
       discountRate: discountRate * 100,
       terminalGrowth: terminalGrowth * 100,
+      confidence: dcfConfidence,
       assumptions: {
         sharesOutstanding,
         beta,
@@ -583,10 +594,10 @@ export async function GET(request) {
         revenueGrowth: revenueGrowth * 100,
         netIncomeGrowth: netIncomeGrowth * 100,
         fcfGrowth: fcfGrowth * 100,
-        operatingMargin: ratios.opMargin !== null ? ratios.opMargin * 100 : null,
-        capexRatio: ratios.capexRatio !== null ? ratios.capexRatio * 100 : null,
-        daRatio: ratios.daRatio !== null ? ratios.daRatio * 100 : null,
-        nwcRatio: ratios.nwcRatio !== null ? ratios.nwcRatio * 100 : null,
+        operatingMargin: dcfRatios.opMargin !== null ? dcfRatios.opMargin * 100 : null,
+        capexRatio: dcfRatios.capexRatio !== null ? dcfRatios.capexRatio * 100 : null,
+        daRatio: dcfRatios.daRatio !== null ? dcfRatios.daRatio * 100 : null,
+        nwcRatio: dcfRatios.nwcRatio !== null ? dcfRatios.nwcRatio * 100 : null,
         latestRevenue,
         latestNetIncome,
         latestFCF,

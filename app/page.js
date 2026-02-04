@@ -636,7 +636,20 @@ export default function StockValuationCalculator() {
           {data.dcf && data.dcf.compositeValue && (
             <div className="mb-6 bg-[#16161f] p-6 rounded-2xl border border-white/[0.06]">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                <h3 className="text-xs font-semibold text-[#a0a0b0] tracking-widest uppercase">Valuation Models</h3>
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs font-semibold text-[#a0a0b0] tracking-widest uppercase">Valuation Models</h3>
+                  {data.dcf?.confidence && (
+                    <div
+                      className={`text-[10px] px-3 py-1 rounded-full border w-fit ${
+                        data.dcf.confidence.valid
+                          ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                          : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                      }`}
+                    >
+                      {data.dcf.confidence.valid ? 'DCF VALID' : `DCF PARTIAL: missing ${data.dcf.confidence.missing.join(', ')}`}
+                    </div>
+                  )}
+                </div>
                 <div className="text-left sm:text-right">
                   <div className="text-[10px] text-[#6b6b80] tracking-wider uppercase">Fair Value Estimate</div>
                   <div className={`text-2xl font-bold ${data.dcf.upside > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
