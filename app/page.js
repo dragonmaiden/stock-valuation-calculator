@@ -92,6 +92,7 @@ const NAV_TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'valuation', label: 'Valuation' },
   { id: 'financials', label: 'Financials' },
+  { id: 'operating-metrics', label: 'Operating Metrics' },
   { id: 'charts', label: 'Charts' },
   { id: 'insider', label: 'Insider Activity' },
   { id: 'profile', label: 'Profile' },
@@ -461,9 +462,18 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
   const methodTypeByKey = {
     dcfOperatingCashFlow: 'dcf',
     dcfTerminal: 'dcf',
+    dcf20Year: 'dcf',
+    dfcf20Year: 'dcf',
+    dni20Year: 'dcf',
+    dfcfTerminal: 'dcf',
     fairValuePS: 'relative',
     fairValuePE: 'relative',
     fairValuePB: 'relative',
+    meanPSValue: 'relative',
+    meanPEValue: 'relative',
+    meanPBValue: 'relative',
+    psgValue: 'relative',
+    pegValue: 'relative',
     earningsPowerValue: 'relative',
     grahamNumber: 'conservative',
   };
@@ -583,7 +593,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
           </div>
 
           <div className="mt-5 p-4 rounded-xl text-[10px] border" style={{ background: theme.bg, borderColor: theme.border, color: theme.textTertiary }}>
-            <span style={{ color: theme.textSecondary }}>Assumptions:</span> Discount Rate: {data.dcf.discountRate?.toFixed(1)}% (WACC) | Terminal Growth: {data.dcf.terminalGrowth?.toFixed(1)}% | Projection: 10 years
+            <span style={{ color: theme.textSecondary }}>Assumptions:</span> Discount Rate: {data.dcf.discountRate?.toFixed(1)}% (WACC) | Terminal Growth: {data.dcf.terminalGrowth?.toFixed(1)}% | Projection: 10 years | Composite Source: {data.dcf.compositeSource || 'core'}
           </div>
         </div>
       )}
@@ -786,6 +796,273 @@ function FinancialsTab({ data, theme, formatPercent, formatRatio }) {
                   <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{formatRatio(r.currentRatio)}</td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OperatingMetricsTab({ data, theme }) {
+  const incomeByYear = useMemo(
+    () => new Map((data?.income || []).map((r) => [String(r.calendarYear), r])),
+    [data?.income]
+  );
+  const cashflowByYear = useMemo(
+    () => new Map((data?.cashflow || []).map((r) => [String(r.calendarYear), r])),
+    [data?.cashflow]
+  );
+  const balanceByYear = useMemo(
+    () => new Map((data?.balance || []).map((r) => [String(r.calendarYear), r])),
+    [data?.balance]
+  );
+  const ratioByYear = useMemo(
+    () => new Map((data?.ratios || []).map((r) => [String(r.calendarYear), r])),
+    [data?.ratios]
+  );
+
+  const years = useMemo(() => {
+    const set = new Set([
+      ...(data?.income || []).map((r) => String(r.calendarYear)),
+      ...(data?.cashflow || []).map((r) => String(r.calendarYear)),
+      ...(data?.balance || []).map((r) => String(r.calendarYear)),
+    ]);
+    return Array.from(set).sort();
+  }, [data?.income, data?.cashflow, data?.balance]);
+
+  const avg = (values) => {
+    const valid = values.filter((v) => v !== null && v !== undefined && Number.isFinite(v));
+    if (!valid.length) return null;
+    return valid.reduce((s, v) => s + v, 0) / valid.length;
+  };
+
+  const pct = (v) => (v === null || v === undefined || !Number.isFinite(v) ? null : v * 100);
+  const ratio = (v) => (v === null || v === undefined || !Number.isFinite(v) ? null : v);
+
+  const getMetricSeries = (getter) =>
+    years.map((y) => {
+      const inc = incomeByYear.get(y);
+      const cf = cashflowByYear.get(y);
+      const bal = balanceByYear.get(y);
+      const rat = ratioByYear.get(y);
+      return getter({ y, inc, cf, bal, rat });
+    });
+
+  const rowFromSeries = (label, values, type = 'percent') => ({
+    label,
+    type,
+    values,
+    current: values[values.length - 1] ?? null,
+    avg10: avg(values),
+  });
+
+  const formatCell = (value, type) => {
+    if (value === null || value === undefined || !Number.isFinite(value)) return '-';
+    if (type === 'percent') return `${value.toFixed(2)}%`;
+    return value.toFixed(2);
+  };
+
+  const profitabilityRows = [
+    rowFromSeries('Operating Cash Flow Margin', getMetricSeries(({ inc, cf }) => (inc?.revenue ? pct((cf?.operatingCashFlow || 0) / inc.revenue) : null))),
+    rowFromSeries('Free Cash Flow Margin', getMetricSeries(({ inc, cf }) => (inc?.revenue ? pct((cf?.freeCashFlow || 0) / inc.revenue) : null))),
+    rowFromSeries('Gross Profit Margin', getMetricSeries(({ rat }) => pct(rat?.grossProfitMargin))),
+    rowFromSeries('Operating Profit Margin', getMetricSeries(({ rat }) => pct(rat?.operatingProfitMargin))),
+    rowFromSeries('Net Profit Margin', getMetricSeries(({ rat }) => pct(rat?.netProfitMargin))),
+    rowFromSeries('Return on Assets (ROA)', getMetricSeries(({ rat }) => pct(rat?.returnOnAssets))),
+    rowFromSeries('Return on Equity (ROE)', getMetricSeries(({ rat }) => pct(rat?.returnOnEquity))),
+    rowFromSeries('Return on Invested Capital (ROIC)', getMetricSeries(({ rat }) => pct(rat?.returnOnCapitalEmployed))),
+  ];
+
+  const debtLiquidityRows = [
+    rowFromSeries('Cash Ratio', getMetricSeries(({ bal }) => (bal?.currentLiabilities > 0 ? ratio(((bal.cashAndCashEquivalents || 0) + (bal.shortTermInvestments || 0)) / bal.currentLiabilities) : null)), 'ratio'),
+    rowFromSeries('Current Ratio', getMetricSeries(({ rat }) => ratio(rat?.currentRatio)), 'ratio'),
+    rowFromSeries('Debt Servicing Ratio', getMetricSeries(() => null)),
+    rowFromSeries('Interest Coverage', getMetricSeries(() => null), 'ratio'),
+    rowFromSeries('Total Debt / EBITDA', getMetricSeries(() => null), 'ratio'),
+  ];
+
+  const efficiencyRows = [
+    rowFromSeries('Fixed Asset Turnover', getMetricSeries(() => null), 'ratio'),
+    rowFromSeries('Days of Payables Outstanding', getMetricSeries(() => null), 'ratio'),
+    rowFromSeries('Inventory Turnover', getMetricSeries(() => null), 'ratio'),
+    rowFromSeries('Receivables Turnover', getMetricSeries(() => null), 'ratio'),
+    rowFromSeries('Asset Turnover Ratio', getMetricSeries(({ inc, bal }) => (bal?.totalAssets ? ratio(inc?.revenue / bal.totalAssets) : null)), 'ratio'),
+    rowFromSeries('Cash Conversion Cycle', getMetricSeries(() => null), 'ratio'),
+    rowFromSeries('CapEx to Operating Cash Flow', getMetricSeries(({ cf }) => (cf?.operatingCashFlow ? ratio(Math.abs(cf.capitalExpenditure || 0) / cf.operatingCashFlow) : null)), 'ratio'),
+    rowFromSeries('CapEx to Operating Income', getMetricSeries(({ inc, cf }) => (inc?.operatingIncome ? ratio(Math.abs(cf?.capitalExpenditure || 0) / inc.operatingIncome) : null)), 'ratio'),
+    rowFromSeries('CapEx to Revenue', getMetricSeries(({ inc, cf }) => (inc?.revenue ? ratio(Math.abs(cf?.capitalExpenditure || 0) / inc.revenue) : null)), 'ratio'),
+  ];
+
+  const valuationHistoryByYear = new Map((data?.valuationRatios?.historical || []).map((h) => [String(h.year), h]));
+  const priceRatioRows = [
+    rowFromSeries('Price to Earnings (PE) Ratio', years.map((y) => ratio(valuationHistoryByYear.get(y)?.peRatio)), 'ratio'),
+    rowFromSeries('Price to Earnings Growth (PEG) Ratio', years.map((y) => ratio(valuationHistoryByYear.get(y)?.pegRatio)), 'ratio'),
+    rowFromSeries('Price to Sales (PS) Ratio', years.map((y) => ratio(valuationHistoryByYear.get(y)?.psRatio)), 'ratio'),
+    rowFromSeries('Price to Book (PB) Ratio', years.map((y) => ratio(valuationHistoryByYear.get(y)?.pbRatio)), 'ratio'),
+  ];
+
+  const getCagr = (series, nYears) => {
+    if (series.length < nYears + 1) return null;
+    const end = series[series.length - 1];
+    const start = series[series.length - 1 - nYears];
+    if (!start || !end || start <= 0 || end <= 0) return null;
+    return Math.pow(end / start, 1 / nYears) - 1;
+  };
+
+  const growthRows = [
+    { label: 'Revenue', series: (data?.income || []).map((r) => r.revenue || 0) },
+    { label: 'Net Income', series: (data?.income || []).map((r) => r.netIncome || 0) },
+    { label: 'Operating Income', series: (data?.income || []).map((r) => r.operatingIncome || 0) },
+    { label: 'Operating Cash Flow', series: (data?.cashflow || []).map((r) => r.operatingCashFlow || 0) },
+    { label: 'Free Cash Flow', series: (data?.cashflow || []).map((r) => r.freeCashFlow || 0) },
+  ];
+
+  const ttmGross = profitabilityRows.find((r) => r.label === 'Gross Profit Margin')?.current;
+  const ttmNet = profitabilityRows.find((r) => r.label === 'Net Profit Margin')?.current;
+  const ttmOp = profitabilityRows.find((r) => r.label === 'Operating Profit Margin')?.current;
+  const ttmOcf = profitabilityRows.find((r) => r.label === 'Operating Cash Flow Margin')?.current;
+  const ttmFcf = profitabilityRows.find((r) => r.label === 'Free Cash Flow Margin')?.current;
+  const ttmRoa = profitabilityRows.find((r) => r.label === 'Return on Assets (ROA)')?.current;
+  const ttmRoic = profitabilityRows.find((r) => r.label === 'Return on Invested Capital (ROIC)')?.current;
+  const ttmRoe = profitabilityRows.find((r) => r.label === 'Return on Equity (ROE)')?.current;
+  const gross5yAvg = avg(profitabilityRows.find((r) => r.label === 'Gross Profit Margin')?.values.slice(-5) || []);
+
+  const ttmAssetTurnover = efficiencyRows.find((r) => r.label === 'Asset Turnover Ratio')?.current;
+  const ttmCapexToOcf = efficiencyRows.find((r) => r.label === 'CapEx to Operating Cash Flow')?.current;
+  const ttmCapexToOp = efficiencyRows.find((r) => r.label === 'CapEx to Operating Income')?.current;
+  const ttmCapexToRev = efficiencyRows.find((r) => r.label === 'CapEx to Revenue')?.current;
+  const ttmDpo = efficiencyRows.find((r) => r.label === 'Days of Payables Outstanding')?.current;
+  const ttmFat = efficiencyRows.find((r) => r.label === 'Fixed Asset Turnover')?.current;
+  const ttmInvTurnover = efficiencyRows.find((r) => r.label === 'Inventory Turnover')?.current;
+  const ttmReceivables = efficiencyRows.find((r) => r.label === 'Receivables Turnover')?.current;
+  const ttmCcc = efficiencyRows.find((r) => r.label === 'Cash Conversion Cycle')?.current;
+
+  const renderTable = (title, rows) => (
+    <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+      <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>{title}</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr style={{ background: theme.tableBg }}>
+              <th className="px-3 py-3 text-left font-semibold sticky left-0" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}`, background: theme.tableBg }}>Metric</th>
+              {years.map((y) => (
+                <th key={y} className="px-3 py-3 text-right font-medium min-w-[70px]" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>{y}</th>
+              ))}
+              <th className="px-3 py-3 text-right font-semibold min-w-[70px]" style={{ color: theme.accent, borderBottom: `1px solid ${theme.border}`, background: theme.accent + '0d' }}>Current</th>
+              <th className="px-3 py-3 text-right font-semibold min-w-[70px]" style={{ color: theme.accentAlt, borderBottom: `1px solid ${theme.border}`, background: theme.accentAlt + '0d' }}>10yAvg</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                <td className="px-3 py-3 font-medium sticky left-0" style={{ color: theme.text, background: theme.stickyBg }}>{row.label}</td>
+                {row.values.map((v, i) => (
+                  <td key={`${row.label}-${years[i]}`} className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>
+                    {formatCell(v, row.type)}
+                  </td>
+                ))}
+                <td className="px-3 py-3 text-right font-semibold" style={{ color: theme.accent, background: theme.accent + '0d' }}>{formatCell(row.current, row.type)}</td>
+                <td className="px-3 py-3 text-right font-semibold" style={{ color: theme.accentAlt, background: theme.accentAlt + '0d' }}>{formatCell(row.avg10, row.type)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-operating-metrics" aria-labelledby="tab-operating-metrics">
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Profitability Ratios</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <MetricCard theme={theme} label="Gross Profit Margin (TTM)" value={formatCell(ttmGross, 'percent')} />
+          <MetricCard theme={theme} label="Gross Profit Margin (5-year Average)" value={formatCell(gross5yAvg, 'percent')} />
+          <MetricCard theme={theme} label="Net Profit Margin (TTM)" value={formatCell(ttmNet, 'percent')} />
+          <MetricCard theme={theme} label="Operating Cash Flow Margin (TTM)" value={formatCell(ttmOcf, 'percent')} />
+          <MetricCard theme={theme} label="Free Cash Flow Margin (TTM)" value={formatCell(ttmFcf, 'percent')} />
+          <MetricCard theme={theme} label="Operating Profit Margin (TTM)" value={formatCell(ttmOp, 'percent')} />
+          <MetricCard theme={theme} label="Return on Assets (TTM)" value={formatCell(ttmRoa, 'percent')} />
+          <MetricCard theme={theme} label="Return on Invested Capital (TTM)" value={formatCell(ttmRoic, 'percent')} />
+          <MetricCard theme={theme} label="Return on Equity (TTM)" value={formatCell(ttmRoe, 'percent')} />
+          <MetricCard theme={theme} label="Return on Common Equity (TTM)" value={formatCell(ttmRoe, 'percent')} />
+        </div>
+      </div>
+
+      {renderTable('Profitability Ratios (Historical)', profitabilityRows)}
+      {renderTable('Debt & Liquidity Ratios', debtLiquidityRows)}
+
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Efficiency Ratios</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <MetricCard theme={theme} label="Asset Turnover Ratio (TTM)" value={formatCell(ttmAssetTurnover, 'ratio')} />
+          <MetricCard theme={theme} label="CapEx to Operating Cash Flow (TTM)" value={formatCell(ttmCapexToOcf, 'ratio')} />
+          <MetricCard theme={theme} label="CapEx to Operating Income (TTM)" value={formatCell(ttmCapexToOp, 'ratio')} />
+          <MetricCard theme={theme} label="CapEx to Revenue (TTM)" value={formatCell(ttmCapexToRev, 'ratio')} />
+          <MetricCard theme={theme} label="Cash Conversion Cycle (TTM)" value={formatCell(ttmCcc, 'ratio')} />
+          <MetricCard theme={theme} label="Days of Payables Outstanding (TTM)" value={formatCell(ttmDpo, 'ratio')} />
+          <MetricCard theme={theme} label="Fixed Asset Turnover (TTM)" value={formatCell(ttmFat, 'ratio')} />
+          <MetricCard theme={theme} label="Inventory Turnover (TTM)" value={formatCell(ttmInvTurnover, 'ratio')} />
+          <MetricCard theme={theme} label="Receivables Turnover (TTM)" value={formatCell(ttmReceivables, 'ratio')} />
+        </div>
+      </div>
+
+      {renderTable('Efficiency Ratios (Historical)', efficiencyRows)}
+      {renderTable('Price Ratios', priceRatioRows)}
+
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Growth</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ background: theme.tableBg }}>
+                <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Historical</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>1-year</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>3-year</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>5-year</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>10-year</th>
+              </tr>
+            </thead>
+            <tbody>
+              {growthRows.map((row) => (
+                <tr key={row.label} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                  <td className="px-3 py-3 font-medium" style={{ color: theme.text }}>{row.label}</td>
+                  <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{formatCell(pct(getCagr(row.series, 1)), 'percent')}</td>
+                  <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{formatCell(pct(getCagr(row.series, 3)), 'percent')}</td>
+                  <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{formatCell(pct(getCagr(row.series, 5)), 'percent')}</td>
+                  <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{formatCell(pct(getCagr(row.series, 10)), 'percent')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-6 overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ background: theme.tableBg }}>
+                <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Projected</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Current</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ borderBottom: `1px solid ${theme.border}` }}>
+                <td className="px-3 py-3 font-medium" style={{ color: theme.text }}>Projected Revenue Growth Rate</td>
+                <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{formatCell(data?.dcf?.assumptions?.revenueGrowth, 'percent')}</td>
+              </tr>
+              <tr style={{ borderBottom: `1px solid ${theme.border}` }}>
+                <td className="px-3 py-3 font-medium" style={{ color: theme.text }}>Projected 3-5 Years EPS Growth Rate</td>
+                <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{formatCell(data?.dcf?.assumptions?.netIncomeGrowth, 'percent')}</td>
+              </tr>
+              <tr style={{ borderBottom: `1px solid ${theme.border}` }}>
+                <td className="px-3 py-3 font-medium" style={{ color: theme.text }}>Projected Long Term EPS Growth Rate</td>
+                <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>-</td>
+              </tr>
+              <tr style={{ borderBottom: `1px solid ${theme.border}` }}>
+                <td className="px-3 py-3 font-medium" style={{ color: theme.text }}>Projected 3-5 Years Cash Flow per Share Growth Rate</td>
+                <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{formatCell(data?.dcf?.assumptions?.fcfGrowth, 'percent')}</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -1161,6 +1438,7 @@ export default function StockValuationCalculator() {
       case 'overview': return <OverviewTab data={data} verdict={verdict} theme={t} formatNumber={formatNumber} formatPercent={formatPercent} formatRatio={formatRatio} calculatePEGValue={calculatePEGValue} revenueCagr={revenueCagr} fcfCagr={fcfCagr} netMargin={netMargin} marginDelta={marginDelta} />;
       case 'valuation': return <ValuationTab data={data} theme={t} formatNumber={formatNumber} formatRatio={formatRatio} />;
       case 'financials': return <FinancialsTab data={data} theme={t} formatPercent={formatPercent} formatRatio={formatRatio} />;
+      case 'operating-metrics': return <OperatingMetricsTab data={data} theme={t} />;
       case 'charts': return <ChartsTab theme={t} viewMode={viewMode} setViewMode={setViewMode} marginData={marginData} returnData={returnData} incomeData={incomeData} cashFlowData={cashFlowData} balanceData={balanceData} />;
       case 'insider': return <InsiderActivityTab data={data} theme={t} />;
       case 'profile': return <ProfileTab data={data} theme={t} />;

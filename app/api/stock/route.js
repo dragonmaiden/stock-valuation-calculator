@@ -715,6 +715,9 @@ export async function GET(request) {
       ...valuations,
       compositeMethods,
       compositeValue,
+      coreCompositeMethods: compositeMethods,
+      coreCompositeValue: compositeValue,
+      compositeSource: 'core',
       currentPrice,
       upside: compositeValue ? ((compositeValue - currentPrice) / currentPrice) * 100 : null,
       discountRate: discountRate * 100,
@@ -907,6 +910,32 @@ export async function GET(request) {
       },
       other: otherValuationRatios,
     };
+
+    // Oracle-style approximation (for iterative calibration against sample charts)
+    const oracleApproxMethodConfig = [
+      { key: 'dcf20Year', label: 'Discounted Cash Flow 20-year (DCF-20)', value: otherValuationRatios.dcf20Year, weight: 0.22, type: 'dcf' },
+      { key: 'dfcf20Year', label: 'Discounted Free Cash Flow 20-year (DFCF-20)', value: otherValuationRatios.dfcf20Year, weight: 0.12, type: 'dcf' },
+      { key: 'dni20Year', label: 'Discounted Net Income 20-year (DNI-20)', value: otherValuationRatios.dni20Year, weight: 0.18, type: 'dcf' },
+      { key: 'dfcfTerminal', label: 'Discounted Free Cash Flow Terminal (DFCF-Terminal)', value: otherValuationRatios.dfcfTerminal, weight: 0.10, type: 'dcf' },
+      { key: 'meanPSValue', label: 'Mean Price to Sales (PS) Ratio', value: otherValuationRatios.meanPSValue, weight: 0.10, type: 'relative' },
+      { key: 'meanPEValue', label: 'Mean Price to Earnings (PE) Ratio without NRI', value: otherValuationRatios.meanPEValue, weight: 0.12, type: 'relative' },
+      { key: 'meanPBValue', label: 'Mean Price to Book (PB) Ratio', value: otherValuationRatios.meanPBValue, weight: 0.06, type: 'relative' },
+      { key: 'psgValue', label: 'Price to Sales Growth (PSG) Ratio', value: valuations.psgValue, weight: 0.05, type: 'relative' },
+      { key: 'pegValue', label: 'Price to Earnings Growth (PEG) Ratio without NRI', value: valuations.pegValue, weight: 0.05, type: 'relative' },
+    ];
+
+    const oracleApproxMethods = oracleApproxMethodConfig.filter((m) => m.value !== null && m.value > 0 && isFinite(m.value));
+    const oracleApproxWeightSum = oracleApproxMethods.reduce((sum, m) => sum + m.weight, 0);
+    const oracleApproxComposite = oracleApproxWeightSum > 0
+      ? oracleApproxMethods.reduce((sum, m) => sum + (m.value * (m.weight / oracleApproxWeightSum)), 0)
+      : null;
+
+    if (oracleApproxComposite && oracleApproxMethods.length >= 4) {
+      dcf.compositeMethods = oracleApproxMethods.map(({ key, label, value, type }) => ({ key, label, value, type }));
+      dcf.compositeValue = oracleApproxComposite;
+      dcf.compositeSource = 'oracle_approx_v1';
+      dcf.upside = ((oracleApproxComposite - currentPrice) / currentPrice) * 100;
+    }
 
     // Calculate Factor Rankings (Low, Medium, High)
     const getRank = (score) => {
