@@ -926,15 +926,15 @@ export async function GET(request) {
 
     // v2 calibration factors derived from observed deltas against reference charts
     const oracleCalibrationFactor = {
-      dcf20Year: 1.95,
-      dfcf20Year: 2.2,
+      dcf20Year: 2.26,
+      dfcf20Year: 2.41,
       dni20Year: 1.65,
-      dfcfTerminal: 1.85,
-      meanPSValue: 0.58,
-      meanPEValue: 0.53,
-      meanPBValue: 0.96,
-      psgValue: 1.15,
-      pegValue: 2.4,
+      dfcfTerminal: 1.81,
+      meanPSValue: 0.585,
+      meanPEValue: 0.532,
+      meanPBValue: 0.97,
+      psgValue: 1.27,
+      pegValue: 2.63,
     };
 
     const calibratedOracleValue = (key, rawValue) => {
@@ -945,14 +945,14 @@ export async function GET(request) {
     };
 
     const oracleApproxMethodConfig = [
-      { key: 'dcf20Year', label: 'Discounted Cash Flow 20-year (DCF-20)', value: calibratedOracleValue('dcf20Year', oracleRawValues.dcf20Year), rawValue: oracleRawValues.dcf20Year, weight: 0.22, type: 'dcf' },
-      { key: 'dfcf20Year', label: 'Discounted Free Cash Flow 20-year (DFCF-20)', value: calibratedOracleValue('dfcf20Year', oracleRawValues.dfcf20Year), rawValue: oracleRawValues.dfcf20Year, weight: 0.12, type: 'dcf' },
-      { key: 'dni20Year', label: 'Discounted Net Income 20-year (DNI-20)', value: calibratedOracleValue('dni20Year', oracleRawValues.dni20Year), rawValue: oracleRawValues.dni20Year, weight: 0.18, type: 'dcf' },
+      { key: 'dcf20Year', label: 'Discounted Cash Flow 20-year (DCF-20)', value: calibratedOracleValue('dcf20Year', oracleRawValues.dcf20Year), rawValue: oracleRawValues.dcf20Year, weight: 0.20, type: 'dcf' },
+      { key: 'dfcf20Year', label: 'Discounted Free Cash Flow 20-year (DFCF-20)', value: calibratedOracleValue('dfcf20Year', oracleRawValues.dfcf20Year), rawValue: oracleRawValues.dfcf20Year, weight: 0.13, type: 'dcf' },
+      { key: 'dni20Year', label: 'Discounted Net Income 20-year (DNI-20)', value: calibratedOracleValue('dni20Year', oracleRawValues.dni20Year), rawValue: oracleRawValues.dni20Year, weight: 0.14, type: 'dcf' },
       { key: 'dfcfTerminal', label: 'Discounted Free Cash Flow Terminal (DFCF-Terminal)', value: calibratedOracleValue('dfcfTerminal', oracleRawValues.dfcfTerminal), rawValue: oracleRawValues.dfcfTerminal, weight: 0.10, type: 'dcf' },
-      { key: 'meanPSValue', label: 'Mean Price to Sales (PS) Ratio', value: calibratedOracleValue('meanPSValue', oracleRawValues.meanPSValue), rawValue: oracleRawValues.meanPSValue, weight: 0.10, type: 'relative' },
-      { key: 'meanPEValue', label: 'Mean Price to Earnings (PE) Ratio without NRI', value: calibratedOracleValue('meanPEValue', oracleRawValues.meanPEValue), rawValue: oracleRawValues.meanPEValue, weight: 0.12, type: 'relative' },
-      { key: 'meanPBValue', label: 'Mean Price to Book (PB) Ratio', value: calibratedOracleValue('meanPBValue', oracleRawValues.meanPBValue), rawValue: oracleRawValues.meanPBValue, weight: 0.06, type: 'relative' },
-      { key: 'psgValue', label: 'Price to Sales Growth (PSG) Ratio', value: calibratedOracleValue('psgValue', oracleRawValues.psgValue), rawValue: oracleRawValues.psgValue, weight: 0.05, type: 'relative' },
+      { key: 'meanPSValue', label: 'Mean Price to Sales (PS) Ratio', value: calibratedOracleValue('meanPSValue', oracleRawValues.meanPSValue), rawValue: oracleRawValues.meanPSValue, weight: 0.12, type: 'relative' },
+      { key: 'meanPEValue', label: 'Mean Price to Earnings (PE) Ratio without NRI', value: calibratedOracleValue('meanPEValue', oracleRawValues.meanPEValue), rawValue: oracleRawValues.meanPEValue, weight: 0.14, type: 'relative' },
+      { key: 'meanPBValue', label: 'Mean Price to Book (PB) Ratio', value: calibratedOracleValue('meanPBValue', oracleRawValues.meanPBValue), rawValue: oracleRawValues.meanPBValue, weight: 0.08, type: 'relative' },
+      { key: 'psgValue', label: 'Price to Sales Growth (PSG) Ratio', value: calibratedOracleValue('psgValue', oracleRawValues.psgValue), rawValue: oracleRawValues.psgValue, weight: 0.04, type: 'relative' },
       { key: 'pegValue', label: 'Price to Earnings Growth (PEG) Ratio without NRI', value: calibratedOracleValue('pegValue', oracleRawValues.pegValue), rawValue: oracleRawValues.pegValue, weight: 0.05, type: 'relative' },
     ];
 

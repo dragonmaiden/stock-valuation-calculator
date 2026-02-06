@@ -539,7 +539,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
             <BarChart
               layout="vertical"
               data={valuationMethodsForChart}
-              margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+              margin={{ top: 20, right: 30, left: 130, bottom: 20 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
               <XAxis
@@ -553,8 +553,8 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
               <YAxis
                 dataKey="name"
                 type="category"
-                tick={{ fontSize: 9, fill: theme.textSecondary }}
-                width={140}
+                tick={{ fontSize: 11, fill: theme.textSecondary }}
+                width={260}
                 axisLine={{ stroke: theme.chartGrid }}
                 tickLine={false}
               />
