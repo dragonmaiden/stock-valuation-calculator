@@ -110,5 +110,53 @@
       "psgValue": 47.92,
       "pegValue": 195.12
     }
+  },
+  {
+    "id": "AVGO",
+    "target": 271.77,
+    "price": 157.76,
+    "methods": {
+      "dcf20Year": 166.1,
+      "dfcf20Year": 10.92,
+      "dni20Year": 161.34,
+      "dfcfTerminal": 16.51,
+      "meanPSValue": 142.89,
+      "meanPEValue": 249.3,
+      "meanPBValue": 135.12,
+      "psgValue": 97.56,
+      "pegValue": 57.83
+    }
+  },
+  {
+    "id": "BABA",
+    "target": 405.45,
+    "price": 310.51,
+    "methods": {
+      "dcf20Year": 339.13,
+      "dfcf20Year": 331.23,
+      "dni20Year": 283.19,
+      "dfcfTerminal": 292.45,
+      "meanPSValue": 174.24,
+      "meanPEValue": 271.57,
+      "meanPBValue": 215.92,
+      "psgValue": 56.46,
+      "pegValue": 153.78
+    }
+  },
+  {
+    "id": "ISRG",
+    "target": 247.98,
+    "price": 476.32,
+    "methods": {
+      "dcf20Year": 255.43,
+      "dfcf20Year": 196.41,
+      "dni20Year": 222.82,
+      "dfcfTerminal": 136.83,
+      "meanPSValue": 531.41,
+      "meanPEValue": 570.72,
+      "meanPBValue": 483.33,
+      "psgValue": 74.59,
+      "pegValue": 162.6
+    }
   }
 ]

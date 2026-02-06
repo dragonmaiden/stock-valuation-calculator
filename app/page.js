@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -94,6 +96,7 @@ const NAV_TABS = [
   { id: 'financials', label: 'Financials' },
   { id: 'operating-metrics', label: 'Operating Metrics' },
   { id: 'charts', label: 'Charts' },
+  { id: 'trading', label: 'Trading' },
   { id: 'insider', label: 'Insider Activity' },
   { id: 'profile', label: 'Profile' },
 ];
@@ -469,6 +472,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
     meanPBValue: 'Mean-PB',
     psgValue: 'PSG',
     pegValue: 'PEG exNRI',
+    analystTargetValue: 'Analyst Target',
     dcfOperatingCashFlow: 'DCF (Unlevered FCF)',
     dcfTerminal: 'DCF Terminal (15x FCF)',
     fairValuePS: 'Fair Value (P/S)',
@@ -493,6 +497,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
     meanPBValue: 'relative',
     psgValue: 'relative',
     pegValue: 'relative',
+    analystTargetValue: 'analyst',
     earningsPowerValue: 'relative',
     grahamNumber: 'conservative',
   };
@@ -500,6 +505,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
   const methodColorByType = {
     dcf: '#f59e0b',
     relative: '#f97316',
+    analyst: '#22c55e',
     conservative: '#6b7280',
   };
 
@@ -622,6 +628,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
           <div className="mt-5 flex flex-wrap gap-5 text-[10px]" style={{ color: theme.textTertiary }}>
             <div className="flex items-center gap-2"><div className="w-3 h-2.5 rounded-sm" style={{ background: '#f59e0b' }}></div><span>DCF Models</span></div>
             <div className="flex items-center gap-2"><div className="w-3 h-2.5 rounded-sm" style={{ background: '#f97316' }}></div><span>Relative Valuation</span></div>
+            <div className="flex items-center gap-2"><div className="w-3 h-2.5 rounded-sm" style={{ background: '#22c55e' }}></div><span>Analyst Target</span></div>
             <div className="flex items-center gap-2"><div className="w-3 h-2.5 rounded-sm" style={{ background: '#6b7280' }}></div><span>Conservative</span></div>
             <div className="flex items-center gap-2"><div className="w-3 h-0.5" style={{ background: '#ef4444' }}></div><span>Current Price</span></div>
             <div className="flex items-center gap-2"><div className="w-3 h-0.5" style={{ background: '#10b981' }}></div><span>Fair Value</span></div>
@@ -642,6 +649,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
               {' '}| Median {data?.dcf?.oracleAssumptions?.oracleMedian?.toFixed?.(2) ?? 'N/A'}
               {' '}| Guardrail [{data?.dcf?.oracleAssumptions?.oracleOutlierFloor?.toFixed?.(2) ?? 'N/A'} - {data?.dcf?.oracleAssumptions?.oracleOutlierCeiling?.toFixed?.(2) ?? 'N/A'}]
               {' '}| Bucket Blend DCF/Relative: {Number.isFinite(data?.dcf?.oracleAssumptions?.dcfBlendWeight) ? `${(data.dcf.oracleAssumptions.dcfBlendWeight * 100).toFixed(1)}%` : 'N/A'} / {Number.isFinite(data?.dcf?.oracleAssumptions?.relativeBlendWeight) ? `${(data.dcf.oracleAssumptions.relativeBlendWeight * 100).toFixed(1)}%` : 'N/A'}
+              {' '}| Analyst Blend: {Number.isFinite(data?.dcf?.oracleAssumptions?.analystBlendWeight) ? `${(data.dcf.oracleAssumptions.analystBlendWeight * 100).toFixed(1)}%` : 'N/A'}
               {' '}| Median Anchor Weight: {Number.isFinite(data?.dcf?.oracleAssumptions?.medianAnchorWeight) ? `${(data.dcf.oracleAssumptions.medianAnchorWeight * 100).toFixed(2)}%` : 'N/A'}
             </div>
             <div className="overflow-x-auto">
@@ -1329,6 +1337,387 @@ function InsiderActivityTab({ data, theme }) {
   );
 }
 
+function TradingTab({ data, theme }) {
+  const [timeframe, setTimeframe] = useState('1Y');
+
+  const analysis = useMemo(() => {
+    const raw = Array.isArray(data?.priceHistory) ? data.priceHistory : [];
+    const history = raw.filter((r) => Number.isFinite(r?.close) && Number.isFinite(r?.high) && Number.isFinite(r?.low) && Number.isFinite(r?.volume));
+    if (history.length < 220) return null;
+
+    const smaSeries = (rows, period, key = 'close') => rows.map((_, i) => {
+      if (i < period - 1) return null;
+      const slice = rows.slice(i - period + 1, i + 1);
+      return slice.reduce((sum, r) => sum + r[key], 0) / period;
+    });
+
+    const emaSeries = (rows, period, key = 'close') => {
+      const out = new Array(rows.length).fill(null);
+      const k = 2 / (period + 1);
+      let prev = null;
+      for (let i = 0; i < rows.length; i++) {
+        const v = rows[i][key];
+        if (!Number.isFinite(v)) continue;
+        if (prev === null) prev = v;
+        else prev = (v * k) + (prev * (1 - k));
+        out[i] = prev;
+      }
+      return out;
+    };
+
+    const calcAnchoredVWAP = (rows, anchorIndex) => {
+      const out = new Array(rows.length).fill(null);
+      if (anchorIndex < 0 || anchorIndex >= rows.length) return out;
+      let pv = 0;
+      let vv = 0;
+      for (let i = anchorIndex; i < rows.length; i++) {
+        const typical = (rows[i].high + rows[i].low + rows[i].close) / 3;
+        const vol = rows[i].volume || 0;
+        pv += typical * vol;
+        vv += vol;
+        out[i] = vv > 0 ? pv / vv : null;
+      }
+      return out;
+    };
+
+    const calcATR = (rows, period = 14) => {
+      const trs = rows.map((r, i) => {
+        if (i === 0) return r.high - r.low;
+        const prevClose = rows[i - 1].close;
+        return Math.max(r.high - r.low, Math.abs(r.high - prevClose), Math.abs(r.low - prevClose));
+      });
+      return smaSeries(trs.map((t) => ({ close: t })), period, 'close');
+    };
+
+    const nowYear = new Date().getFullYear();
+    const ytd = history.filter((r) => new Date(`${r.date}T00:00:00Z`).getUTCFullYear() === nowYear);
+    const ytdStartIndex = Math.max(0, history.length - ytd.length);
+    const ytdHigh = ytd.reduce((acc, r) => (acc === null || r.high > acc.high ? r : acc), null);
+    const ytdLow = ytd.reduce((acc, r) => (acc === null || r.low < acc.low ? r : acc), null);
+    const ytdHighIndex = ytdHigh ? history.findIndex((r) => r.date === ytdHigh.date) : ytdStartIndex;
+    const ytdLowIndex = ytdLow ? history.findIndex((r) => r.date === ytdLow.date) : ytdStartIndex;
+
+    let gapIndex = Math.max(1, history.length - 252);
+    let maxGap = -1;
+    for (let i = Math.max(1, history.length - 252); i < history.length; i++) {
+      const prevClose = history[i - 1].close;
+      if (!Number.isFinite(prevClose) || prevClose <= 0) continue;
+      const gap = Math.abs((history[i].open - prevClose) / prevClose);
+      if (gap > maxGap) {
+        maxGap = gap;
+        gapIndex = i;
+      }
+    }
+
+    const yearlyVWAP = calcAnchoredVWAP(history, ytdStartIndex);
+    const cycleLowVWAP = calcAnchoredVWAP(history, ytdLowIndex);
+    const athVWAP = calcAnchoredVWAP(history, ytdHighIndex);
+    const regimeVWAP = calcAnchoredVWAP(history, gapIndex);
+
+    const ma50 = smaSeries(history, 50);
+    const ma200 = smaSeries(history, 200);
+    const ema20w = emaSeries(history, 100);
+    const atr14 = calcATR(history, 14);
+
+    const returns = history.map((r, i) => (i === 0 ? null : Math.log(r.close / history[i - 1].close))).filter((v) => Number.isFinite(v));
+    const realizedVol20 = [];
+    for (let i = 0; i < returns.length; i++) {
+      if (i < 19) realizedVol20.push(null);
+      else {
+        const slice = returns.slice(i - 19, i + 1);
+        const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
+        const variance = slice.reduce((sum, v) => sum + ((v - mean) ** 2), 0) / slice.length;
+        realizedVol20.push(Math.sqrt(variance) * Math.sqrt(252));
+      }
+    }
+    const currentVol = realizedVol20[realizedVol20.length - 1];
+    const volWindow = realizedVol20.filter((v) => Number.isFinite(v));
+    const volPercentile = volWindow.length
+      ? (volWindow.filter((v) => v <= currentVol).length / volWindow.length) * 100
+      : null;
+
+    const vpRows = history.slice(-252);
+    const minP = Math.min(...vpRows.map((r) => r.low));
+    const maxP = Math.max(...vpRows.map((r) => r.high));
+    const bins = 24;
+    const step = (maxP - minP) / bins || 1;
+    const profile = Array.from({ length: bins }, (_, i) => ({
+      low: minP + (i * step),
+      high: minP + ((i + 1) * step),
+      vol: 0,
+    }));
+    for (const r of vpRows) {
+      const idx = Math.max(0, Math.min(bins - 1, Math.floor((r.close - minP) / step)));
+      profile[idx].vol += r.volume || 0;
+    }
+    const pocIdx = profile.reduce((best, b, i) => (b.vol > profile[best].vol ? i : best), 0);
+    const totalProfileVol = profile.reduce((s, b) => s + b.vol, 0);
+    let vaLow = pocIdx;
+    let vaHigh = pocIdx;
+    let covered = profile[pocIdx].vol;
+    while (covered < totalProfileVol * 0.7 && (vaLow > 0 || vaHigh < bins - 1)) {
+      const leftVol = vaLow > 0 ? profile[vaLow - 1].vol : -1;
+      const rightVol = vaHigh < bins - 1 ? profile[vaHigh + 1].vol : -1;
+      if (rightVol >= leftVol && vaHigh < bins - 1) {
+        vaHigh += 1;
+        covered += profile[vaHigh].vol;
+      } else if (vaLow > 0) {
+        vaLow -= 1;
+        covered += profile[vaLow].vol;
+      } else {
+        break;
+      }
+    }
+
+    const poc = (profile[pocIdx].low + profile[pocIdx].high) / 2;
+    const vah = profile[vaHigh].high;
+    const val = profile[vaLow].low;
+
+    const recent20 = history.slice(-20);
+    const prev20 = history.slice(-40, -20);
+    const recent60 = history.slice(-60);
+    const hhhl = recent20.length && prev20.length
+      ? Math.max(...recent20.map((r) => r.high)) > Math.max(...prev20.map((r) => r.high)) &&
+        Math.min(...recent20.map((r) => r.low)) > Math.min(...prev20.map((r) => r.low))
+      : false;
+    const lhll = recent20.length && prev20.length
+      ? Math.max(...recent20.map((r) => r.high)) < Math.max(...prev20.map((r) => r.high)) &&
+        Math.min(...recent20.map((r) => r.low)) < Math.min(...prev20.map((r) => r.low))
+      : false;
+
+    const latest = history[history.length - 1];
+    const yearlyHigh = ytdHigh?.high ?? Math.max(...history.slice(-252).map((r) => r.high));
+    const yearlyLow = ytdLow?.low ?? Math.min(...history.slice(-252).map((r) => r.low));
+    const latestYearlyVWAP = yearlyVWAP[yearlyVWAP.length - 1];
+    const last3 = history.slice(-3);
+    const vahHold = last3.every((r) => r.close > vah);
+    const rejectedVAH = last3.some((r) => r.high > vah && r.close < vah);
+    const weeklyStrong = history.length > 6 ? latest.close > history[history.length - 6].close : false;
+
+    const currentAtr = atr14[atr14.length - 1];
+    const atrPrev = atr14[Math.max(0, atr14.length - 21)];
+    const atrExpansion = Number.isFinite(currentAtr) && Number.isFinite(atrPrev) && currentAtr > atrPrev * 1.15;
+
+    const regime = latest.close > latestYearlyVWAP && vahHold && hhhl && weeklyStrong
+      ? 'Bullish'
+      : latest.close < latestYearlyVWAP && rejectedVAH && lhll
+      ? 'Bearish / Distribution'
+      : 'Chop / Neutral';
+
+    const timeframeDays = timeframe === '6M' ? 126 : timeframe === '2Y' ? 504 : 252;
+    const chartSource = history.slice(-Math.min(timeframeDays, history.length));
+
+    const markerRows = history.map((r, i) => ({
+      date: r.date,
+      close: r.close,
+      yearlyVWAP: yearlyVWAP[i],
+      ma50: ma50[i],
+      ma200: ma200[i],
+      vah,
+      val,
+    }));
+
+    const bullishEntry = markerRows
+      .filter((r) =>
+        Number.isFinite(r.close) &&
+        Number.isFinite(r.yearlyVWAP) &&
+        r.close > r.yearlyVWAP &&
+        Math.abs((r.close - r.yearlyVWAP) / r.yearlyVWAP) <= 0.02
+      )
+      .slice(-1)[0] || null;
+
+    let reclaim = null;
+    for (let i = 1; i < markerRows.length - 2; i++) {
+      const p = markerRows[i - 1];
+      const c = markerRows[i];
+      const n1 = markerRows[i + 1];
+      const n2 = markerRows[i + 2];
+      if (
+        Number.isFinite(p.close) && Number.isFinite(p.yearlyVWAP) &&
+        Number.isFinite(c.close) && Number.isFinite(c.yearlyVWAP) &&
+        p.close <= p.yearlyVWAP &&
+        c.close > c.yearlyVWAP &&
+        Number.isFinite(n1.close) && Number.isFinite(n1.yearlyVWAP) &&
+        Number.isFinite(n2.close) && Number.isFinite(n2.yearlyVWAP) &&
+        n1.close > n1.yearlyVWAP &&
+        n2.close > n2.yearlyVWAP
+      ) {
+        reclaim = c;
+      }
+    }
+
+    let invalidation = null;
+    if (reclaim) {
+      const rIdx = markerRows.findIndex((r) => r.date === reclaim.date);
+      for (let i = rIdx + 1; i < markerRows.length; i++) {
+        const r = markerRows[i];
+        if (Number.isFinite(r.close) && Number.isFinite(r.yearlyVWAP) && r.close < r.yearlyVWAP) {
+          invalidation = r;
+          break;
+        }
+      }
+    } else {
+      invalidation = markerRows
+        .filter((r) => Number.isFinite(r.close) && Number.isFinite(r.ma50) && r.close < r.ma50)
+        .slice(-1)[0] || null;
+    }
+
+    const chartRows = chartSource.map((r) => {
+      const idx = history.findIndex((h) => h.date === r.date);
+      return {
+        date: r.date,
+        close: r.close,
+        yearlyVWAP: yearlyVWAP[idx],
+        cycleLowVWAP: cycleLowVWAP[idx],
+        athVWAP: athVWAP[idx],
+        regimeVWAP: regimeVWAP[idx],
+        ma50: ma50[idx],
+        ma200: ma200[idx],
+        ema20w: ema20w[idx],
+      };
+    });
+
+    return {
+      chartRows,
+      latest,
+      yearlyHigh,
+      yearlyLow,
+      yearlyVWAP: latestYearlyVWAP,
+      cycleLowVWAP: cycleLowVWAP[cycleLowVWAP.length - 1],
+      athVWAP: athVWAP[athVWAP.length - 1],
+      regimeVWAP: regimeVWAP[regimeVWAP.length - 1],
+      ma50: ma50[ma50.length - 1],
+      ma200: ma200[ma200.length - 1],
+      ema20w: ema20w[ema20w.length - 1],
+      atrExpansion,
+      volPercentile,
+      poc,
+      vah,
+      val,
+      hhhl,
+      lhll,
+      rangeHigh: Math.max(...recent60.map((r) => r.high)),
+      rangeLow: Math.min(...recent60.map((r) => r.low)),
+      regime,
+      markers: {
+        entry: bullishEntry,
+        reclaim,
+        invalidation,
+      },
+      notes: {
+        oiFunding: 'Not available for most equities via this feed; using price/volume behavior instead.',
+      },
+    };
+  }, [data, timeframe]);
+
+  if (!analysis) {
+    return (
+      <div className="animate-fadeIn p-6 rounded-2xl border text-xs" style={{ background: theme.bgCard, borderColor: theme.border, color: theme.textTertiary }}>
+        Trading section needs at least ~220 daily candles for this ticker.
+      </div>
+    );
+  }
+
+  const regimeTone = analysis.regime === 'Bullish'
+    ? theme.positive
+    : analysis.regime.startsWith('Bearish')
+    ? theme.negative
+    : theme.warning;
+
+  const inValue = analysis.latest.close <= analysis.vah && analysis.latest.close >= analysis.val;
+  const aboveYearlyVWAP = analysis.latest.close > analysis.yearlyVWAP;
+
+  return (
+    <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-trading" aria-labelledby="tab-trading">
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+          <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Trading Regime (Ticker-Driven)</h3>
+          <div className="flex items-center gap-2">
+            {['6M', '1Y', '2Y'].map((tf) => (
+              <button
+                key={tf}
+                onClick={() => setTimeframe(tf)}
+                className="px-3 py-1 rounded-md text-[10px] font-semibold tracking-wider border transition-all"
+                style={{
+                  color: timeframe === tf ? theme.bg : theme.textTertiary,
+                  background: timeframe === tf ? theme.accent : theme.bg,
+                  borderColor: timeframe === tf ? theme.accent : theme.border,
+                }}
+              >
+                {tf}
+              </button>
+            ))}
+            <div className="px-3 py-1 rounded-full text-[10px] font-semibold border" style={{ color: regimeTone, borderColor: `${regimeTone}55`, background: `${regimeTone}14` }}>
+              {analysis.regime}
+            </div>
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={420}>
+          <LineChart data={analysis.chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
+            <XAxis dataKey="date" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} minTickGap={28} />
+            <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} domain={['auto', 'auto']} />
+            <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} />
+            <Legend wrapperStyle={{ fontSize: 10 }} />
+            <Line type="monotone" dataKey="close" stroke="#60a5fa" dot={false} strokeWidth={2} name="Close" />
+            <Line type="monotone" dataKey="yearlyVWAP" stroke="#10b981" dot={false} strokeWidth={1.8} name="Yearly VWAP" />
+            <Line type="monotone" dataKey="cycleLowVWAP" stroke="#22c55e" dot={false} strokeDasharray="6 4" name="Cycle Low VWAP" />
+            <Line type="monotone" dataKey="athVWAP" stroke="#f59e0b" dot={false} strokeDasharray="6 4" name="ATH VWAP" />
+            <Line type="monotone" dataKey="regimeVWAP" stroke="#a855f7" dot={false} strokeDasharray="3 4" name="Regime VWAP" />
+            <Line type="monotone" dataKey="ma50" stroke="#f97316" dot={false} name="50 DMA" />
+            <Line type="monotone" dataKey="ma200" stroke="#ef4444" dot={false} name="200 DMA" />
+            <Line type="monotone" dataKey="ema20w" stroke="#94a3b8" dot={false} strokeDasharray="4 3" name="20 EMA (weekly proxy)" />
+            <ReferenceLine y={analysis.yearlyHigh} stroke="#1d4ed8" strokeDasharray="4 3" label={{ value: 'YH', position: 'right', fill: '#1d4ed8', fontSize: 10 }} />
+            <ReferenceLine y={analysis.yearlyLow} stroke="#1d4ed8" strokeDasharray="4 3" label={{ value: 'YL', position: 'right', fill: '#1d4ed8', fontSize: 10 }} />
+            <ReferenceLine y={analysis.poc} stroke="#334155" strokeDasharray="5 4" label={{ value: 'POC', position: 'right', fill: '#64748b', fontSize: 10 }} />
+            <ReferenceLine y={analysis.vah} stroke="#0ea5e9" strokeDasharray="5 4" label={{ value: 'VAH', position: 'right', fill: '#0284c7', fontSize: 10 }} />
+            <ReferenceLine y={analysis.val} stroke="#0ea5e9" strokeDasharray="5 4" label={{ value: 'VAL', position: 'right', fill: '#0284c7', fontSize: 10 }} />
+            {analysis?.markers?.entry?.date && (
+              <ReferenceLine x={analysis.markers.entry.date} stroke="#22c55e" strokeDasharray="4 3" label={{ value: 'Entry', position: 'top', fill: '#22c55e', fontSize: 10 }} />
+            )}
+            {analysis?.markers?.reclaim?.date && (
+              <ReferenceLine x={analysis.markers.reclaim.date} stroke="#10b981" strokeDasharray="4 3" label={{ value: 'Reclaim', position: 'top', fill: '#10b981', fontSize: 10 }} />
+            )}
+            {analysis?.markers?.invalidation?.date && (
+              <ReferenceLine x={analysis.markers.invalidation.date} stroke="#ef4444" strokeDasharray="4 3" label={{ value: 'Invalid', position: 'top', fill: '#ef4444', fontSize: 10 }} />
+            )}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard theme={theme} label="Yearly VWAP Bias" value={aboveYearlyVWAP ? 'Above (Long Bias)' : 'Below (Sell Rallies)'} />
+        <MetricCard theme={theme} label="Value Area Status" value={inValue ? 'Inside Value (Chop)' : analysis.latest.close > analysis.vah ? 'Above VAH (Trend)' : 'Below VAL (Weakness)'} />
+        <MetricCard theme={theme} label="Structure" value={analysis.hhhl ? 'HH + HL' : analysis.lhll ? 'LH + LL' : 'Mixed'} />
+        <MetricCard theme={theme} label="ATR Regime" value={analysis.atrExpansion ? 'Expansion' : 'Compression'} subtext={Number.isFinite(analysis.volPercentile) ? `RV Percentile ${analysis.volPercentile.toFixed(1)}%` : 'RV N/A'} />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h4 className="text-[11px] font-semibold tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>Decision Tree (Auto)</h4>
+          <ul className="space-y-1.5 text-xs" style={{ color: theme.textSecondary }}>
+            <li>• Bullish if: above Yearly VWAP, VAH held, HH/HL, strong weekly close.</li>
+            <li>• Bearish if: below Yearly VWAP, VAH rejection, LH/LL.</li>
+            <li>• Otherwise: chop, reduce activity and wait for close confirmation.</li>
+          </ul>
+          <div className="mt-3 text-[11px] font-semibold" style={{ color: regimeTone }}>Current Classification: {analysis.regime}</div>
+        </div>
+        <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h4 className="text-[11px] font-semibold tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>Principle Mapping</h4>
+          <ul className="space-y-1.5 text-xs" style={{ color: theme.textSecondary }}>
+            <li>• Anchored VWAPs: Yearly, Cycle-Low, ATH, Regime anchor are auto-drawn.</li>
+            <li>• Liquidity rails: Yearly High/Low are auto-drawn.</li>
+            <li>• Volume profile: POC/VAH/VAL computed from 1Y volume-weighted distribution.</li>
+            <li>• HTF trend: 20 EMA (weekly proxy), 50 DMA, 200 DMA are auto-drawn.</li>
+            <li>• Volatility: ATR expansion + realized volatility percentile are auto-labeled.</li>
+            <li>• OI/Funding: {analysis.notes.oiFunding}</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---- Main Component ----
 
 export default function StockValuationCalculator() {
@@ -1534,6 +1923,7 @@ export default function StockValuationCalculator() {
       case 'financials': return <FinancialsTab data={data} theme={t} formatPercent={formatPercent} formatRatio={formatRatio} />;
       case 'operating-metrics': return <OperatingMetricsTab data={data} theme={t} />;
       case 'charts': return <ChartsTab theme={t} viewMode={viewMode} setViewMode={setViewMode} marginData={marginData} returnData={returnData} incomeData={incomeData} cashFlowData={cashFlowData} balanceData={balanceData} />;
+      case 'trading': return <TradingTab data={data} theme={t} />;
       case 'insider': return <InsiderActivityTab data={data} theme={t} />;
       case 'profile': return <ProfileTab data={data} theme={t} />;
       default: return <OverviewTab data={data} verdict={verdict} theme={t} formatNumber={formatNumber} formatPercent={formatPercent} formatRatio={formatRatio} calculatePEGValue={calculatePEGValue} revenueCagr={revenueCagr} fcfCagr={fcfCagr} netMargin={netMargin} marginDelta={marginDelta} />;

@@ -13,6 +13,7 @@ const METHOD_KEYS = [
   'meanPBValue',
   'psgValue',
   'pegValue',
+  'analystTargetValue',
 ];
 
 const DEFAULT_SAMPLE_PATH = path.join(__dirname, 'oracle-reference-samples.json');
@@ -28,13 +29,15 @@ const defaultConfig = {
     meanPBValue: 0.334838,
     psgValue: 0.22069,
     pegValue: 0.023841,
+    analystTargetValue: 1.0,
   },
-  dcfBlendWeight: 0.400104,
-  relativeBlendWeight: 0.599896,
-  medianAnchorWeight: 0.00453,
-  priceAnchorBase: 0.042984,
-  priceAnchorSpread: 0.386538,
-  priceAnchorMax: 0.35,
+  dcfBlendWeight: 0.55,
+  relativeBlendWeight: 0.35,
+  analystBlendWeight: 0.10,
+  medianAnchorWeight: 0.10,
+  priceAnchorBase: 0.04,
+  priceAnchorSpread: 0.10,
+  priceAnchorMax: 0.22,
 };
 
 function median(values) {
@@ -71,12 +74,20 @@ function predict(sample, config) {
     psgValue: config.methodWeights.psgValue,
     pegValue: config.methodWeights.pegValue,
   };
+  const analystWeights = {
+    analystTargetValue: config.methodWeights.analystTargetValue,
+  };
 
   const dcfBucketFair = weightedMean(sample.methods, dcfWeights);
   const relativeBucketFair = weightedMean(sample.methods, relativeWeights);
-  const blendedBucketFair = dcfBucketFair && relativeBucketFair
-    ? (dcfBucketFair * config.dcfBlendWeight) + (relativeBucketFair * config.relativeBlendWeight)
-    : (dcfBucketFair || relativeBucketFair);
+  const analystBucketFair = weightedMean(sample.methods, analystWeights);
+  const parts = [
+    { value: dcfBucketFair, weight: config.dcfBlendWeight },
+    { value: relativeBucketFair, weight: config.relativeBlendWeight },
+    { value: analystBucketFair, weight: config.analystBlendWeight || 0 },
+  ].filter((p) => Number.isFinite(p.value) && p.value > 0 && Number.isFinite(p.weight) && p.weight > 0);
+  const w = parts.reduce((sum, p) => sum + p.weight, 0);
+  const blendedBucketFair = w > 0 ? parts.reduce((sum, p) => sum + (p.value * (p.weight / w)), 0) : null;
   if (!blendedBucketFair) return null;
 
   const methodValues = METHOD_KEYS
@@ -97,6 +108,7 @@ function predict(sample, config) {
     fair,
     dcfBucketFair,
     relativeBucketFair,
+    analystBucketFair,
     blendedBucketFair,
     median: med,
     spread,

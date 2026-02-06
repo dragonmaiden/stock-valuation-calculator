@@ -184,7 +184,11 @@ export async function GET(request) {
     }
 
     // Fetch company facts (financial data) from SEC and price/stats from Yahoo
-    const [factsRes, submissionsRes, yahooQuote, yahooStats] = await Promise.all([
+    const period2 = new Date();
+    const period1 = new Date(period2);
+    period1.setFullYear(period1.getFullYear() - 2);
+
+    const [factsRes, submissionsRes, yahooQuote, yahooStats, priceHistoryRaw] = await Promise.all([
       fetch(`${SEC_BASE}/api/xbrl/companyfacts/CIK${cik}.json`, {
         headers: { 'User-Agent': USER_AGENT },
       }),
@@ -194,6 +198,11 @@ export async function GET(request) {
       yahooFinance.quote(ticker.toUpperCase()).catch(() => null),
       yahooFinance.quoteSummary(ticker.toUpperCase(), {
         modules: ['summaryDetail', 'defaultKeyStatistics', 'financialData', 'insiderTransactions'],
+      }).catch(() => null),
+      yahooFinance.historical(ticker.toUpperCase(), {
+        period1,
+        period2,
+        interval: '1d',
       }).catch(() => null),
     ]);
 
@@ -403,6 +412,20 @@ export async function GET(request) {
       marketCap: yahooQuote?.marketCap || 0,
       pe: yahooQuote?.trailingPE || null,
     };
+
+    const priceHistory = Array.isArray(priceHistoryRaw)
+      ? priceHistoryRaw
+          .filter((row) => row?.date && Number.isFinite(row?.close))
+          .map((row) => ({
+            date: new Date(row.date).toISOString().slice(0, 10),
+            open: Number.isFinite(row.open) ? row.open : null,
+            high: Number.isFinite(row.high) ? row.high : null,
+            low: Number.isFinite(row.low) ? row.low : null,
+            close: Number.isFinite(row.close) ? row.close : null,
+            volume: Number.isFinite(row.volume) ? row.volume : null,
+          }))
+          .sort((a, b) => a.date.localeCompare(b.date))
+      : [];
 
     // Build favorites metrics
     const summaryDetail = yahooStats?.summaryDetail || {};
@@ -963,6 +986,7 @@ export async function GET(request) {
       meanPBValue: otherValuationRatios.meanPBValue,
       psgValue: valuations.psgValue,
       pegValue: valuations.pegValue,
+      analystTargetValue: financialData?.targetMeanPrice || financialData?.targetMedianPrice || null,
     };
 
     // Per-method scaling factors. Keep neutral unless broader calibration data
@@ -977,6 +1001,7 @@ export async function GET(request) {
       meanPBValue: 1.0,
       psgValue: 1.0,
       pegValue: 1.0,
+      analystTargetValue: 1.0,
     };
 
     const calibratedOracleValue = (key, rawValue) => {
@@ -988,22 +1013,24 @@ export async function GET(request) {
 
     const oracleApproxConfig = {
       methodWeights: {
-        dcf20Year: 0.134145,
-        dfcf20Year: 0.023700,
-        dni20Year: 0.527679,
-        dfcfTerminal: 0.314476,
-        meanPSValue: 0.075361,
-        meanPEValue: 0.345270,
-        meanPBValue: 0.334838,
-        psgValue: 0.220690,
-        pegValue: 0.023841,
+        dcf20Year: 0.30,
+        dfcf20Year: 0.20,
+        dni20Year: 0.35,
+        dfcfTerminal: 0.15,
+        meanPSValue: 0.20,
+        meanPEValue: 0.30,
+        meanPBValue: 0.25,
+        psgValue: 0.10,
+        pegValue: 0.15,
+        analystTargetValue: 1.0,
       },
-      dcfBlendWeight: 0.400104,
-      relativeBlendWeight: 0.599896,
-      medianAnchorWeight: 0.004530,
-      priceAnchorBase: 0.042984,
-      priceAnchorSpread: 0.386538,
-      priceAnchorMax: 0.35,
+      dcfBlendWeight: 0.55,
+      relativeBlendWeight: 0.35,
+      analystBlendWeight: 0.10,
+      medianAnchorWeight: 0.10,
+      priceAnchorBase: 0.04,
+      priceAnchorSpread: 0.10,
+      priceAnchorMax: 0.22,
     };
 
     const oracleApproxMethodConfig = [
@@ -1016,6 +1043,7 @@ export async function GET(request) {
       { key: 'meanPBValue', label: 'Mean Price to Book (PB) Ratio', value: calibratedOracleValue('meanPBValue', oracleRawValues.meanPBValue), rawValue: oracleRawValues.meanPBValue, weight: oracleApproxConfig.methodWeights.meanPBValue, type: 'relative' },
       { key: 'psgValue', label: 'Price to Sales Growth (PSG) Ratio', value: calibratedOracleValue('psgValue', oracleRawValues.psgValue), rawValue: oracleRawValues.psgValue, weight: oracleApproxConfig.methodWeights.psgValue, type: 'relative' },
       { key: 'pegValue', label: 'Price to Earnings Growth (PEG) Ratio without NRI', value: calibratedOracleValue('pegValue', oracleRawValues.pegValue), rawValue: oracleRawValues.pegValue, weight: oracleApproxConfig.methodWeights.pegValue, type: 'relative' },
+      { key: 'analystTargetValue', label: 'Analyst Mean Target Price', value: calibratedOracleValue('analystTargetValue', oracleRawValues.analystTargetValue), rawValue: oracleRawValues.analystTargetValue, weight: oracleApproxConfig.methodWeights.analystTargetValue, type: 'analyst' },
     ];
 
     const oracleApproxMethods = oracleApproxMethodConfig.filter((m) => m.value !== null && m.value > 0 && isFinite(m.value));
@@ -1047,29 +1075,77 @@ export async function GET(request) {
 
     const dcfBucket = weightedOracleMethods.filter((m) => m.type === 'dcf');
     const relativeBucket = weightedOracleMethods.filter((m) => m.type === 'relative');
+    const analystBucket = weightedOracleMethods.filter((m) => m.type === 'analyst');
     const dcfBucketFair = weightedMean(dcfBucket);
     const relativeBucketFair = weightedMean(relativeBucket);
+    const analystBucketFair = weightedMean(analystBucket);
 
     const blendedBucketFair = (() => {
-      if (dcfBucketFair && relativeBucketFair) {
-        // Global cross-ticker blend calibrated from reference OracleValue samples.
-        return (dcfBucketFair * oracleApproxConfig.dcfBlendWeight) + (relativeBucketFair * oracleApproxConfig.relativeBlendWeight);
-      }
-      return dcfBucketFair || relativeBucketFair || null;
+      const parts = [
+        { value: dcfBucketFair, weight: oracleApproxConfig.dcfBlendWeight },
+        { value: relativeBucketFair, weight: oracleApproxConfig.relativeBlendWeight },
+        { value: analystBucketFair, weight: oracleApproxConfig.analystBlendWeight },
+      ].filter((p) => p.value && p.value > 0 && isFinite(p.value));
+      if (!parts.length) return null;
+      const w = parts.reduce((sum, p) => sum + p.weight, 0);
+      if (!w) return null;
+      return parts.reduce((sum, p) => sum + (p.value * (p.weight / w)), 0);
     })();
 
     const oracleApproxComposite = (() => {
       if (!blendedBucketFair) return null;
-      if (!oracleMedian) return blendedBucketFair;
-      const baseNoPrice = (blendedBucketFair * (1 - oracleApproxConfig.medianAnchorWeight)) + (oracleMedian * oracleApproxConfig.medianAnchorWeight);
+      const baseNoPrice = oracleMedian
+        ? (blendedBucketFair * (1 - oracleApproxConfig.medianAnchorWeight)) + (oracleMedian * oracleApproxConfig.medianAnchorWeight)
+        : blendedBucketFair;
+
+      // First-principles adjustment layer:
+      // - Growth premium from multi-signal growth trend
+      // - Quality premium from profitability/returns
+      // - Risk penalty from beta + leverage
+      const growthScore = clamp((blendedGrowthSignal - 0.08) / 0.20, -0.50, 1.00);
+      const qualityBase = [
+        favorites.roic,
+        favorites.roe,
+        netMargin,
+      ].filter((v) => v !== null && v !== undefined && isFinite(v));
+      const qualityScore = qualityBase.length
+        ? clamp((qualityBase.reduce((a, b) => a + b, 0) / qualityBase.length - 0.12) / 0.18, -0.50, 0.80)
+        : 0;
+      const riskSignals = [
+        beta ? clamp((beta - 1.0) / 1.0, -0.50, 1.20) : 0,
+        favorites.debtToEbitda !== null && favorites.debtToEbitda !== undefined
+          ? clamp((favorites.debtToEbitda - 2.0) / 2.0, -0.50, 1.50)
+          : 0,
+      ];
+      const riskScore = riskSignals.reduce((a, b) => a + b, 0) / riskSignals.length;
+
+      let adjusted = baseNoPrice * (1 + (0.20 * growthScore) + (0.10 * qualityScore) - (0.12 * riskScore));
+
+      // Regime-aware correction: if multiple-based bucket is much richer than
+      // intrinsic cash-flow bucket, damp optimism; if opposite and growth is healthy,
+      // allow a modest premium.
+      if (dcfBucketFair && relativeBucketFair && dcfBucketFair > 0 && relativeBucketFair > 0) {
+        const relativeStretch = relativeBucketFair / dcfBucketFair;
+        if (relativeStretch > 1.35) {
+          adjusted *= (1 - Math.min(0.20, (relativeStretch - 1.35) * 0.25));
+        } else if (relativeStretch < 0.80 && growthScore > 0) {
+          adjusted *= (1 + Math.min(0.12, (0.80 - relativeStretch) * 0.20));
+        }
+      }
+
       const spread = (dcfBucketFair && relativeBucketFair)
         ? Math.abs(Math.log((dcfBucketFair + 1) / (relativeBucketFair + 1)))
         : 0;
       const priceAnchor = Math.min(
         oracleApproxConfig.priceAnchorMax,
-        oracleApproxConfig.priceAnchorBase + (oracleApproxConfig.priceAnchorSpread * spread)
+        oracleApproxConfig.priceAnchorBase + (oracleApproxConfig.priceAnchorSpread * spread) + (beta > 1.3 ? 0.04 : 0)
       );
-      return (baseNoPrice * (1 - priceAnchor)) + (currentPrice * priceAnchor);
+      const anchored = (adjusted * (1 - priceAnchor)) + (currentPrice * priceAnchor);
+
+      if (!oracleMedian) return anchored;
+      const floor = oracleMedian * 0.45;
+      const ceiling = oracleMedian * 2.40;
+      return Math.min(ceiling, Math.max(floor, anchored));
     })();
 
     if (oracleApproxComposite && oracleApproxMethods.length >= 4) {
@@ -1098,9 +1174,11 @@ export async function GET(request) {
         oracleOutlierCeiling: null,
         dcfBucketFair,
         relativeBucketFair,
+        analystBucketFair,
         blendedBucketFair,
         dcfBlendWeight: oracleApproxConfig.dcfBlendWeight,
         relativeBlendWeight: oracleApproxConfig.relativeBlendWeight,
+        analystBlendWeight: oracleApproxConfig.analystBlendWeight,
         medianAnchorWeight: oracleApproxConfig.medianAnchorWeight,
       };
     }
@@ -1213,6 +1291,7 @@ export async function GET(request) {
       factorRankings,
       insiderTransactions,
       insiderSelling,
+      priceHistory,
     });
 
   } catch (error) {
