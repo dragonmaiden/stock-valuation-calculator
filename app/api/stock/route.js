@@ -912,16 +912,48 @@ export async function GET(request) {
     };
 
     // Oracle-style approximation (for iterative calibration against sample charts)
+    const oracleRawValues = {
+      dcf20Year: otherValuationRatios.dcf20Year,
+      dfcf20Year: otherValuationRatios.dfcf20Year,
+      dni20Year: otherValuationRatios.dni20Year,
+      dfcfTerminal: otherValuationRatios.dfcfTerminal,
+      meanPSValue: otherValuationRatios.meanPSValue,
+      meanPEValue: otherValuationRatios.meanPEValue,
+      meanPBValue: otherValuationRatios.meanPBValue,
+      psgValue: valuations.psgValue,
+      pegValue: valuations.pegValue,
+    };
+
+    // v2 calibration factors derived from observed deltas against reference charts
+    const oracleCalibrationFactor = {
+      dcf20Year: 1.95,
+      dfcf20Year: 2.2,
+      dni20Year: 1.65,
+      dfcfTerminal: 1.85,
+      meanPSValue: 0.58,
+      meanPEValue: 0.53,
+      meanPBValue: 0.96,
+      psgValue: 1.15,
+      pegValue: 2.4,
+    };
+
+    const calibratedOracleValue = (key, rawValue) => {
+      if (rawValue === null || rawValue === undefined || !isFinite(rawValue) || rawValue <= 0) return null;
+      const factor = oracleCalibrationFactor[key] ?? 1;
+      const adjusted = rawValue * factor;
+      return isFinite(adjusted) && adjusted > 0 ? adjusted : null;
+    };
+
     const oracleApproxMethodConfig = [
-      { key: 'dcf20Year', label: 'Discounted Cash Flow 20-year (DCF-20)', value: otherValuationRatios.dcf20Year, weight: 0.22, type: 'dcf' },
-      { key: 'dfcf20Year', label: 'Discounted Free Cash Flow 20-year (DFCF-20)', value: otherValuationRatios.dfcf20Year, weight: 0.12, type: 'dcf' },
-      { key: 'dni20Year', label: 'Discounted Net Income 20-year (DNI-20)', value: otherValuationRatios.dni20Year, weight: 0.18, type: 'dcf' },
-      { key: 'dfcfTerminal', label: 'Discounted Free Cash Flow Terminal (DFCF-Terminal)', value: otherValuationRatios.dfcfTerminal, weight: 0.10, type: 'dcf' },
-      { key: 'meanPSValue', label: 'Mean Price to Sales (PS) Ratio', value: otherValuationRatios.meanPSValue, weight: 0.10, type: 'relative' },
-      { key: 'meanPEValue', label: 'Mean Price to Earnings (PE) Ratio without NRI', value: otherValuationRatios.meanPEValue, weight: 0.12, type: 'relative' },
-      { key: 'meanPBValue', label: 'Mean Price to Book (PB) Ratio', value: otherValuationRatios.meanPBValue, weight: 0.06, type: 'relative' },
-      { key: 'psgValue', label: 'Price to Sales Growth (PSG) Ratio', value: valuations.psgValue, weight: 0.05, type: 'relative' },
-      { key: 'pegValue', label: 'Price to Earnings Growth (PEG) Ratio without NRI', value: valuations.pegValue, weight: 0.05, type: 'relative' },
+      { key: 'dcf20Year', label: 'Discounted Cash Flow 20-year (DCF-20)', value: calibratedOracleValue('dcf20Year', oracleRawValues.dcf20Year), rawValue: oracleRawValues.dcf20Year, weight: 0.22, type: 'dcf' },
+      { key: 'dfcf20Year', label: 'Discounted Free Cash Flow 20-year (DFCF-20)', value: calibratedOracleValue('dfcf20Year', oracleRawValues.dfcf20Year), rawValue: oracleRawValues.dfcf20Year, weight: 0.12, type: 'dcf' },
+      { key: 'dni20Year', label: 'Discounted Net Income 20-year (DNI-20)', value: calibratedOracleValue('dni20Year', oracleRawValues.dni20Year), rawValue: oracleRawValues.dni20Year, weight: 0.18, type: 'dcf' },
+      { key: 'dfcfTerminal', label: 'Discounted Free Cash Flow Terminal (DFCF-Terminal)', value: calibratedOracleValue('dfcfTerminal', oracleRawValues.dfcfTerminal), rawValue: oracleRawValues.dfcfTerminal, weight: 0.10, type: 'dcf' },
+      { key: 'meanPSValue', label: 'Mean Price to Sales (PS) Ratio', value: calibratedOracleValue('meanPSValue', oracleRawValues.meanPSValue), rawValue: oracleRawValues.meanPSValue, weight: 0.10, type: 'relative' },
+      { key: 'meanPEValue', label: 'Mean Price to Earnings (PE) Ratio without NRI', value: calibratedOracleValue('meanPEValue', oracleRawValues.meanPEValue), rawValue: oracleRawValues.meanPEValue, weight: 0.12, type: 'relative' },
+      { key: 'meanPBValue', label: 'Mean Price to Book (PB) Ratio', value: calibratedOracleValue('meanPBValue', oracleRawValues.meanPBValue), rawValue: oracleRawValues.meanPBValue, weight: 0.06, type: 'relative' },
+      { key: 'psgValue', label: 'Price to Sales Growth (PSG) Ratio', value: calibratedOracleValue('psgValue', oracleRawValues.psgValue), rawValue: oracleRawValues.psgValue, weight: 0.05, type: 'relative' },
+      { key: 'pegValue', label: 'Price to Earnings Growth (PEG) Ratio without NRI', value: calibratedOracleValue('pegValue', oracleRawValues.pegValue), rawValue: oracleRawValues.pegValue, weight: 0.05, type: 'relative' },
     ];
 
     const oracleApproxMethods = oracleApproxMethodConfig.filter((m) => m.value !== null && m.value > 0 && isFinite(m.value));
@@ -931,9 +963,9 @@ export async function GET(request) {
       : null;
 
     if (oracleApproxComposite && oracleApproxMethods.length >= 4) {
-      dcf.compositeMethods = oracleApproxMethods.map(({ key, label, value, type }) => ({ key, label, value, type }));
+      dcf.compositeMethods = oracleApproxMethods.map(({ key, label, value, type, rawValue }) => ({ key, label, value, type, rawValue }));
       dcf.compositeValue = oracleApproxComposite;
-      dcf.compositeSource = 'oracle_approx_v1';
+      dcf.compositeSource = 'oracle_approx_v2_calibrated';
       dcf.upside = ((oracleApproxComposite - currentPrice) / currentPrice) * 100;
     }
 
