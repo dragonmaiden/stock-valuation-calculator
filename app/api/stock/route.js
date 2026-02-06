@@ -172,12 +172,12 @@ export async function GET(request) {
     const capexQuarterly = getMetricValues(usGaap, capexFields, 'Q', 20);
 
     // Build income statement data (annual)
-    const income = revenueAnnual.map((rev, i) => ({
+    const income = revenueAnnual.map((rev) => ({
       date: rev.end,
       calendarYear: String(rev.fy),
       revenue: rev.val || 0,
-      grossProfit: grossProfitAnnual[i]?.val || 0,
-      operatingIncome: operatingIncomeAnnual[i]?.val || 0,
+      grossProfit: grossProfitAnnual.find(g => g.fy === rev.fy)?.val || 0,
+      operatingIncome: operatingIncomeAnnual.find(o => o.fy === rev.fy)?.val || 0,
       netIncome: netIncomeAnnual.find(n => n.fy === rev.fy)?.val || 0,
     })).reverse();
 
@@ -238,9 +238,12 @@ export async function GET(request) {
       freeCashFlow: (ocf.val || 0) - (capexQuarterly.find(c => c.end === ocf.end)?.val || 0),
     })).reverse();
 
+    const balanceByYear = new Map(balance.map(b => [String(b.calendarYear), b]));
+    const cashflowByYear = new Map(cashflow.map(c => [String(c.calendarYear), c]));
+
     // Build ratios (calculated from data)
-    const ratios = income.map((inc, i) => {
-      const bal = balance[i] || {};
+    const ratios = income.map((inc) => {
+      const bal = balanceByYear.get(String(inc.calendarYear)) || {};
       return {
         date: inc.date,
         calendarYear: inc.calendarYear,
@@ -258,8 +261,8 @@ export async function GET(request) {
     });
 
     // Build metrics (per-share where possible)
-    const metrics = income.map((inc, i) => {
-      const bal = balance[i] || {};
+    const metrics = income.map((inc) => {
+      const bal = balanceByYear.get(String(inc.calendarYear)) || {};
       return {
         date: inc.date,
         calendarYear: inc.calendarYear,
@@ -615,8 +618,8 @@ export async function GET(request) {
 
     // Calculate historical ratios (using current price as approximation for trend analysis)
     const valuationRatios = income.map((inc, i) => {
-      const bal = balance[i] || {};
-      const cf = cashflow[i] || {};
+      const bal = balanceByYear.get(String(inc.calendarYear)) || {};
+      const cf = cashflowByYear.get(String(inc.calendarYear)) || {};
       const year = inc.calendarYear;
 
       // EPS and per-share metrics
