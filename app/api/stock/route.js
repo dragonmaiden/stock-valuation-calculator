@@ -92,6 +92,78 @@ function getMetricValues(facts, fieldNames, period = 'FY', limit = 20) {
     .slice(0, limit);
 }
 
+function toEpochMs(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1e12 ? value : value * 1000;
+  }
+  if (value instanceof Date && !isNaN(value)) return value.getTime();
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function toNumber(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[^0-9.\-]/g, '');
+    if (!cleaned) return null;
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeInsiderTransactions(rows = []) {
+  return rows
+    .map((row) => {
+      const startMs = toEpochMs(
+        row?.startDate ??
+        row?.transactionDate ??
+        row?.date
+      );
+      const sharesRaw = toNumber(
+        row?.shares ??
+        row?.sharesTraded ??
+        row?.transactionShares
+      );
+      const valueRaw = toNumber(
+        row?.value ??
+        row?.totalValue ??
+        row?.dollarValue
+      );
+      const text = String(
+        row?.transactionText ??
+        row?.transactionType ??
+        row?.type ??
+        ''
+      ).toLowerCase();
+
+      const isSellText = /sale|sell|sold|dispose/.test(text);
+      const isBuyText = /buy|bought|purchase/.test(text);
+      const side = isSellText || (sharesRaw !== null && sharesRaw < 0)
+        ? 'SELL'
+        : isBuyText || (sharesRaw !== null && sharesRaw > 0)
+        ? 'BUY'
+        : 'UNKNOWN';
+
+      return {
+        date: startMs ? new Date(startMs).toISOString().slice(0, 10) : null,
+        epochMs: startMs,
+        insider: row?.filerName || row?.name || 'Unknown',
+        relation: row?.filerRelation || row?.position || row?.title || 'N/A',
+        side,
+        shares: sharesRaw !== null ? Math.abs(sharesRaw) : null,
+        value: valueRaw !== null ? Math.abs(valueRaw) : null,
+        transactionText: row?.transactionText || row?.transactionType || row?.text || '',
+      };
+    })
+    .filter((tx) => tx.date && (tx.shares !== null || tx.value !== null))
+    .sort((a, b) => (b.epochMs || 0) - (a.epochMs || 0));
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const ticker = searchParams.get('ticker');
@@ -121,7 +193,7 @@ export async function GET(request) {
       }),
       yahooFinance.quote(ticker.toUpperCase()).catch(() => null),
       yahooFinance.quoteSummary(ticker.toUpperCase(), {
-        modules: ['summaryDetail', 'defaultKeyStatistics', 'financialData'],
+        modules: ['summaryDetail', 'defaultKeyStatistics', 'financialData', 'insiderTransactions'],
       }).catch(() => null),
     ]);
 
@@ -150,6 +222,7 @@ export async function GET(request) {
     const revenueFields = ['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues', 'SalesRevenueNet', 'SalesRevenueGoodsNet'];
     const netIncomeFields = ['NetIncomeLoss', 'ProfitLoss', 'NetIncomeLossAvailableToCommonStockholdersBasic'];
     const grossProfitFields = ['GrossProfit'];
+    const costOfRevenueFields = ['CostOfRevenue', 'CostOfGoodsAndServicesSold', 'CostOfGoodsSold'];
     const operatingIncomeFields = ['OperatingIncomeLoss'];
     const totalAssetsFields = ['Assets'];
     const totalEquityFields = ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'];
@@ -177,6 +250,7 @@ export async function GET(request) {
     const revenueAnnual = getMetricValues(usGaap, revenueFields, 'FY', 10);
     const netIncomeAnnual = getMetricValues(usGaap, netIncomeFields, 'FY', 10);
     const grossProfitAnnual = getMetricValues(usGaap, grossProfitFields, 'FY', 10);
+    const costOfRevenueAnnual = getMetricValues(usGaap, costOfRevenueFields, 'FY', 10);
     const operatingIncomeAnnual = getMetricValues(usGaap, operatingIncomeFields, 'FY', 10);
     const assetsAnnual = getMetricValues(usGaap, totalAssetsFields, 'FY', 10);
     const equityAnnual = getMetricValues(usGaap, totalEquityFields, 'FY', 10);
@@ -197,6 +271,7 @@ export async function GET(request) {
     const revenueQuarterly = getMetricValues(usGaap, revenueFields, 'Q', 20);
     const netIncomeQuarterly = getMetricValues(usGaap, netIncomeFields, 'Q', 20);
     const grossProfitQuarterly = getMetricValues(usGaap, grossProfitFields, 'Q', 20);
+    const costOfRevenueQuarterly = getMetricValues(usGaap, costOfRevenueFields, 'Q', 20);
     const operatingIncomeQuarterly = getMetricValues(usGaap, operatingIncomeFields, 'Q', 20);
     const assetsQuarterly = getMetricValues(usGaap, totalAssetsFields, 'Q', 20);
     const equityQuarterly = getMetricValues(usGaap, totalEquityFields, 'Q', 20);
@@ -207,23 +282,33 @@ export async function GET(request) {
 
     // Build income statement data (annual)
     const income = revenueAnnual.map((rev) => ({
+      grossProfit: (() => {
+        const directGross = grossProfitAnnual.find(g => g.fy === rev.fy)?.val;
+        if (directGross !== null && directGross !== undefined) return directGross;
+        const costOfRevenue = costOfRevenueAnnual.find(c => c.fy === rev.fy)?.val;
+        return costOfRevenue !== null && costOfRevenue !== undefined ? (rev.val || 0) - costOfRevenue : null;
+      })(),
       date: rev.end,
       calendarYear: String(rev.fy),
       revenue: rev.val || 0,
-      grossProfit: grossProfitAnnual.find(g => g.fy === rev.fy)?.val || 0,
-      operatingIncome: operatingIncomeAnnual.find(o => o.fy === rev.fy)?.val || 0,
-      netIncome: netIncomeAnnual.find(n => n.fy === rev.fy)?.val || 0,
+      operatingIncome: operatingIncomeAnnual.find(o => o.fy === rev.fy)?.val ?? null,
+      netIncome: netIncomeAnnual.find(n => n.fy === rev.fy)?.val ?? null,
     })).reverse();
 
     // Build income statement data (quarterly)
     const incomeQ = revenueQuarterly.map((rev) => ({
+      grossProfit: (() => {
+        const directGross = grossProfitQuarterly.find(g => g.end === rev.end)?.val;
+        if (directGross !== null && directGross !== undefined) return directGross;
+        const costOfRevenue = costOfRevenueQuarterly.find(c => c.end === rev.end)?.val;
+        return costOfRevenue !== null && costOfRevenue !== undefined ? (rev.val || 0) - costOfRevenue : null;
+      })(),
       date: rev.end,
       fiscalYear: String(rev.fy),
       period: rev.fp,
       revenue: rev.val || 0,
-      grossProfit: grossProfitQuarterly.find(g => g.end === rev.end)?.val || 0,
-      operatingIncome: operatingIncomeQuarterly.find(o => o.end === rev.end)?.val || 0,
-      netIncome: netIncomeQuarterly.find(n => n.end === rev.end)?.val || 0,
+      operatingIncome: operatingIncomeQuarterly.find(o => o.end === rev.end)?.val ?? null,
+      netIncome: netIncomeQuarterly.find(n => n.end === rev.end)?.val ?? null,
     })).reverse();
 
     // Build balance sheet data (annual)
@@ -281,16 +366,18 @@ export async function GET(request) {
       return {
         date: inc.date,
         calendarYear: inc.calendarYear,
-        grossProfitMargin: inc.revenue ? inc.grossProfit / inc.revenue : null,
-        operatingProfitMargin: inc.revenue ? inc.operatingIncome / inc.revenue : null,
-        netProfitMargin: inc.revenue ? inc.netIncome / inc.revenue : null,
-        returnOnEquity: bal.totalEquity ? inc.netIncome / bal.totalEquity : null,
-        returnOnAssets: bal.totalAssets ? inc.netIncome / bal.totalAssets : null,
-        returnOnCapitalEmployed: bal.totalEquity || bal.totalDebt
+        grossProfitMargin: (inc.revenue && inc.grossProfit !== null && inc.grossProfit !== undefined) ? inc.grossProfit / inc.revenue : null,
+        operatingProfitMargin: (inc.revenue && inc.operatingIncome !== null && inc.operatingIncome !== undefined) ? inc.operatingIncome / inc.revenue : null,
+        netProfitMargin: (inc.revenue && inc.netIncome !== null && inc.netIncome !== undefined) ? inc.netIncome / inc.revenue : null,
+        returnOnEquity: (bal.totalEquity && inc.netIncome !== null && inc.netIncome !== undefined) ? inc.netIncome / bal.totalEquity : null,
+        returnOnAssets: (bal.totalAssets && inc.netIncome !== null && inc.netIncome !== undefined) ? inc.netIncome / bal.totalAssets : null,
+        returnOnCapitalEmployed: ((bal.totalEquity || bal.totalDebt) && inc.operatingIncome !== null && inc.operatingIncome !== undefined)
           ? inc.operatingIncome / ((bal.totalEquity || 0) + (bal.totalDebt || 0))
           : null,
         debtToEquityRatio: bal.totalEquity ? bal.totalDebt / bal.totalEquity : null,
-        currentRatio: null,
+        currentRatio: (bal.currentAssets !== null && bal.currentAssets !== undefined && bal.currentLiabilities && bal.currentLiabilities > 0)
+          ? bal.currentAssets / bal.currentLiabilities
+          : null,
       };
     });
 
@@ -321,6 +408,11 @@ export async function GET(request) {
     const summaryDetail = yahooStats?.summaryDetail || {};
     const keyStats = yahooStats?.defaultKeyStatistics || {};
     const financialData = yahooStats?.financialData || {};
+    const insiderTransactionsRaw = yahooStats?.insiderTransactions?.transactions || [];
+    const insiderTransactions = normalizeInsiderTransactions(insiderTransactionsRaw).slice(0, 50);
+    const insiderSelling = insiderTransactions
+      .filter((tx) => tx.side === 'SELL')
+      .slice(0, 20);
 
     const favorites = {
       peRatio: yahooQuote?.trailingPE || null,
@@ -591,13 +683,22 @@ export async function GET(request) {
         : null,
     };
 
-    // Calculate composite fair value (weighted average of valid methods)
-    const validValuations = Object.entries(valuations)
-      .filter(([_, v]) => v !== null && v > 0 && isFinite(v))
-      .map(([k, v]) => ({ method: k, value: v }));
+    const compositeMethodConfig = [
+      { key: 'dcfOperatingCashFlow', label: 'DCF (Unlevered FCF)' },
+      { key: 'dcfTerminal', label: 'DCF Terminal (15x FCF)' },
+      { key: 'fairValuePS', label: 'Fair Value (P/S)' },
+      { key: 'fairValuePE', label: 'Fair Value (P/E)' },
+      { key: 'fairValuePB', label: 'Fair Value (P/B)' },
+      { key: 'earningsPowerValue', label: 'Earnings Power Value' },
+      { key: 'grahamNumber', label: 'Graham Number' },
+    ];
 
-    const compositeValue = validValuations.length > 0
-      ? validValuations.reduce((sum, v) => sum + v.value, 0) / validValuations.length
+    const compositeMethods = compositeMethodConfig
+      .map(({ key, label }) => ({ key, label, value: valuations[key] }))
+      .filter((entry) => entry.value !== null && entry.value > 0 && isFinite(entry.value));
+
+    const compositeValue = compositeMethods.length > 0
+      ? compositeMethods.reduce((sum, v) => sum + v.value, 0) / compositeMethods.length
       : null;
 
     const dcfConfidence = {
@@ -612,6 +713,7 @@ export async function GET(request) {
 
     const dcf = {
       ...valuations,
+      compositeMethods,
       compositeValue,
       currentPrice,
       upside: compositeValue ? ((compositeValue - currentPrice) / currentPrice) * 100 : null,
@@ -912,6 +1014,8 @@ export async function GET(request) {
       dcf,
       valuationRatios: valuationRatiosSummary,
       factorRankings,
+      insiderTransactions,
+      insiderSelling,
     });
 
   } catch (error) {

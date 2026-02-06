@@ -93,6 +93,7 @@ const NAV_TABS = [
   { id: 'valuation', label: 'Valuation' },
   { id: 'financials', label: 'Financials' },
   { id: 'charts', label: 'Charts' },
+  { id: 'insider', label: 'Insider Activity' },
   { id: 'profile', label: 'Profile' },
 ];
 
@@ -106,6 +107,58 @@ function isValidUrl(url) {
 // ---- Extracted Components (outside render, no remount on re-render) ----
 
 function ChartSection({ title, chartData, dataKeys, colors, unit = '', dataKeyX = 'period', theme }) {
+  const numericValues = useMemo(() => {
+    if (!Array.isArray(chartData) || !Array.isArray(dataKeys)) return [];
+    return chartData.flatMap((row) =>
+      dataKeys
+        .map((key) => row?.[key])
+        .filter((value) => typeof value === 'number' && Number.isFinite(value))
+    );
+  }, [chartData, dataKeys]);
+
+  const yDomain = useMemo(() => {
+    if (!numericValues.length) return [0, 1];
+    const min = Math.min(...numericValues);
+    const max = Math.max(...numericValues);
+
+    if (min === max) {
+      if (max === 0) return [0, unit === 'B' ? 0.01 : 1];
+      const padding = Math.abs(max) * 0.2;
+      if (min >= 0) return [0, max + padding];
+      if (max <= 0) return [min - padding, 0];
+      return [min - padding, max + padding];
+    }
+
+    const span = max - min;
+    const padding = span * 0.1;
+    if (min >= 0) return [0, max + padding];
+    if (max <= 0) return [min - padding, 0];
+    return [min - padding, max + padding];
+  }, [numericValues, unit]);
+
+  const formatBillionsValue = useCallback((value) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'N/A';
+    const abs = Math.abs(value);
+    if (abs >= 1) return `${value.toFixed(abs < 10 ? 2 : 1)}B`;
+    if (abs >= 0.001) return `${(value * 1_000).toFixed(abs * 1_000 < 10 ? 2 : 1)}M`;
+    if (abs >= 0.000001) return `${(value * 1_000_000).toFixed(abs * 1_000_000 < 10 ? 1 : 0)}K`;
+    return `${(value * 1_000_000_000).toFixed(0)}`;
+  }, []);
+
+  const formatAxisTick = useCallback((value) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return '';
+    if (unit === 'B') return formatBillionsValue(value);
+    if (unit === '%') return `${value.toFixed(1)}%`;
+    return `${value}`;
+  }, [formatBillionsValue, unit]);
+
+  const formatTooltipValue = useCallback((value) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'N/A';
+    if (unit === 'B') return `$${formatBillionsValue(value)}`;
+    if (unit === '%') return `${value.toFixed(2)}%`;
+    return `${value}${unit}`;
+  }, [formatBillionsValue, unit]);
+
   return (
     <div
       className="p-5 rounded-2xl border transition-colors"
@@ -121,10 +174,16 @@ function ChartSection({ title, chartData, dataKeys, colors, unit = '', dataKeyX 
         <BarChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
           <XAxis dataKey={dataKeyX} tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
-          <YAxis tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
+          <YAxis
+            domain={yDomain}
+            tickFormatter={formatAxisTick}
+            tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: theme.textTertiary }}
+            axisLine={{ stroke: theme.chartGrid }}
+            tickLine={false}
+          />
           <Tooltip
             contentStyle={{ fontFamily: 'JetBrains Mono', fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
-            formatter={(value) => [`${value}${unit}`, '']}
+            formatter={(value) => [formatTooltipValue(value), '']}
             cursor={{ fill: theme.cursorFill }}
           />
           <Legend wrapperStyle={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: theme.textSecondary }} />
@@ -399,6 +458,44 @@ function OverviewTab({ data, verdict, theme, formatNumber, formatPercent, format
 }
 
 function ValuationTab({ data, theme, formatNumber, formatRatio }) {
+  const methodTypeByKey = {
+    dcfOperatingCashFlow: 'dcf',
+    dcfTerminal: 'dcf',
+    fairValuePS: 'relative',
+    fairValuePE: 'relative',
+    fairValuePB: 'relative',
+    earningsPowerValue: 'relative',
+    grahamNumber: 'conservative',
+  };
+
+  const methodColorByType = {
+    dcf: '#f59e0b',
+    relative: '#f97316',
+    conservative: '#6b7280',
+  };
+
+  const valuationMethods = (data?.dcf?.compositeMethods || [])
+    .map((entry) => ({
+      name: entry.label,
+      value: entry.value,
+      key: entry.key,
+      type: methodTypeByKey[entry.key] || 'relative',
+    }))
+    .filter((entry) => entry.value && entry.value > 0 && isFinite(entry.value));
+  const valuationMethodsForChart = valuationMethods.length > 0
+    ? valuationMethods
+    : [
+      { name: 'DCF (Unlevered FCF)', value: data?.dcf?.dcfOperatingCashFlow, key: 'dcfOperatingCashFlow' },
+      { name: 'DCF Terminal (15x FCF)', value: data?.dcf?.dcfTerminal, key: 'dcfTerminal' },
+      { name: 'Fair Value (P/S)', value: data?.dcf?.fairValuePS, key: 'fairValuePS' },
+      { name: 'Fair Value (P/E)', value: data?.dcf?.fairValuePE, key: 'fairValuePE' },
+      { name: 'Fair Value (P/B)', value: data?.dcf?.fairValuePB, key: 'fairValuePB' },
+      { name: 'Earnings Power Value', value: data?.dcf?.earningsPowerValue, key: 'earningsPowerValue' },
+      { name: 'Graham Number', value: data?.dcf?.grahamNumber, key: 'grahamNumber' },
+    ]
+      .map((entry) => ({ ...entry, type: methodTypeByKey[entry.key] || 'relative' }))
+      .filter((entry) => entry.value && entry.value > 0 && isFinite(entry.value));
+
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-valuation" aria-labelledby="tab-valuation">
       {/* Valuation Chart */}
@@ -431,15 +528,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
           <ResponsiveContainer width="100%" height={400}>
             <BarChart
               layout="vertical"
-              data={[
-                { name: 'DCF (Unlevered FCF)', value: data.dcf.dcfOperatingCashFlow, type: 'dcf' },
-                { name: 'DCF Terminal (15x FCF)', value: data.dcf.dcfTerminal, type: 'dcf' },
-                { name: 'Fair Value (P/S)', value: data.dcf.fairValuePS, type: 'relative' },
-                { name: 'Fair Value (P/E)', value: data.dcf.fairValuePE, type: 'relative' },
-                { name: 'Fair Value (P/B)', value: data.dcf.fairValuePB, type: 'relative' },
-                { name: 'Earnings Power Value', value: data.dcf.earningsPowerValue, type: 'relative' },
-                { name: 'Graham Number', value: data.dcf.grahamNumber, type: 'conservative' },
-              ].filter(d => d.value && d.value > 0 && isFinite(d.value))}
+              data={valuationMethodsForChart}
               margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
@@ -478,25 +567,8 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
                 label={{ value: `Fair: $${data.dcf.compositeValue?.toFixed(2)}`, position: 'top', fontSize: 10, fill: '#10b981' }}
               />
               <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                {[
-                  { name: 'DCF (Unlevered FCF)', type: 'dcf' },
-                  { name: 'DCF Terminal (15x FCF)', type: 'dcf' },
-                  { name: 'Fair Value (P/S)', type: 'relative' },
-                  { name: 'Fair Value (P/E)', type: 'relative' },
-                  { name: 'Fair Value (P/B)', type: 'relative' },
-                  { name: 'Earnings Power Value', type: 'relative' },
-                  { name: 'Graham Number', type: 'conservative' },
-                ].filter(d => {
-                  const val = data.dcf[d.name === 'DCF (Unlevered FCF)' ? 'dcfOperatingCashFlow' :
-                    d.name === 'DCF Terminal (15x FCF)' ? 'dcfTerminal' :
-                    d.name === 'Fair Value (P/S)' ? 'fairValuePS' :
-                    d.name === 'Fair Value (P/E)' ? 'fairValuePE' :
-                    d.name === 'Fair Value (P/B)' ? 'fairValuePB' :
-                    d.name === 'Earnings Power Value' ? 'earningsPowerValue' :
-                    'grahamNumber'];
-                  return val && val > 0 && isFinite(val);
-                }).map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.type === 'dcf' ? '#f59e0b' : entry.type === 'relative' ? '#f97316' : '#6b7280'} />
+                {valuationMethodsForChart.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={methodColorByType[entry.type] || methodColorByType.relative} />
                 ))}
               </Bar>
             </BarChart>
@@ -687,14 +759,14 @@ function FinancialsTab({ data, theme, formatPercent, formatRatio }) {
             <thead>
               <tr style={{ background: theme.tableBg }}>
                 <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Year</th>
-                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Gross</th>
-                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Op</th>
-                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Net</th>
-                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>ROE</th>
-                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>ROIC</th>
-                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>ROA</th>
-                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>D/E</th>
-                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Current</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Gross Profit Margin</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Operating Margin</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Net Margin</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Return on Equity</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Return on Capital Employed</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Return on Assets</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Debt to Equity</th>
+                <th className="px-3 py-3 text-right font-medium" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Current Ratio</th>
               </tr>
             </thead>
             <tbody>
@@ -798,6 +870,94 @@ function ProfileTab({ data, theme }) {
   );
 }
 
+function InsiderActivityTab({ data, theme }) {
+  const transactions = data?.insiderTransactions || [];
+
+  const formatShares = (num) => {
+    if (num === null || num === undefined || !Number.isFinite(num)) return 'N/A';
+    return num.toLocaleString();
+  };
+
+  const formatMoney = (num) => {
+    if (num === null || num === undefined || !Number.isFinite(num)) return 'N/A';
+    if (Math.abs(num) >= 1e9) return `$${(num / 1e9).toFixed(2)}B`;
+    if (Math.abs(num) >= 1e6) return `$${(num / 1e6).toFixed(2)}M`;
+    if (Math.abs(num) >= 1e3) return `$${(num / 1e3).toFixed(1)}K`;
+    return `$${num.toFixed(0)}`;
+  };
+
+  const sells = transactions.filter((tx) => tx.side === 'SELL');
+  const buys = transactions.filter((tx) => tx.side === 'BUY');
+
+  const sellShares = sells.reduce((sum, tx) => sum + (tx.shares || 0), 0);
+  const buyShares = buys.reduce((sum, tx) => sum + (tx.shares || 0), 0);
+  const sellValue = sells.reduce((sum, tx) => sum + (tx.value || 0), 0);
+  const buyValue = buys.reduce((sum, tx) => sum + (tx.value || 0), 0);
+
+  return (
+    <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-insider" aria-labelledby="tab-insider">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard theme={theme} label="Sell Transactions" value={String(sells.length)} subtext={formatMoney(sellValue)} />
+        <MetricCard theme={theme} label="Buy Transactions" value={String(buys.length)} subtext={formatMoney(buyValue)} />
+        <MetricCard theme={theme} label="Net Shares" value={formatShares(buyShares - sellShares)} subtext="Buys - Sells" />
+        <MetricCard theme={theme} label="Net Value" value={formatMoney(buyValue - sellValue)} subtext="Buys - Sells" />
+      </div>
+
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Recent Insider Transactions</h3>
+          <div className="text-[10px]" style={{ color: theme.textMuted }}>Latest reported insider activity</div>
+        </div>
+
+        {transactions.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ background: theme.tableBg }}>
+                  <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Date</th>
+                  <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Insider</th>
+                  <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Role</th>
+                  <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Type</th>
+                  <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Shares</th>
+                  <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.slice(0, 20).map((tx, idx) => {
+                  const tone = tx.side === 'SELL' ? theme.negative : tx.side === 'BUY' ? theme.positive : theme.textTertiary;
+                  return (
+                    <tr
+                      key={`${tx.date}-${tx.insider}-${idx}`}
+                      style={{ borderBottom: `1px solid ${theme.border}` }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = theme.tableRowHover}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td className="px-3 py-3" style={{ color: theme.text }}>{tx.date || 'N/A'}</td>
+                      <td className="px-3 py-3 font-medium" style={{ color: theme.textSecondary }}>{tx.insider || 'N/A'}</td>
+                      <td className="px-3 py-3" style={{ color: theme.textTertiary }}>{tx.relation || 'N/A'}</td>
+                      <td className="px-3 py-3">
+                        <span className="px-2 py-1 rounded-full text-[10px] font-semibold" style={{ background: `${tone}22`, color: tone }}>
+                          {tx.side || 'UNKNOWN'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-right" style={{ color: tone }}>{formatShares(tx.shares)}</td>
+                      <td className="px-3 py-3 text-right" style={{ color: tone }}>{formatMoney(tx.value)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-xs" style={{ color: theme.textTertiary }}>
+            No insider activity data found for this ticker.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---- Main Component ----
 
 export default function StockValuationCalculator() {
@@ -857,16 +1017,6 @@ export default function StockValuationCalculator() {
     }
   };
 
-  const calculateGrahamNumber = useCallback(() => {
-    if (data?.dcf?.grahamNumber) return data.dcf.grahamNumber;
-    if (!data?.metrics?.length) return null;
-    const latestMetrics = data.metrics[data.metrics.length - 1];
-    const eps = latestMetrics.netIncomePerShare || 0;
-    const bvps = latestMetrics.bookValuePerShare || 0;
-    if (eps <= 0 || bvps <= 0) return null;
-    return Math.sqrt(22.5 * eps * bvps);
-  }, [data]);
-
   const calculatePEGValue = useCallback(() => {
     return data?.valuationRatios?.current?.pegRatio ?? null;
   }, [data]);
@@ -875,27 +1025,26 @@ export default function StockValuationCalculator() {
     if (!data?.quote?.price) return null;
 
     const currentPrice = data.quote.price;
-    const valuations = [];
+    const fairValue = data?.dcf?.compositeValue;
+    if (!fairValue || !isFinite(fairValue)) return null;
 
-    const dcfValue = data.dcf?.compositeValue;
-    if (dcfValue) valuations.push({ method: 'DCF Composite', value: dcfValue });
-
-    const graham = calculateGrahamNumber();
-    if (graham) valuations.push({ method: 'Graham Number', value: graham });
-
-    if (valuations.length === 0) return null;
-
-    const avgFairValue = valuations.reduce((sum, v) => sum + v.value, 0) / valuations.length;
-    const upside = ((avgFairValue - currentPrice) / currentPrice) * 100;
+    const valuations = (data?.dcf?.compositeMethods || []).map((entry) => ({
+      method: entry.label,
+      value: entry.value,
+    }));
+    if (valuations.length === 0) {
+      valuations.push({ method: 'DCF Composite', value: fairValue });
+    }
+    const upside = ((fairValue - currentPrice) / currentPrice) * 100;
 
     return {
       currentPrice,
-      avgFairValue,
+      avgFairValue: fairValue,
       upside,
       valuations,
       verdict: upside > 15 ? 'UNDERVALUED' : upside < -15 ? 'OVERVALUED' : 'FAIRLY VALUED',
     };
-  }, [data, calculateGrahamNumber]);
+  }, [data]);
 
   const formatNumber = useCallback((num, decimals = 2) => {
     if (num === null || num === undefined || isNaN(num)) return 'N/A';
@@ -916,14 +1065,25 @@ export default function StockValuationCalculator() {
     return num.toFixed(2);
   }, []);
 
+  const toBillions = useCallback((num) => {
+    if (num === null || num === undefined || !Number.isFinite(num)) return null;
+    return num / 1e9;
+  }, []);
+
   // Memoized data prep
   const marginData = useMemo(() => {
     if (!data?.ratios) return [];
     return data.ratios.map((r) => ({
       year: r.calendarYear || r.date?.slice(0, 4),
-      'Gross Margin': parseFloat(((r.grossProfitMargin || 0) * 100).toFixed(1)),
-      'Operating Margin': parseFloat(((r.operatingProfitMargin || 0) * 100).toFixed(1)),
-      'Net Margin': parseFloat(((r.netProfitMargin || 0) * 100).toFixed(1)),
+      'Gross Margin': r.grossProfitMargin !== null && r.grossProfitMargin !== undefined
+        ? parseFloat((r.grossProfitMargin * 100).toFixed(1))
+        : null,
+      'Operating Margin': r.operatingProfitMargin !== null && r.operatingProfitMargin !== undefined
+        ? parseFloat((r.operatingProfitMargin * 100).toFixed(1))
+        : null,
+      'Net Margin': r.netProfitMargin !== null && r.netProfitMargin !== undefined
+        ? parseFloat((r.netProfitMargin * 100).toFixed(1))
+        : null,
     }));
   }, [data?.ratios]);
 
@@ -944,11 +1104,11 @@ export default function StockValuationCalculator() {
       period: viewMode === 'quarterly'
         ? `${i.fiscalYear || i.date?.slice(0, 4)} ${i.period || ''}`.trim()
         : i.calendarYear || i.date?.slice(0, 4),
-      Revenue: parseFloat((i.revenue / 1e9).toFixed(2)),
-      'Operating Income': parseFloat((i.operatingIncome / 1e9).toFixed(2)),
-      'Net Income': parseFloat((i.netIncome / 1e9).toFixed(2)),
+      Revenue: toBillions(i.revenue),
+      'Operating Income': toBillions(i.operatingIncome),
+      'Net Income': toBillions(i.netIncome),
     }));
-  }, [data?.income, data?.incomeQ, viewMode]);
+  }, [data?.income, data?.incomeQ, toBillions, viewMode]);
 
   const cashFlowData = useMemo(() => {
     const source = viewMode === 'quarterly' ? data?.cashflowQ : data?.cashflow;
@@ -957,11 +1117,11 @@ export default function StockValuationCalculator() {
       period: viewMode === 'quarterly'
         ? `${c.fiscalYear || c.date?.slice(0, 4)} ${c.period || ''}`.trim()
         : c.calendarYear || c.date?.slice(0, 4),
-      'Operating CF': parseFloat((c.operatingCashFlow / 1e9).toFixed(2)),
-      'Free Cash Flow': parseFloat((c.freeCashFlow / 1e9).toFixed(2)),
-      CapEx: parseFloat((Math.abs(c.capitalExpenditure || 0) / 1e9).toFixed(2)),
+      'Operating CF': toBillions(c.operatingCashFlow),
+      'Free Cash Flow': toBillions(c.freeCashFlow),
+      CapEx: toBillions(Math.abs(c.capitalExpenditure || 0)),
     }));
-  }, [data?.cashflow, data?.cashflowQ, viewMode]);
+  }, [data?.cashflow, data?.cashflowQ, toBillions, viewMode]);
 
   const balanceData = useMemo(() => {
     const source = viewMode === 'quarterly' ? data?.balanceQ : data?.balance;
@@ -970,12 +1130,10 @@ export default function StockValuationCalculator() {
       period: viewMode === 'quarterly'
         ? `${b.fiscalYear || b.date?.slice(0, 4)} ${b.period || ''}`.trim()
         : b.calendarYear || b.date?.slice(0, 4),
-      'Cash & Investments': parseFloat(
-        ((b.cashAndCashEquivalents + (b.shortTermInvestments || 0)) / 1e9).toFixed(2)
-      ),
-      'Total Debt': parseFloat(((b.totalDebt || 0) / 1e9).toFixed(2)),
+      'Cash & Investments': toBillions((b.cashAndCashEquivalents || 0) + (b.shortTermInvestments || 0)),
+      'Total Debt': toBillions(b.totalDebt || 0),
     }));
-  }, [data?.balance, data?.balanceQ, viewMode]);
+  }, [data?.balance, data?.balanceQ, toBillions, viewMode]);
 
   const calcCAGR = (values) => {
     if (!values || values.length < 2) return null;
@@ -1004,6 +1162,7 @@ export default function StockValuationCalculator() {
       case 'valuation': return <ValuationTab data={data} theme={t} formatNumber={formatNumber} formatRatio={formatRatio} />;
       case 'financials': return <FinancialsTab data={data} theme={t} formatPercent={formatPercent} formatRatio={formatRatio} />;
       case 'charts': return <ChartsTab theme={t} viewMode={viewMode} setViewMode={setViewMode} marginData={marginData} returnData={returnData} incomeData={incomeData} cashFlowData={cashFlowData} balanceData={balanceData} />;
+      case 'insider': return <InsiderActivityTab data={data} theme={t} />;
       case 'profile': return <ProfileTab data={data} theme={t} />;
       default: return <OverviewTab data={data} verdict={verdict} theme={t} formatNumber={formatNumber} formatPercent={formatPercent} formatRatio={formatRatio} calculatePEGValue={calculatePEGValue} revenueCagr={revenueCagr} fcfCagr={fcfCagr} netMargin={netMargin} marginDelta={marginDelta} />;
     }
