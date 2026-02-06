@@ -5,21 +5,6 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #12121a;
-  --bg-tertiary: #1a1a24;
-  --bg-card: #16161f;
-  --bg-elevated: #1e1e2a;
-
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.15);
-
-  --text-primary: #f0f0f5;
-  --text-secondary: #a0a0b0;
-  --text-tertiary: #6b6b80;
-  --text-muted: #45455a;
-
   --accent-blue: #3b82f6;
   --accent-blue-dim: #2563eb;
   --accent-green: #10b981;
@@ -39,11 +24,10 @@
 
 body {
   font-family: 'JetBrains Mono', 'Courier New', monospace;
-  background: var(--bg-primary);
   min-height: 100vh;
-  color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Custom selection */
@@ -72,24 +56,24 @@ button:active:not(:disabled) {
   transform: translateY(0);
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - dark */
 ::-webkit-scrollbar {
   height: 6px;
   width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: transparent;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
+  background: rgba(128, 128, 128, 0.3);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-tertiary);
+  background: rgba(128, 128, 128, 0.5);
 }
 
 /* Animations */
@@ -113,6 +97,11 @@ button:active:not(:disabled) {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -125,9 +114,12 @@ button:active:not(:disabled) {
   animation: slideUp 0.5s ease-out forwards;
 }
 
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
 /* Glass effect utility */
 .glass {
-  background: rgba(22, 22, 31, 0.8);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -170,9 +162,12 @@ table {
   border-spacing: 0;
 }
 
-/* Chart tooltip override for dark theme */
-.recharts-tooltip-wrapper .recharts-default-tooltip {
-  background: var(--bg-elevated) !important;
-  border: 1px solid var(--border-default) !important;
-  border-radius: 8px !important;
+/* Tab navigation: no vertical bounce on tab buttons */
+nav[role="tablist"] button:hover:not(:disabled) {
+  transform: none;
+}
+
+/* Theme toggle button: no vertical bounce */
+button[title*="mode"]:hover:not(:disabled) {
+  transform: scale(1.05);
 }

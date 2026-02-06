@@ -3,15 +3,28 @@ import YahooFinance from 'yahoo-finance2';
 
 const yahooFinance = new YahooFinance();
 const SEC_BASE = 'https://data.sec.gov';
-const USER_AGENT = 'StockValuationCalculator/1.0 (contact@example.com)';
+const USER_AGENT = `StockValuationCalculator/1.0 (${process.env.SEC_CONTACT_EMAIL || 'admin@stockvaluationcalculator.app'})`;
 
-// Map common tickers to CIK numbers
-async function getCIK(ticker) {
+// In-memory cache for SEC company tickers (refreshes once per day)
+let tickerCache = { data: null, fetchedAt: 0 };
+const TICKER_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+async function getTickerMap() {
+  const now = Date.now();
+  if (tickerCache.data && (now - tickerCache.fetchedAt) < TICKER_CACHE_TTL) {
+    return tickerCache.data;
+  }
   const response = await fetch(`https://www.sec.gov/files/company_tickers.json`, {
     headers: { 'User-Agent': USER_AGENT },
   });
   const data = await response.json();
+  tickerCache = { data, fetchedAt: now };
+  return data;
+}
 
+// Map common tickers to CIK numbers
+async function getCIK(ticker) {
+  const data = await getTickerMap();
   const upperTicker = ticker.toUpperCase();
   for (const entry of Object.values(data)) {
     if (entry.ticker === upperTicker) {
@@ -21,43 +34,61 @@ async function getCIK(ticker) {
   return null;
 }
 
-// Get metric values, combining data from multiple field names for full history
+// Get metric values, combining data from multiple field names for full history.
+// Keys by actual data period (end date) instead of filing year to avoid picking
+// prior-year comparative data that SEC EDGAR includes in each filing.
 function getMetricValues(facts, fieldNames, period = 'FY', limit = 20) {
   const seen = new Map();
 
-  // Collect data from ALL matching field names to get complete history
   for (const fieldName of fieldNames) {
     const data = facts?.[fieldName]?.units?.USD || [];
 
-    // Filter by period type
     let filtered;
     if (period === 'Q') {
+      // Quarterly: require fp in Q1-Q4 and a single-quarter span (~3 months)
       filtered = data.filter(d => {
         if (!['Q1','Q2','Q3','Q4'].includes(d.fp)) return false;
         if (d.start && d.end) {
-          const startDate = new Date(d.start);
-          const endDate = new Date(d.end);
-          const months = (endDate - startDate) / (1000 * 60 * 60 * 24 * 30);
+          const months = (new Date(d.end) - new Date(d.start)) / (1000 * 60 * 60 * 24 * 30);
           return months < 5;
         }
         return true;
       });
     } else {
-      filtered = data.filter(d => d.fp === period);
+      // Annual: require fp === 'FY' and validate ~12-month span when dates available
+      filtered = data.filter(d => {
+        if (d.fp !== period) return false;
+        if (d.start && d.end) {
+          const months = (new Date(d.end) - new Date(d.start)) / (1000 * 60 * 60 * 24 * 30);
+          if (months < 10 || months > 14) return false;
+        }
+        return true;
+      });
     }
 
-    // Add to seen map, preferring newer filings
+    // Key by the actual data period (end date) instead of the filing year.
+    // SEC filings include prior-year comparatives, so the same fy can have
+    // entries for different actual years. Using end date ensures we get the
+    // correct value for each period and don't lose the most recent year's data.
     for (const entry of filtered) {
-      const key = `${entry.fy}-${entry.fp}`;
+      if (!entry.end) continue;
+      const key = entry.end; // e.g. "2024-12-31" for annual, "2024-03-31" for Q1
       const existing = seen.get(key);
       if (!existing || new Date(entry.filed) > new Date(existing.filed)) {
-        seen.set(key, entry);
+        // Normalize fy to reflect the actual data year (from end date)
+        // so downstream code using .fy gets the correct calendar year
+        const actualYear = new Date(entry.end).getFullYear();
+        seen.set(key, { ...entry, fy: actualYear });
       }
     }
   }
 
   return Array.from(seen.values())
-    .sort((a, b) => b.fy - a.fy || b.fp?.localeCompare(a.fp))
+    .sort((a, b) => {
+      // Sort by end date descending for consistent ordering
+      if (a.end && b.end) return b.end.localeCompare(a.end);
+      return b.fy - a.fy || (b.fp || '').localeCompare(a.fp || '');
+    })
     .slice(0, limit);
 }
 
@@ -67,6 +98,10 @@ export async function GET(request) {
 
   if (!ticker) {
     return NextResponse.json({ error: 'Ticker symbol is required' }, { status: 400 });
+  }
+
+  if (!/^[A-Z0-9.\-^]{1,10}$/i.test(ticker)) {
+    return NextResponse.json({ error: 'Invalid ticker symbol' }, { status: 400 });
   }
 
   try {
@@ -117,7 +152,6 @@ export async function GET(request) {
     const grossProfitFields = ['GrossProfit'];
     const operatingIncomeFields = ['OperatingIncomeLoss'];
     const totalAssetsFields = ['Assets'];
-    const totalLiabilitiesFields = ['Liabilities', 'LiabilitiesAndStockholdersEquity'];
     const totalEquityFields = ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'];
     const cashFields = ['CashAndCashEquivalentsAtCarryingValue', 'Cash'];
     const debtFields = ['LongTermDebt', 'LongTermDebtNoncurrent'];
@@ -193,7 +227,7 @@ export async function GET(request) {
     })).reverse();
 
     // Build balance sheet data (annual)
-    const balance = assetsAnnual.map((asset, i) => ({
+    const balance = assetsAnnual.map((asset) => ({
       date: asset.end,
       calendarYear: String(asset.fy),
       totalAssets: asset.val || 0,
@@ -262,7 +296,6 @@ export async function GET(request) {
 
     // Build metrics (per-share where possible)
     const metrics = income.map((inc) => {
-      const bal = balanceByYear.get(String(inc.calendarYear)) || {};
       return {
         date: inc.date,
         calendarYear: inc.calendarYear,
@@ -302,20 +335,10 @@ export async function GET(request) {
       debtToEbitda: null, // Will calculate from SEC data
     };
 
-    // Calculate ROIC and Debt/EBITDA from SEC data if available
+    // Calculate Debt/EBITDA from SEC data if available
     const latestIncome = income[income.length - 1];
     const latestBalance = balance[balance.length - 1];
-    const latestCashflow = cashflow[cashflow.length - 1];
-    const latestDepreciation = depreciationAnnual[depreciationAnnual.length - 1]?.val || null;
-
-    if (latestIncome && latestBalance) {
-      const taxRate = 0.21;
-      const nopat = latestIncome.operatingIncome * (1 - taxRate);
-      const investedCapital = (latestBalance.totalEquity || 0) + (latestBalance.totalDebt || 0) - (latestBalance.cashAndCashEquivalents || 0);
-      if (investedCapital > 0) {
-        favorites.roic = nopat / investedCapital;
-      }
-    }
+    const latestDepreciation = depreciationAnnual[0]?.val || null;
 
     const ebitda = latestIncome && latestDepreciation !== null
       ? latestIncome.operatingIncome + latestDepreciation
@@ -398,6 +421,16 @@ export async function GET(request) {
     const taxRate = effectiveTax !== null && isFinite(effectiveTax)
       ? Math.min(Math.max(effectiveTax, 0), 0.35)
       : 0.21;
+
+    // Calculate ROIC using the dynamic tax rate
+    if (latestIncome && latestBalance) {
+      const nopat = latestIncome.operatingIncome * (1 - taxRate);
+      const investedCapital = (latestBalance.totalEquity || 0) + (latestBalance.totalDebt || 0) - (latestBalance.cashAndCashEquivalents || 0);
+      if (investedCapital > 0) {
+        favorites.roic = nopat / investedCapital;
+      }
+    }
+
     const totalCapital = marketCap + totalDebt;
     const equityWeight = totalCapital > 0 ? marketCap / totalCapital : 1;
     const debtWeight = totalCapital > 0 ? totalDebt / totalCapital : 0;
@@ -490,7 +523,6 @@ export async function GET(request) {
 
     // Ratios for DCF inputs (working capital + reinvestment)
     const yearKey = (y) => String(y);
-    const cashflowByYear = new Map(cashflow.map(c => [yearKey(c.calendarYear), c]));
     const depByYear = new Map(depreciationAnnual.map(d => [yearKey(d.fy), d.val]));
     const capexByYear = new Map(capexAnnual.map(c => [yearKey(c.fy), Math.abs(c.val || 0)]));
     const ratiosSample = [];
@@ -619,7 +651,6 @@ export async function GET(request) {
     // Calculate historical ratios (using current price as approximation for trend analysis)
     const valuationRatios = income.map((inc, i) => {
       const bal = balanceByYear.get(String(inc.calendarYear)) || {};
-      const cf = cashflowByYear.get(String(inc.calendarYear)) || {};
       const year = inc.calendarYear;
 
       // EPS and per-share metrics
@@ -829,9 +860,9 @@ export async function GET(request) {
     ));
 
     // 5. Financial Strength Rank - Based on debt levels and coverage
-    const debtToEquity = favorites.debtToEbitda || 0;
+    const debtToEbitda = favorites.debtToEbitda || 0;
     const financialStrengthScore = Math.min(100, (
-      (debtToEquity < 1 ? 50 : debtToEquity < 2 ? 35 : debtToEquity < 3 ? 20 : 10) +
+      (debtToEbitda < 1 ? 50 : debtToEbitda < 2 ? 35 : debtToEbitda < 3 ? 20 : 10) +
       (latestBalance?.cashAndCashEquivalents > latestBalance?.totalDebt ? 50 :
        latestBalance?.cashAndCashEquivalents > latestBalance?.totalDebt * 0.5 ? 35 : 20)
     ));
@@ -885,6 +916,6 @@ export async function GET(request) {
 
   } catch (error) {
     console.error('API Error:', error);
-    return NextResponse.json({ error: 'Failed to fetch stock data: ' + error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch stock data' }, { status: 500 });
   }
 }
