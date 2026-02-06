@@ -460,19 +460,22 @@ export async function GET(request) {
       return Math.pow(end / start, 1 / years) - 1;
     };
 
-    // Simple DCF helper for 20-year projections
-    const calcDCF = (baseValue, growthRate, years, shares) => {
+    // Simple DCF helper for projections
+    const calcDCF = (baseValue, growthRate, years, shares, options = {}) => {
       if (!baseValue || baseValue <= 0 || !isFinite(baseValue)) return null;
-      const dr = discountRate || 0.10;
-      const gr = Math.min(growthRate || 0, 0.15); // Cap growth at 15%
+      const dr = options.discountRate ?? discountRate ?? 0.10;
+      const terminal = options.terminalGrowth ?? 0.025;
+      const growthCap = options.growthCap ?? 0.15;
+      const gr = Math.min(growthRate || 0, growthCap);
+      if (dr <= terminal + 0.005) return null;
       let totalPV = 0;
       for (let i = 1; i <= years; i++) {
         const cfVal = baseValue * Math.pow(1 + gr, i);
         totalPV += cfVal / Math.pow(1 + dr, i);
       }
       // Add terminal value
-      const terminalCF = baseValue * Math.pow(1 + gr, years) * (1 + 0.025);
-      const terminalValue = terminalCF / (dr - 0.025);
+      const terminalCF = baseValue * Math.pow(1 + gr, years) * (1 + terminal);
+      const terminalValue = terminalCF / (dr - terminal);
       const pvTerminal = terminalValue / Math.pow(1 + dr, years);
       return (totalPV + pvTerminal) / (shares || 1);
     };
@@ -844,6 +847,44 @@ export async function GET(request) {
     const forwardEPS = currentEPS * (1 + Math.min(netIncomeGrowth, 0.2));
     const forwardPE = forwardEPS > 0 ? currentPrice / forwardEPS : null;
 
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    const growthSignals = [revenueGrowth, netIncomeGrowth, fcfGrowth, favorites.epsGrowth]
+      .filter((g) => g !== null && g !== undefined && isFinite(g));
+    const positiveGrowthSignals = growthSignals.filter((g) => g > 0);
+    const blendedGrowthSignal = positiveGrowthSignals.length > 0
+      ? positiveGrowthSignals.reduce((a, b) => a + b, 0) / positiveGrowthSignals.length
+      : 0.08;
+
+    // Oracle-style risk and growth assumptions for 20Y methods (separate from core WACC path).
+    const oracleDiscountRate = clamp(
+      (riskFreeRate + (beta * 0.055)) + 0.01 + (netIncomeGrowth < 0 ? 0.01 : 0) + (beta > 1.5 ? 0.005 : 0),
+      0.10,
+      0.18
+    );
+    const oracleTerminalGrowth = 0.03;
+
+    const calcOracle20Y = (baseValue, growthBias = 1.0, shares) => {
+      if (!baseValue || baseValue <= 0 || !isFinite(baseValue)) return null;
+      const years = 20;
+      const highGrowthYears = 4;
+      const highGrowth = clamp(blendedGrowthSignal * growthBias, 0.05, 0.22);
+      let totalPV = 0;
+      let cf = baseValue;
+
+      for (let year = 1; year <= years; year++) {
+        const growth = year <= highGrowthYears
+          ? highGrowth
+          : highGrowth + (oracleTerminalGrowth - highGrowth) * ((year - highGrowthYears) / (years - highGrowthYears));
+        cf *= (1 + growth);
+        totalPV += cf / Math.pow(1 + oracleDiscountRate, year);
+      }
+
+      const terminalCF = cf * (1 + oracleTerminalGrowth);
+      const terminalValue = terminalCF / (oracleDiscountRate - oracleTerminalGrowth);
+      const pvTerminal = terminalValue / Math.pow(1 + oracleDiscountRate, years);
+      return (totalPV + pvTerminal) / (shares || 1);
+    };
+
     const otherValuationRatios = {
       // Per Share Metrics
       ebitdaPerShare: ebitdaForRatios ? ebitdaForRatios / currentShares : null,
@@ -875,11 +916,11 @@ export async function GET(request) {
       medianPB,
       medianPBValue: medianPB && bookValuePerShare > 0 ? medianPB * bookValuePerShare : null,
 
-      // DCF Values (20-year projections)
-      dcf20Year: calcDCF(latestOCF, fcfGrowth * 0.6, 20, currentShares),
-      dfcf20Year: calcDCF(latestFCF, fcfGrowth * 0.7, 20, currentShares),
-      dni20Year: calcDCF(latestNetIncome, netIncomeGrowth * 0.6, 20, currentShares),
-      dfcfTerminal: latestFCF > 0 ? (latestFCF * (1 + terminalGrowth) / (discountRate - terminalGrowth)) / currentShares : null,
+      // DCF Values (20-year projections, Oracle-style growth-aware path)
+      dcf20Year: calcOracle20Y(latestOCF, 0.95, currentShares),
+      dfcf20Year: calcOracle20Y(latestFCF, 1.00, currentShares),
+      dni20Year: calcOracle20Y(latestNetIncome, 0.90, currentShares),
+      dfcfTerminal: latestFCF > 0 ? (latestFCF * (1 + oracleTerminalGrowth) / (oracleDiscountRate - oracleTerminalGrowth)) / currentShares : null,
 
       // Rule of 40
       ruleOf40,
@@ -924,17 +965,18 @@ export async function GET(request) {
       pegValue: valuations.pegValue,
     };
 
-    // v2 calibration factors derived from observed deltas against reference charts
+    // Per-method scaling factors. Keep neutral unless broader calibration data
+    // shows a systematic cross-ticker bias.
     const oracleCalibrationFactor = {
-      dcf20Year: 2.26,
-      dfcf20Year: 2.41,
-      dni20Year: 1.65,
-      dfcfTerminal: 1.81,
-      meanPSValue: 0.585,
-      meanPEValue: 0.532,
-      meanPBValue: 0.97,
-      psgValue: 1.27,
-      pegValue: 2.63,
+      dcf20Year: 1.0,
+      dfcf20Year: 1.0,
+      dni20Year: 1.0,
+      dfcfTerminal: 1.0,
+      meanPSValue: 1.0,
+      meanPEValue: 1.0,
+      meanPBValue: 1.0,
+      psgValue: 1.0,
+      pegValue: 1.0,
     };
 
     const calibratedOracleValue = (key, rawValue) => {
@@ -944,29 +986,123 @@ export async function GET(request) {
       return isFinite(adjusted) && adjusted > 0 ? adjusted : null;
     };
 
+    const oracleApproxConfig = {
+      methodWeights: {
+        dcf20Year: 0.134145,
+        dfcf20Year: 0.023700,
+        dni20Year: 0.527679,
+        dfcfTerminal: 0.314476,
+        meanPSValue: 0.075361,
+        meanPEValue: 0.345270,
+        meanPBValue: 0.334838,
+        psgValue: 0.220690,
+        pegValue: 0.023841,
+      },
+      dcfBlendWeight: 0.400104,
+      relativeBlendWeight: 0.599896,
+      medianAnchorWeight: 0.004530,
+      priceAnchorBase: 0.042984,
+      priceAnchorSpread: 0.386538,
+      priceAnchorMax: 0.35,
+    };
+
     const oracleApproxMethodConfig = [
-      { key: 'dcf20Year', label: 'Discounted Cash Flow 20-year (DCF-20)', value: calibratedOracleValue('dcf20Year', oracleRawValues.dcf20Year), rawValue: oracleRawValues.dcf20Year, weight: 0.20, type: 'dcf' },
-      { key: 'dfcf20Year', label: 'Discounted Free Cash Flow 20-year (DFCF-20)', value: calibratedOracleValue('dfcf20Year', oracleRawValues.dfcf20Year), rawValue: oracleRawValues.dfcf20Year, weight: 0.13, type: 'dcf' },
-      { key: 'dni20Year', label: 'Discounted Net Income 20-year (DNI-20)', value: calibratedOracleValue('dni20Year', oracleRawValues.dni20Year), rawValue: oracleRawValues.dni20Year, weight: 0.14, type: 'dcf' },
-      { key: 'dfcfTerminal', label: 'Discounted Free Cash Flow Terminal (DFCF-Terminal)', value: calibratedOracleValue('dfcfTerminal', oracleRawValues.dfcfTerminal), rawValue: oracleRawValues.dfcfTerminal, weight: 0.10, type: 'dcf' },
-      { key: 'meanPSValue', label: 'Mean Price to Sales (PS) Ratio', value: calibratedOracleValue('meanPSValue', oracleRawValues.meanPSValue), rawValue: oracleRawValues.meanPSValue, weight: 0.12, type: 'relative' },
-      { key: 'meanPEValue', label: 'Mean Price to Earnings (PE) Ratio without NRI', value: calibratedOracleValue('meanPEValue', oracleRawValues.meanPEValue), rawValue: oracleRawValues.meanPEValue, weight: 0.14, type: 'relative' },
-      { key: 'meanPBValue', label: 'Mean Price to Book (PB) Ratio', value: calibratedOracleValue('meanPBValue', oracleRawValues.meanPBValue), rawValue: oracleRawValues.meanPBValue, weight: 0.08, type: 'relative' },
-      { key: 'psgValue', label: 'Price to Sales Growth (PSG) Ratio', value: calibratedOracleValue('psgValue', oracleRawValues.psgValue), rawValue: oracleRawValues.psgValue, weight: 0.04, type: 'relative' },
-      { key: 'pegValue', label: 'Price to Earnings Growth (PEG) Ratio without NRI', value: calibratedOracleValue('pegValue', oracleRawValues.pegValue), rawValue: oracleRawValues.pegValue, weight: 0.05, type: 'relative' },
+      { key: 'dcf20Year', label: 'Discounted Cash Flow 20-year (DCF-20)', value: calibratedOracleValue('dcf20Year', oracleRawValues.dcf20Year), rawValue: oracleRawValues.dcf20Year, weight: oracleApproxConfig.methodWeights.dcf20Year, type: 'dcf' },
+      { key: 'dfcf20Year', label: 'Discounted Free Cash Flow 20-year (DFCF-20)', value: calibratedOracleValue('dfcf20Year', oracleRawValues.dfcf20Year), rawValue: oracleRawValues.dfcf20Year, weight: oracleApproxConfig.methodWeights.dfcf20Year, type: 'dcf' },
+      { key: 'dni20Year', label: 'Discounted Net Income 20-year (DNI-20)', value: calibratedOracleValue('dni20Year', oracleRawValues.dni20Year), rawValue: oracleRawValues.dni20Year, weight: oracleApproxConfig.methodWeights.dni20Year, type: 'dcf' },
+      { key: 'dfcfTerminal', label: 'Discounted Free Cash Flow Terminal (DFCF-Terminal)', value: calibratedOracleValue('dfcfTerminal', oracleRawValues.dfcfTerminal), rawValue: oracleRawValues.dfcfTerminal, weight: oracleApproxConfig.methodWeights.dfcfTerminal, type: 'dcf' },
+      { key: 'meanPSValue', label: 'Mean Price to Sales (PS) Ratio', value: calibratedOracleValue('meanPSValue', oracleRawValues.meanPSValue), rawValue: oracleRawValues.meanPSValue, weight: oracleApproxConfig.methodWeights.meanPSValue, type: 'relative' },
+      { key: 'meanPEValue', label: 'Mean Price to Earnings (PE) Ratio without NRI', value: calibratedOracleValue('meanPEValue', oracleRawValues.meanPEValue), rawValue: oracleRawValues.meanPEValue, weight: oracleApproxConfig.methodWeights.meanPEValue, type: 'relative' },
+      { key: 'meanPBValue', label: 'Mean Price to Book (PB) Ratio', value: calibratedOracleValue('meanPBValue', oracleRawValues.meanPBValue), rawValue: oracleRawValues.meanPBValue, weight: oracleApproxConfig.methodWeights.meanPBValue, type: 'relative' },
+      { key: 'psgValue', label: 'Price to Sales Growth (PSG) Ratio', value: calibratedOracleValue('psgValue', oracleRawValues.psgValue), rawValue: oracleRawValues.psgValue, weight: oracleApproxConfig.methodWeights.psgValue, type: 'relative' },
+      { key: 'pegValue', label: 'Price to Earnings Growth (PEG) Ratio without NRI', value: calibratedOracleValue('pegValue', oracleRawValues.pegValue), rawValue: oracleRawValues.pegValue, weight: oracleApproxConfig.methodWeights.pegValue, type: 'relative' },
     ];
 
     const oracleApproxMethods = oracleApproxMethodConfig.filter((m) => m.value !== null && m.value > 0 && isFinite(m.value));
-    const oracleApproxWeightSum = oracleApproxMethods.reduce((sum, m) => sum + m.weight, 0);
-    const oracleApproxComposite = oracleApproxWeightSum > 0
-      ? oracleApproxMethods.reduce((sum, m) => sum + (m.value * (m.weight / oracleApproxWeightSum)), 0)
-      : null;
+
+    const calcMedianValues = (vals) => {
+      const sorted = [...vals].sort((a, b) => a - b);
+      if (!sorted.length) return null;
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    };
+
+    const rawOracleValues = oracleApproxMethods.map((m) => m.value).filter((v) => v > 0 && isFinite(v));
+    const oracleMedian = calcMedianValues(rawOracleValues);
+
+    const weightedOracleMethods = oracleApproxMethods.map((m) => {
+      if (!oracleMedian || !m.value || m.value <= 0) return { ...m, dynamicWeight: m.weight };
+      const distance = Math.abs(Math.log(m.value / oracleMedian));
+      const reliability = 1 / (1 + (distance * 2));
+      return { ...m, dynamicWeight: m.weight * reliability };
+    });
+
+    const weightedMean = (rows) => {
+      const valid = rows.filter((r) => r.value > 0 && isFinite(r.value));
+      if (!valid.length) return null;
+      const w = valid.reduce((sum, r) => sum + (r.dynamicWeight || 0), 0);
+      if (!w) return null;
+      return valid.reduce((sum, r) => sum + (r.value * ((r.dynamicWeight || 0) / w)), 0);
+    };
+
+    const dcfBucket = weightedOracleMethods.filter((m) => m.type === 'dcf');
+    const relativeBucket = weightedOracleMethods.filter((m) => m.type === 'relative');
+    const dcfBucketFair = weightedMean(dcfBucket);
+    const relativeBucketFair = weightedMean(relativeBucket);
+
+    const blendedBucketFair = (() => {
+      if (dcfBucketFair && relativeBucketFair) {
+        // Global cross-ticker blend calibrated from reference OracleValue samples.
+        return (dcfBucketFair * oracleApproxConfig.dcfBlendWeight) + (relativeBucketFair * oracleApproxConfig.relativeBlendWeight);
+      }
+      return dcfBucketFair || relativeBucketFair || null;
+    })();
+
+    const oracleApproxComposite = (() => {
+      if (!blendedBucketFair) return null;
+      if (!oracleMedian) return blendedBucketFair;
+      const baseNoPrice = (blendedBucketFair * (1 - oracleApproxConfig.medianAnchorWeight)) + (oracleMedian * oracleApproxConfig.medianAnchorWeight);
+      const spread = (dcfBucketFair && relativeBucketFair)
+        ? Math.abs(Math.log((dcfBucketFair + 1) / (relativeBucketFair + 1)))
+        : 0;
+      const priceAnchor = Math.min(
+        oracleApproxConfig.priceAnchorMax,
+        oracleApproxConfig.priceAnchorBase + (oracleApproxConfig.priceAnchorSpread * spread)
+      );
+      return (baseNoPrice * (1 - priceAnchor)) + (currentPrice * priceAnchor);
+    })();
 
     if (oracleApproxComposite && oracleApproxMethods.length >= 4) {
-      dcf.compositeMethods = oracleApproxMethods.map(({ key, label, value, type, rawValue }) => ({ key, label, value, type, rawValue }));
+      dcf.compositeMethods = weightedOracleMethods.map(({ key, label, value, boundedValue, type, rawValue, weight, dynamicWeight }) => ({
+        key,
+        label,
+        value,
+        boundedValue: value,
+        type,
+        rawValue,
+        weight,
+        dynamicWeight: dynamicWeight ?? weight,
+        calibrationFactor: oracleCalibrationFactor[key] ?? 1,
+      }));
       dcf.compositeValue = oracleApproxComposite;
       dcf.compositeSource = 'oracle_approx_v2_calibrated';
       dcf.upside = ((oracleApproxComposite - currentPrice) / currentPrice) * 100;
+      dcf.oracleAssumptions = {
+        oracleDiscountRate: oracleDiscountRate * 100,
+        oracleTerminalGrowth: oracleTerminalGrowth * 100,
+        blendedGrowthSignal: blendedGrowthSignal * 100,
+        highGrowthYears: 4,
+        weightingModel: 'oracle_approx_v2_calibrated',
+        oracleMedian,
+        oracleOutlierFloor: null,
+        oracleOutlierCeiling: null,
+        dcfBucketFair,
+        relativeBucketFair,
+        blendedBucketFair,
+        dcfBlendWeight: oracleApproxConfig.dcfBlendWeight,
+        relativeBlendWeight: oracleApproxConfig.relativeBlendWeight,
+        medianAnchorWeight: oracleApproxConfig.medianAnchorWeight,
+      };
     }
 
     // Calculate Factor Rankings (Low, Medium, High)

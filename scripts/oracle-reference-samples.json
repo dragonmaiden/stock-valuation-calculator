@@ -1,0 +1,114 @@
+[
+  {
+    "id": "sample_1",
+    "target": 871.71,
+    "price": 1350.16,
+    "methods": {
+      "dcf20Year": 1446.84,
+      "dfcf20Year": 1259.3,
+      "dni20Year": 1101.5,
+      "dfcfTerminal": 720.71,
+      "meanPSValue": 1088.3,
+      "meanPEValue": 1135.38,
+      "meanPBValue": null,
+      "psgValue": 230.74,
+      "pegValue": 788.74
+    }
+  },
+  {
+    "id": "sample_2",
+    "target": 1315.53,
+    "price": 1020.84,
+    "methods": {
+      "dcf20Year": 814.98,
+      "dfcf20Year": 326.58,
+      "dni20Year": 1047.25,
+      "dfcfTerminal": 880.98,
+      "meanPSValue": 968.33,
+      "meanPEValue": 1330.02,
+      "meanPBValue": null,
+      "psgValue": 195.41,
+      "pegValue": 599.6
+    }
+  },
+  {
+    "id": "sample_3",
+    "target": 267.25,
+    "price": 397.21,
+    "methods": {
+      "dcf20Year": 553.3,
+      "dfcf20Year": 231.73,
+      "dni20Year": 145.36,
+      "dfcfTerminal": 131.85,
+      "meanPSValue": 353.2,
+      "meanPEValue": 205.76,
+      "meanPBValue": 409.09,
+      "psgValue": 132.79,
+      "pegValue": 83.33
+    }
+  },
+  {
+    "id": "sample_4",
+    "target": 236.4,
+    "price": 222.69,
+    "methods": {
+      "dcf20Year": 456.12,
+      "dfcf20Year": 30.17,
+      "dni20Year": 256.28,
+      "dfcfTerminal": 25.13,
+      "meanPSValue": 209.92,
+      "meanPEValue": 356.19,
+      "meanPBValue": 362.8,
+      "psgValue": 47.54,
+      "pegValue": 177.28
+    }
+  },
+  {
+    "id": "AAPL",
+    "target": 207.59,
+    "price": 275.91,
+    "methods": {
+      "dcf20Year": 220.06,
+      "dfcf20Year": 209.18,
+      "dni20Year": 191.11,
+      "dfcfTerminal": 183.79,
+      "meanPSValue": 221.75,
+      "meanPEValue": 238.69,
+      "meanPBValue": 264.48,
+      "psgValue": 77.35,
+      "pegValue": 134.89
+    }
+  },
+  {
+    "id": "GOOGL",
+    "target": 303.07,
+    "price": 331.33,
+    "methods": {
+      "dcf20Year": 388.81,
+      "dfcf20Year": 176.5,
+      "dni20Year": 313.25,
+      "dfcfTerminal": 162.0,
+      "meanPSValue": 216.15,
+      "meanPEValue": 269.48,
+      "meanPBValue": 228.43,
+      "psgValue": 83.96,
+      "pegValue": 230.58
+    }
+  },
+  {
+    "id": "NVDA",
+    "target": 215.55,
+    "price": 171.88,
+    "methods": {
+      "dcf20Year": 326.94,
+      "dfcf20Year": 304.15,
+      "dni20Year": 389.58,
+      "dfcfTerminal": 120.99,
+      "meanPSValue": 196.2,
+      "meanPEValue": 301.59,
+      "meanPBValue": 167.53,
+      "psgValue": 47.92,
+      "pegValue": 195.12
+    }
+  }
+]

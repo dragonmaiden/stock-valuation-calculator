@@ -459,6 +459,25 @@ function OverviewTab({ data, verdict, theme, formatNumber, formatPercent, format
 }
 
 function ValuationTab({ data, theme, formatNumber, formatRatio }) {
+  const shortMethodNameByKey = {
+    dcf20Year: 'DCF20-CF',
+    dfcf20Year: 'DFCF20-FCF',
+    dni20Year: 'DNI20-NI',
+    dfcfTerminal: 'DFCF-Term',
+    meanPSValue: 'Mean-PS',
+    meanPEValue: 'Mean-PE exNRI',
+    meanPBValue: 'Mean-PB',
+    psgValue: 'PSG',
+    pegValue: 'PEG exNRI',
+    dcfOperatingCashFlow: 'DCF (Unlevered FCF)',
+    dcfTerminal: 'DCF Terminal (15x FCF)',
+    fairValuePS: 'Fair Value (P/S)',
+    fairValuePE: 'Fair Value (P/E)',
+    fairValuePB: 'Fair Value (P/B)',
+    earningsPowerValue: 'Earnings Power Value',
+    grahamNumber: 'Graham Number',
+  };
+
   const methodTypeByKey = {
     dcfOperatingCashFlow: 'dcf',
     dcfTerminal: 'dcf',
@@ -486,12 +505,18 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
 
   const valuationMethods = (data?.dcf?.compositeMethods || [])
     .map((entry) => ({
-      name: entry.label,
+      name: shortMethodNameByKey[entry.key] || entry.label,
+      fullLabel: entry.label,
       value: entry.value,
+      plotValue: entry.boundedValue ?? entry.value,
+      rawValue: entry.rawValue,
+      weight: entry.weight,
+      dynamicWeight: entry.dynamicWeight,
+      calibrationFactor: entry.calibrationFactor,
       key: entry.key,
       type: methodTypeByKey[entry.key] || 'relative',
     }))
-    .filter((entry) => entry.value && entry.value > 0 && isFinite(entry.value));
+    .filter((entry) => entry.plotValue && entry.plotValue > 0 && isFinite(entry.plotValue));
   const valuationMethodsForChart = valuationMethods.length > 0
     ? valuationMethods
     : [
@@ -516,11 +541,21 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
               <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Valuation Models</h3>
               {data.dcf?.confidence && (
                 <div className="text-[10px] px-3 py-1 rounded-full border w-fit" style={{
-                  background: data.dcf.confidence.valid ? theme.positiveBg : theme.warningBg,
-                  color: data.dcf.confidence.valid ? theme.positive : theme.warning,
-                  borderColor: data.dcf.confidence.valid ? theme.positiveBorder : theme.warningBorder,
+                  background: (data.dcf.compositeSource || '').startsWith('oracle_')
+                    ? theme.positiveBg
+                    : data.dcf.confidence.valid ? theme.positiveBg : theme.warningBg,
+                  color: (data.dcf.compositeSource || '').startsWith('oracle_')
+                    ? theme.positive
+                    : data.dcf.confidence.valid ? theme.positive : theme.warning,
+                  borderColor: (data.dcf.compositeSource || '').startsWith('oracle_')
+                    ? theme.positiveBorder
+                    : data.dcf.confidence.valid ? theme.positiveBorder : theme.warningBorder,
                 }}>
-                  {data.dcf.confidence.valid ? 'DCF VALID' : `DCF PARTIAL: missing ${data.dcf.confidence.missing.join(', ')}`}
+                  {(data.dcf.compositeSource || '').startsWith('oracle_')
+                    ? 'ORACLE APPROX MODEL'
+                    : data.dcf.confidence.valid
+                    ? 'DCF VALID'
+                    : `DCF PARTIAL: missing ${data.dcf.confidence.missing.join(', ')}`}
                 </div>
               )}
             </div>
@@ -539,7 +574,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
             <BarChart
               layout="vertical"
               data={valuationMethodsForChart}
-              margin={{ top: 20, right: 30, left: 130, bottom: 20 }}
+              margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
               <XAxis
@@ -553,8 +588,8 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
               <YAxis
                 dataKey="name"
                 type="category"
-                tick={{ fontSize: 11, fill: theme.textSecondary }}
-                width={260}
+                tick={{ fontSize: 12, fill: theme.textSecondary }}
+                width={160}
                 axisLine={{ stroke: theme.chartGrid }}
                 tickLine={false}
               />
@@ -576,7 +611,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
                 strokeWidth={2}
                 label={{ value: `Fair: $${data.dcf.compositeValue?.toFixed(2)}`, position: 'top', fontSize: 10, fill: '#10b981' }}
               />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+              <Bar dataKey="plotValue" radius={[0, 4, 4, 0]}>
                 {valuationMethodsForChart.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={methodColorByType[entry.type] || methodColorByType.relative} />
                 ))}
@@ -594,6 +629,65 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
 
           <div className="mt-5 p-4 rounded-xl text-[10px] border" style={{ background: theme.bg, borderColor: theme.border, color: theme.textTertiary }}>
             <span style={{ color: theme.textSecondary }}>Assumptions:</span> Discount Rate: {data.dcf.discountRate?.toFixed(1)}% (WACC) | Terminal Growth: {data.dcf.terminalGrowth?.toFixed(1)}% | Projection: 10 years | Composite Source: {data.dcf.compositeSource || 'core'}
+          </div>
+
+          <div className="mt-4 p-4 rounded-xl text-[10px] border" style={{ background: theme.bg, borderColor: theme.border, color: theme.textTertiary }}>
+            <div className="font-semibold mb-2" style={{ color: theme.textSecondary }}>Methodology Footnote (Transparency)</div>
+            <div className="mb-2">
+              Oracle Model Assumptions:
+              {' '}Discount Rate {data?.dcf?.oracleAssumptions?.oracleDiscountRate?.toFixed(2) ?? 'N/A'}%
+              {' '}| Terminal Growth {data?.dcf?.oracleAssumptions?.oracleTerminalGrowth?.toFixed(2) ?? 'N/A'}%
+              {' '}| Blended Growth Signal {data?.dcf?.oracleAssumptions?.blendedGrowthSignal?.toFixed(2) ?? 'N/A'}%
+              {' '}| High Growth Years {data?.dcf?.oracleAssumptions?.highGrowthYears ?? 'N/A'}
+              {' '}| Median {data?.dcf?.oracleAssumptions?.oracleMedian?.toFixed?.(2) ?? 'N/A'}
+              {' '}| Guardrail [{data?.dcf?.oracleAssumptions?.oracleOutlierFloor?.toFixed?.(2) ?? 'N/A'} - {data?.dcf?.oracleAssumptions?.oracleOutlierCeiling?.toFixed?.(2) ?? 'N/A'}]
+              {' '}| Bucket Blend DCF/Relative: {Number.isFinite(data?.dcf?.oracleAssumptions?.dcfBlendWeight) ? `${(data.dcf.oracleAssumptions.dcfBlendWeight * 100).toFixed(1)}%` : 'N/A'} / {Number.isFinite(data?.dcf?.oracleAssumptions?.relativeBlendWeight) ? `${(data.dcf.oracleAssumptions.relativeBlendWeight * 100).toFixed(1)}%` : 'N/A'}
+              {' '}| Median Anchor Weight: {Number.isFinite(data?.dcf?.oracleAssumptions?.medianAnchorWeight) ? `${(data.dcf.oracleAssumptions.medianAnchorWeight * 100).toFixed(2)}%` : 'N/A'}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[10px]">
+                <thead>
+                  <tr style={{ background: theme.tableBg }}>
+                    <th className="px-2 py-2 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Method</th>
+                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Raw</th>
+                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Factor</th>
+                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Bounded</th>
+                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Plotted</th>
+                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Adjusted</th>
+                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Weight</th>
+                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Dyn Weight</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {valuationMethodsForChart.map((method, idx) => (
+                    <tr key={`${method.key}-${idx}`} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                      <td className="px-2 py-2" style={{ color: theme.text }}>{method.fullLabel || method.name}</td>
+                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
+                        {method.rawValue !== null && method.rawValue !== undefined && isFinite(method.rawValue) ? `$${method.rawValue.toFixed(2)}` : '-'}
+                      </td>
+                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
+                        {method.calibrationFactor !== null && method.calibrationFactor !== undefined && isFinite(method.calibrationFactor) ? method.calibrationFactor.toFixed(3) : '-'}
+                      </td>
+                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
+                        {method.boundedValue !== null && method.boundedValue !== undefined && isFinite(method.boundedValue) ? `$${method.boundedValue.toFixed(2)}` : '-'}
+                      </td>
+                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
+                        {method.plotValue !== null && method.plotValue !== undefined && isFinite(method.plotValue) ? `$${method.plotValue.toFixed(2)}` : '-'}
+                      </td>
+                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
+                        {method.value !== null && method.value !== undefined && isFinite(method.value) ? `$${method.value.toFixed(2)}` : '-'}
+                      </td>
+                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
+                        {method.weight !== null && method.weight !== undefined && isFinite(method.weight) ? `${(method.weight * 100).toFixed(1)}%` : '-'}
+                      </td>
+                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
+                        {method.dynamicWeight !== null && method.dynamicWeight !== undefined && isFinite(method.dynamicWeight) ? `${method.dynamicWeight.toFixed(3)}` : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
