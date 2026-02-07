@@ -6,17 +6,52 @@ export const runtime = 'nodejs';
 const yahooFinance = new YahooFinance();
 const SEC_BASE = 'https://data.sec.gov';
 const USER_AGENT = `StockValuationCalculator/1.0 (${process.env.SEC_CONTACT_EMAIL || 'admin@stockvaluationcalculator.app'})`;
+const EXTERNAL_FETCH_TIMEOUT_MS = 12000;
 
 // In-memory cache for SEC company tickers (refreshes once per day)
 let tickerCache = { data: null, fetchedAt: 0 };
 const TICKER_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+let historyCache = new Map();
+const HISTORY_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+
+function isValidDate(value) {
+  const time = Date.parse(value);
+  return Number.isFinite(time);
+}
+
+function formatDateISO(value) {
+  if (!isValidDate(value)) return null;
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+async function withTimeout(promise, timeoutMs, label = 'request') {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = EXTERNAL_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 async function getTickerMap() {
   const now = Date.now();
   if (tickerCache.data && (now - tickerCache.fetchedAt) < TICKER_CACHE_TTL) {
     return tickerCache.data;
   }
-  const response = await fetch(`https://www.sec.gov/files/company_tickers.json`, {
+  const response = await fetchWithTimeout(`https://www.sec.gov/files/company_tickers.json`, {
     headers: { 'User-Agent': USER_AGENT },
   });
   if (!response.ok) {
@@ -26,6 +61,33 @@ async function getTickerMap() {
   const data = await response.json();
   tickerCache = { data, fetchedAt: now };
   return data;
+}
+
+async function getHistoricalPrices(symbol) {
+  const cacheKey = symbol.toUpperCase();
+  const now = Date.now();
+  const cached = historyCache.get(cacheKey);
+  if (cached && (now - cached.fetchedAt) < HISTORY_CACHE_TTL) {
+    return cached.data;
+  }
+
+  const period2 = new Date();
+  const period1 = new Date(period2);
+  period1.setFullYear(period1.getFullYear() - 10); // bounded window for reliability on serverless
+
+  const data = await withTimeout(
+    yahooFinance.historical(cacheKey, {
+      period1,
+      period2,
+      interval: '1d',
+    }),
+    EXTERNAL_FETCH_TIMEOUT_MS,
+    'yahoo historical'
+  ).catch(() => null);
+
+  const normalized = Array.isArray(data) ? data : [];
+  historyCache.set(cacheKey, { data: normalized, fetchedAt: now });
+  return normalized;
 }
 
 // Map common tickers to CIK numbers
@@ -140,6 +202,12 @@ function normalizeInsiderTransactions(rows = []) {
         row?.totalValue ??
         row?.dollarValue
       );
+      const priceRaw = toNumber(
+        row?.price ??
+        row?.transactionPrice ??
+        row?.pricePerShare ??
+        row?.sharePrice
+      );
       const text = String(
         row?.transactionText ??
         row?.transactionType ??
@@ -155,14 +223,21 @@ function normalizeInsiderTransactions(rows = []) {
         ? 'BUY'
         : 'UNKNOWN';
 
+      const absShares = sharesRaw !== null ? Math.abs(sharesRaw) : null;
+      const estimatedValue = valueRaw === null && absShares !== null && priceRaw !== null
+        ? Math.abs(absShares * priceRaw)
+        : null;
+
       return {
         date: startMs ? new Date(startMs).toISOString().slice(0, 10) : null,
         epochMs: startMs,
         insider: row?.filerName || row?.name || 'Unknown',
         relation: row?.filerRelation || row?.position || row?.title || 'N/A',
         side,
-        shares: sharesRaw !== null ? Math.abs(sharesRaw) : null,
-        value: valueRaw !== null ? Math.abs(valueRaw) : null,
+        shares: absShares,
+        value: valueRaw !== null ? Math.abs(valueRaw) : estimatedValue,
+        valueIsEstimated: valueRaw === null && estimatedValue !== null,
+        pricePerShare: priceRaw !== null ? Math.abs(priceRaw) : null,
         transactionText: row?.transactionText || row?.transactionType || row?.text || '',
       };
     })
@@ -186,19 +261,16 @@ export async function GET(request) {
     const symbol = ticker.toUpperCase();
 
     // Always fetch market data first so SEC outages do not take the whole API down.
-    const period2 = new Date();
-    const period1 = new Date('1900-01-01T00:00:00Z');
-
     const [yahooQuote, yahooStats, priceHistoryRaw] = await Promise.all([
-      yahooFinance.quote(symbol).catch(() => null),
-      yahooFinance.quoteSummary(symbol, {
-        modules: ['summaryDetail', 'defaultKeyStatistics', 'financialData', 'insiderTransactions', 'assetProfile'],
-      }).catch(() => null),
-      yahooFinance.historical(symbol, {
-        period1,
-        period2,
-        interval: '1d',
-      }).catch(() => null),
+      withTimeout(yahooFinance.quote(symbol), EXTERNAL_FETCH_TIMEOUT_MS, 'yahoo quote').catch(() => null),
+      withTimeout(
+        yahooFinance.quoteSummary(symbol, {
+          modules: ['summaryDetail', 'defaultKeyStatistics', 'financialData', 'insiderTransactions', 'assetProfile'],
+        }),
+        EXTERNAL_FETCH_TIMEOUT_MS,
+        'yahoo quoteSummary'
+      ).catch(() => null),
+      getHistoricalPrices(symbol),
     ]);
 
     const hasYahooData = Boolean(yahooQuote) || (Array.isArray(priceHistoryRaw) && priceHistoryRaw.length > 0);
@@ -219,10 +291,10 @@ export async function GET(request) {
     let submissions = {};
     if (cik) {
       const [factsRes, submissionsRes] = await Promise.all([
-        fetch(`${SEC_BASE}/api/xbrl/companyfacts/CIK${cik}.json`, {
+        fetchWithTimeout(`${SEC_BASE}/api/xbrl/companyfacts/CIK${cik}.json`, {
           headers: { 'User-Agent': USER_AGENT },
         }).catch((error) => ({ ok: false, status: 0, _error: error })),
-        fetch(`${SEC_BASE}/submissions/CIK${cik}.json`, {
+        fetchWithTimeout(`${SEC_BASE}/submissions/CIK${cik}.json`, {
           headers: { 'User-Agent': USER_AGENT },
         }).catch((error) => ({ ok: false, status: 0, _error: error })),
       ]);
@@ -322,35 +394,54 @@ export async function GET(request) {
     const opCashFlowQuarterly = getMetricValues(usGaap, operatingCashFlowFields, 'Q', 20);
     const capexQuarterly = getMetricValues(usGaap, capexFields, 'Q', 20);
 
+    const mapByEndValue = (rows) => new Map(rows.map((r) => [r.end, r.val]));
+    const grossProfitAnnualByEnd = mapByEndValue(grossProfitAnnual);
+    const costOfRevenueAnnualByEnd = mapByEndValue(costOfRevenueAnnual);
+    const operatingIncomeAnnualByEnd = mapByEndValue(operatingIncomeAnnual);
+    const netIncomeAnnualByEnd = mapByEndValue(netIncomeAnnual);
+    const equityAnnualByEnd = mapByEndValue(equityAnnual);
+    const cashAnnualByEnd = mapByEndValue(cashAnnual);
+    const debtAnnualByEnd = mapByEndValue(debtAnnual);
+    const currentAssetsAnnualByEnd = mapByEndValue(currentAssetsAnnual);
+    const currentLiabilitiesAnnualByEnd = mapByEndValue(currentLiabilitiesAnnual);
+
+    const grossProfitQuarterlyByEnd = mapByEndValue(grossProfitQuarterly);
+    const costOfRevenueQuarterlyByEnd = mapByEndValue(costOfRevenueQuarterly);
+    const operatingIncomeQuarterlyByEnd = mapByEndValue(operatingIncomeQuarterly);
+    const netIncomeQuarterlyByEnd = mapByEndValue(netIncomeQuarterly);
+    const equityQuarterlyByEnd = mapByEndValue(equityQuarterly);
+    const cashQuarterlyByEnd = mapByEndValue(cashQuarterly);
+    const debtQuarterlyByEnd = mapByEndValue(debtQuarterly);
+
     // Build income statement data (annual)
     const income = revenueAnnual.map((rev) => ({
       grossProfit: (() => {
-        const directGross = grossProfitAnnual.find(g => g.fy === rev.fy)?.val;
+        const directGross = grossProfitAnnualByEnd.get(rev.end);
         if (directGross !== null && directGross !== undefined) return directGross;
-        const costOfRevenue = costOfRevenueAnnual.find(c => c.fy === rev.fy)?.val;
+        const costOfRevenue = costOfRevenueAnnualByEnd.get(rev.end);
         return costOfRevenue !== null && costOfRevenue !== undefined ? (rev.val || 0) - costOfRevenue : null;
       })(),
       date: rev.end,
       calendarYear: String(rev.fy),
       revenue: rev.val || 0,
-      operatingIncome: operatingIncomeAnnual.find(o => o.fy === rev.fy)?.val ?? null,
-      netIncome: netIncomeAnnual.find(n => n.fy === rev.fy)?.val ?? null,
+      operatingIncome: operatingIncomeAnnualByEnd.get(rev.end) ?? null,
+      netIncome: netIncomeAnnualByEnd.get(rev.end) ?? null,
     })).reverse();
 
     // Build income statement data (quarterly)
     const incomeQ = revenueQuarterly.map((rev) => ({
       grossProfit: (() => {
-        const directGross = grossProfitQuarterly.find(g => g.end === rev.end)?.val;
+        const directGross = grossProfitQuarterlyByEnd.get(rev.end);
         if (directGross !== null && directGross !== undefined) return directGross;
-        const costOfRevenue = costOfRevenueQuarterly.find(c => c.end === rev.end)?.val;
+        const costOfRevenue = costOfRevenueQuarterlyByEnd.get(rev.end);
         return costOfRevenue !== null && costOfRevenue !== undefined ? (rev.val || 0) - costOfRevenue : null;
       })(),
       date: rev.end,
       fiscalYear: String(rev.fy),
       period: rev.fp,
       revenue: rev.val || 0,
-      operatingIncome: operatingIncomeQuarterly.find(o => o.end === rev.end)?.val ?? null,
-      netIncome: netIncomeQuarterly.find(n => n.end === rev.end)?.val ?? null,
+      operatingIncome: operatingIncomeQuarterlyByEnd.get(rev.end) ?? null,
+      netIncome: netIncomeQuarterlyByEnd.get(rev.end) ?? null,
     })).reverse();
 
     // Build balance sheet data (annual)
@@ -358,12 +449,12 @@ export async function GET(request) {
       date: asset.end,
       calendarYear: String(asset.fy),
       totalAssets: asset.val || 0,
-      totalEquity: equityAnnual.find(e => e.fy === asset.fy)?.val || 0,
-      cashAndCashEquivalents: cashAnnual.find(c => c.fy === asset.fy)?.val || 0,
+      totalEquity: equityAnnualByEnd.get(asset.end) || 0,
+      cashAndCashEquivalents: cashAnnualByEnd.get(asset.end) || 0,
       shortTermInvestments: 0,
-      currentAssets: currentAssetsAnnual.find(ca => ca.fy === asset.fy)?.val || null,
-      currentLiabilities: currentLiabilitiesAnnual.find(cl => cl.fy === asset.fy)?.val || null,
-      totalDebt: debtAnnual.find(d => d.fy === asset.fy)?.val || 0,
+      currentAssets: currentAssetsAnnualByEnd.get(asset.end) || null,
+      currentLiabilities: currentLiabilitiesAnnualByEnd.get(asset.end) || null,
+      totalDebt: debtAnnualByEnd.get(asset.end) || 0,
     })).reverse();
 
     // Build balance sheet data (quarterly)
@@ -372,12 +463,12 @@ export async function GET(request) {
       fiscalYear: String(asset.fy),
       period: asset.fp,
       totalAssets: asset.val || 0,
-      totalEquity: equityQuarterly.find(e => e.end === asset.end)?.val || 0,
-      cashAndCashEquivalents: cashQuarterly.find(c => c.end === asset.end)?.val || 0,
+      totalEquity: equityQuarterlyByEnd.get(asset.end) || 0,
+      cashAndCashEquivalents: cashQuarterlyByEnd.get(asset.end) || 0,
       shortTermInvestments: 0,
       currentAssets: null,
       currentLiabilities: null,
-      totalDebt: debtQuarterly.find(d => d.end === asset.end)?.val || 0,
+      totalDebt: debtQuarterlyByEnd.get(asset.end) || 0,
     })).reverse();
 
     // Build cash flow data (annual)
@@ -448,15 +539,19 @@ export async function GET(request) {
 
     const priceHistory = Array.isArray(priceHistoryRaw)
       ? priceHistoryRaw
-          .filter((row) => row?.date && Number.isFinite(row?.close))
-          .map((row) => ({
-            date: new Date(row.date).toISOString().slice(0, 10),
-            open: Number.isFinite(row.open) ? row.open : null,
-            high: Number.isFinite(row.high) ? row.high : null,
-            low: Number.isFinite(row.low) ? row.low : null,
-            close: Number.isFinite(row.close) ? row.close : null,
-            volume: Number.isFinite(row.volume) ? row.volume : null,
-          }))
+          .map((row) => {
+            const isoDate = formatDateISO(row?.date);
+            if (!isoDate || !Number.isFinite(row?.close)) return null;
+            return {
+              date: isoDate,
+              open: Number.isFinite(row?.open) ? row.open : null,
+              high: Number.isFinite(row?.high) ? row.high : null,
+              low: Number.isFinite(row?.low) ? row.low : null,
+              close: Number.isFinite(row?.close) ? row.close : null,
+              volume: Number.isFinite(row?.volume) ? row.volume : null,
+            };
+          })
+          .filter(Boolean)
           .sort((a, b) => a.date.localeCompare(b.date))
       : [];
 
@@ -622,10 +717,14 @@ export async function GET(request) {
     const keyStats = yahooStats?.defaultKeyStatistics || {};
     const financialData = yahooStats?.financialData || {};
     const insiderTransactionsRaw = yahooStats?.insiderTransactions?.transactions || [];
-    const insiderTransactions = normalizeInsiderTransactions(insiderTransactionsRaw).slice(0, 50);
+    const allInsiderTransactions = normalizeInsiderTransactions(insiderTransactionsRaw);
+    const sixMonthsAgoMs = Date.now() - (183 * 24 * 60 * 60 * 1000);
+    const insiderTransactions = allInsiderTransactions
+      .filter((tx) => Number.isFinite(tx.epochMs) && tx.epochMs >= sixMonthsAgoMs)
+      .slice(0, 200);
     const insiderSelling = insiderTransactions
       .filter((tx) => tx.side === 'SELL')
-      .slice(0, 20);
+      .slice(0, 100);
 
     const favorites = {
       peRatio: yahooQuote?.trailingPE || null,
@@ -655,8 +754,19 @@ export async function GET(request) {
     // Calculate comprehensive valuations
     const latestDilutedShares = sharesDilutedAnnual[0]?.val;
     const latestBasicShares = sharesBasicAnnual[0]?.val;
-    const sharesOutstanding = latestDilutedShares || latestBasicShares || favorites.sharesOutstanding || 1;
-    const currentPrice = quote.price || 1;
+    const sharesOutstandingRaw = latestDilutedShares || latestBasicShares || favorites.sharesOutstanding || null;
+    const sharesOutstanding = Number.isFinite(sharesOutstandingRaw) && sharesOutstandingRaw > 0
+      ? sharesOutstandingRaw
+      : null;
+    const currentPrice = Number.isFinite(quote.price) && quote.price > 0 ? quote.price : null;
+
+    const dilutedSharesByYear = new Map(sharesDilutedAnnual.map((s) => [String(s.fy), s.val]));
+    const basicSharesByYear = new Map(sharesBasicAnnual.map((s) => [String(s.fy), s.val]));
+    const sharesForYear = (year) => {
+      const yearVal = dilutedSharesByYear.get(String(year)) || basicSharesByYear.get(String(year));
+      if (Number.isFinite(yearVal) && yearVal > 0) return yearVal;
+      return sharesOutstanding;
+    };
 
     // Get historical data for calculations
     const recentIncome = income.slice(-5);
@@ -690,8 +800,9 @@ export async function GET(request) {
     for (let i = 0; i < metrics.length; i++) {
       const inc = income[i] || {};
       const bal = balance[i] || {};
-      metrics[i].netIncomePerShare = inc.netIncome ? inc.netIncome / sharesOutstanding : null;
-      metrics[i].bookValuePerShare = bal.totalEquity ? bal.totalEquity / sharesOutstanding : null;
+      const metricShares = sharesForYear(inc.calendarYear);
+      metrics[i].netIncomePerShare = metricShares && Number.isFinite(inc.netIncome) ? inc.netIncome / metricShares : null;
+      metrics[i].bookValuePerShare = metricShares && Number.isFinite(bal.totalEquity) ? bal.totalEquity / metricShares : null;
     }
 
     // Discount rate (WACC approximation)
@@ -799,7 +910,7 @@ export async function GET(request) {
       const terminalValue = (terminalFcf * (1 + terminal)) / (discountRate - terminal);
       totalPV += terminalValue / Math.pow(1 + discountRate, years);
 
-      return totalPV / sharesOutstanding;
+      return sharesOutstanding ? totalPV / sharesOutstanding : null;
     };
 
     // Calculate average multiples from historical data
@@ -856,35 +967,35 @@ export async function GET(request) {
       dcfTerminal: null,
 
       // Relative Valuations
-      fairValuePS: avgPS && latestRevenue > 0 ? (latestRevenue * avgPS * 0.9) / sharesOutstanding : null, // 10% margin of safety
-      fairValuePE: avgPE && latestNetIncome > 0 ? (latestNetIncome * avgPE * 0.9) / sharesOutstanding : null,
-      fairValuePB: avgPB && latestEquity > 0 ? (latestEquity * avgPB * 0.8) / sharesOutstanding : null, // 20% margin of safety
+      fairValuePS: avgPS && latestRevenue > 0 && sharesOutstanding ? (latestRevenue * avgPS * 0.9) / sharesOutstanding : null, // 10% margin of safety
+      fairValuePE: avgPE && latestNetIncome > 0 && sharesOutstanding ? (latestNetIncome * avgPE * 0.9) / sharesOutstanding : null,
+      fairValuePB: avgPB && latestEquity > 0 && sharesOutstanding ? (latestEquity * avgPB * 0.8) / sharesOutstanding : null, // 20% margin of safety
 
       // Growth-adjusted valuations
-      pegValue: avgPE && netIncomeGrowth > 0
+      pegValue: avgPE && netIncomeGrowth > 0 && sharesOutstanding
         ? (latestNetIncome * (avgPE / (netIncomeGrowth * 100 + 1))) / sharesOutstanding
         : null,
-      psgValue: avgPS && revenueGrowth > 0
+      psgValue: avgPS && revenueGrowth > 0 && sharesOutstanding
         ? (latestRevenue * (avgPS / (revenueGrowth * 100 + 1))) / sharesOutstanding
         : null,
 
       // Graham Number (conservative)
-      grahamNumber: latestNetIncome > 0 && latestEquity > 0
+      grahamNumber: latestNetIncome > 0 && latestEquity > 0 && sharesOutstanding
         ? Math.sqrt(22.5 * (latestNetIncome / sharesOutstanding) * (latestEquity / sharesOutstanding))
         : null,
 
       // Earnings Power Value
-      earningsPowerValue: latestNetIncome > 0 && discountRate > 0
+      earningsPowerValue: latestNetIncome > 0 && discountRate > 0 && sharesOutstanding
         ? (latestNetIncome / discountRate) / sharesOutstanding
         : null,
     };
 
     const compositeMethodConfig = [
-      { key: 'dcfOperatingCashFlow', label: 'DCF (Unlevered FCF)' },
-      { key: 'dcfTerminal', label: 'DCF Terminal (15x FCF)' },
-      { key: 'fairValuePS', label: 'Fair Value (P/S)' },
-      { key: 'fairValuePE', label: 'Fair Value (P/E)' },
-      { key: 'fairValuePB', label: 'Fair Value (P/B)' },
+      { key: 'dcfOperatingCashFlow', label: 'Discounted Cash Flow (Unlevered Free Cash Flow)' },
+      { key: 'dcfTerminal', label: 'Discounted Cash Flow Terminal Value (15x Free Cash Flow)' },
+      { key: 'fairValuePS', label: 'Fair Value (Price-to-Sales)' },
+      { key: 'fairValuePE', label: 'Fair Value (Price-to-Earnings)' },
+      { key: 'fairValuePB', label: 'Fair Value (Price-to-Book)' },
       { key: 'earningsPowerValue', label: 'Earnings Power Value' },
       { key: 'grahamNumber', label: 'Graham Number' },
     ];
@@ -915,7 +1026,7 @@ export async function GET(request) {
       coreCompositeValue: compositeValue,
       compositeSource: 'core',
       currentPrice,
-      upside: compositeValue ? ((compositeValue - currentPrice) / currentPrice) * 100 : null,
+      upside: compositeValue && currentPrice ? ((compositeValue - currentPrice) / currentPrice) * 100 : null,
       discountRate: discountRate * 100,
       terminalGrowth: terminalGrowth * 100,
       confidence: dcfConfidence,
@@ -944,24 +1055,39 @@ export async function GET(request) {
 
     // Calculate historical valuation ratios
     const currentMarketCap = quote.marketCap || 0;
-    const currentShares = favorites.sharesOutstanding || 1;
+    const currentShares = sharesOutstanding;
     const currentPE = favorites.peRatio;
     const currentPS = favorites.psRatio;
     const currentPB = latestEquity > 0 ? currentMarketCap / latestEquity : null;
 
-    // Calculate historical ratios (using current price as approximation for trend analysis)
+    // Use the latest close at or before fiscal period end for historical valuation ratios.
+    // This avoids mixing today's price with old fundamentals.
+    const historicalPriceAtOrBefore = (targetDate) => {
+      if (!Array.isArray(priceHistory) || priceHistory.length === 0 || !targetDate) return null;
+      for (let i = priceHistory.length - 1; i >= 0; i--) {
+        if (priceHistory[i].date <= targetDate && Number.isFinite(priceHistory[i].close)) {
+          return priceHistory[i].close;
+        }
+      }
+      return null;
+    };
+
+    // Calculate historical ratios (using historical prices and year-specific shares).
     const valuationRatios = income.map((inc, i) => {
       const bal = balanceByYear.get(String(inc.calendarYear)) || {};
       const year = inc.calendarYear;
+      const yearShares = sharesForYear(year);
+      const historicalPrice = historicalPriceAtOrBefore(inc.date);
 
       // EPS and per-share metrics
-      const eps = inc.netIncome / currentShares;
-      const salesPerShare = inc.revenue / currentShares;
-      const bookValuePerShare = (bal.totalEquity || 0) / currentShares;
+      const eps = yearShares > 0 ? (inc.netIncome / yearShares) : null;
+      const salesPerShare = yearShares > 0 ? (inc.revenue / yearShares) : null;
+      const bookValuePerShare = yearShares > 0 ? ((bal.totalEquity || 0) / yearShares) : null;
 
       // Calculate growth rates for PEG/PSG
       const prevIncome = income[i - 1];
-      const prevEps = prevIncome ? (prevIncome.netIncome / currentShares) : null;
+      const prevYearShares = prevIncome ? sharesForYear(prevIncome.calendarYear) : null;
+      const prevEps = prevIncome && prevYearShares > 0 ? (prevIncome.netIncome / prevYearShares) : null;
       const epsGrowth = prevEps && prevEps !== 0
         ? (eps - prevEps) / prevEps
         : null;
@@ -969,18 +1095,18 @@ export async function GET(request) {
         ? (inc.revenue - prevIncome.revenue) / prevIncome.revenue
         : null;
 
-      // Historical P/E (using that year's earnings with current price as reference)
-      const peRatio = eps > 0 ? currentPrice / eps : null;
-      const psRatio = salesPerShare > 0 ? currentPrice / salesPerShare : null;
-      const pbRatio = bookValuePerShare > 0 ? currentPrice / bookValuePerShare : null;
+      // Historical P/E/P/S/P/B using that period's own price and own fundamentals.
+      const peRatio = Number.isFinite(historicalPrice) && eps > 0 ? historicalPrice / eps : null;
+      const psRatio = Number.isFinite(historicalPrice) && salesPerShare > 0 ? historicalPrice / salesPerShare : null;
+      const pbRatio = Number.isFinite(historicalPrice) && bookValuePerShare > 0 ? historicalPrice / bookValuePerShare : null;
 
       // PEG ratio (P/E divided by growth rate)
-      const pegRatio = peRatio && epsGrowth && epsGrowth > 0
+      const pegRatio = peRatio && epsGrowth !== null && epsGrowth > 0
         ? peRatio / (epsGrowth * 100)
         : null;
 
       // PSG ratio (P/S divided by growth rate)
-      const psgRatio = psRatio && revenueGrowthRate && revenueGrowthRate > 0
+      const psgRatio = psRatio && revenueGrowthRate !== null && revenueGrowthRate > 0
         ? psRatio / (revenueGrowthRate * 100)
         : null;
 
@@ -992,8 +1118,9 @@ export async function GET(request) {
         pegRatio,
         psgRatio,
         eps,
-        epsGrowth: epsGrowth ? epsGrowth * 100 : null,
-        revenueGrowth: revenueGrowthRate ? revenueGrowthRate * 100 : null,
+        historicalPrice,
+        epsGrowth: epsGrowth !== null ? epsGrowth * 100 : null,
+        revenueGrowth: revenueGrowthRate !== null ? revenueGrowthRate * 100 : null,
       };
     });
 
@@ -1028,17 +1155,17 @@ export async function GET(request) {
     const medianPB = calcMedian(valuationRatios, 'pbRatio');
 
     // EPS for value calculations
-    const currentEPS = latestNetIncome / currentShares;
-    const salesPerShare = latestRevenue / currentShares;
-    const bookValuePerShare = latestEquity / currentShares;
+    const currentEPS = currentShares ? latestNetIncome / currentShares : null;
+    const salesPerShare = currentShares ? latestRevenue / currentShares : null;
+    const bookValuePerShare = currentShares ? latestEquity / currentShares : null;
 
     // Rule of 40 (Revenue Growth % + Profit Margin %)
     const profitMargin = latestRevenue > 0 ? (latestNetIncome / latestRevenue) * 100 : 0;
     const ruleOf40 = (revenueGrowth * 100) + profitMargin;
 
     // Forward P/E (estimate using growth)
-    const forwardEPS = currentEPS * (1 + Math.min(netIncomeGrowth, 0.2));
-    const forwardPE = forwardEPS > 0 ? currentPrice / forwardEPS : null;
+    const forwardEPS = currentEPS !== null ? currentEPS * (1 + Math.min(netIncomeGrowth, 0.2)) : null;
+    const forwardPE = forwardEPS && forwardEPS > 0 && currentPrice ? currentPrice / forwardEPS : null;
 
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
     const growthSignals = [revenueGrowth, netIncomeGrowth, fcfGrowth, favorites.epsGrowth]
@@ -1046,7 +1173,7 @@ export async function GET(request) {
     const positiveGrowthSignals = growthSignals.filter((g) => g > 0);
     const blendedGrowthSignal = positiveGrowthSignals.length > 0
       ? positiveGrowthSignals.reduce((a, b) => a + b, 0) / positiveGrowthSignals.length
-      : 0.08;
+      : 0;
 
     // Oracle-style risk and growth assumptions for 20Y methods (separate from core WACC path).
     const oracleDiscountRate = clamp(
@@ -1075,13 +1202,14 @@ export async function GET(request) {
       const terminalCF = cf * (1 + oracleTerminalGrowth);
       const terminalValue = terminalCF / (oracleDiscountRate - oracleTerminalGrowth);
       const pvTerminal = terminalValue / Math.pow(1 + oracleDiscountRate, years);
-      return (totalPV + pvTerminal) / (shares || 1);
+      if (!shares || shares <= 0) return null;
+      return (totalPV + pvTerminal) / shares;
     };
 
     const otherValuationRatios = {
       // Per Share Metrics
-      ebitdaPerShare: ebitdaForRatios ? ebitdaForRatios / currentShares : null,
-      earningsYield: currentEPS > 0 ? (currentEPS / currentPrice) * 100 : null,
+      ebitdaPerShare: ebitdaForRatios && currentShares ? ebitdaForRatios / currentShares : null,
+      earningsYield: currentEPS && currentEPS > 0 && currentPrice ? (currentEPS / currentPrice) * 100 : null,
 
       // Enterprise Value Metrics
       enterpriseValue,
@@ -1113,16 +1241,23 @@ export async function GET(request) {
       dcf20Year: calcOracle20Y(latestOCF, 0.95, currentShares),
       dfcf20Year: calcOracle20Y(latestFCF, 1.00, currentShares),
       dni20Year: calcOracle20Y(latestNetIncome, 0.90, currentShares),
-      dfcfTerminal: latestFCF > 0 ? (latestFCF * (1 + oracleTerminalGrowth) / (oracleDiscountRate - oracleTerminalGrowth)) / currentShares : null,
+      dfcfTerminal: latestFCF > 0 && currentShares ? (latestFCF * (1 + oracleTerminalGrowth) / (oracleDiscountRate - oracleTerminalGrowth)) / currentShares : null,
 
       // Rule of 40
       ruleOf40,
     };
 
-    const latestEps = currentShares > 0 ? latestNetIncome / currentShares : null;
+    const latestIncomeYear = income[income.length - 1]?.calendarYear;
+    const prevIncomeYear = income[income.length - 2]?.calendarYear;
+    const latestSharesForGrowth = latestIncomeYear ? sharesForYear(latestIncomeYear) : currentShares;
+    const prevSharesForGrowth = prevIncomeYear ? sharesForYear(prevIncomeYear) : currentShares;
+    const latestEps = latestSharesForGrowth ? latestNetIncome / latestSharesForGrowth : null;
     const prevNetIncome = income[income.length - 2]?.netIncome;
-    const prevEps = currentShares > 0 && prevNetIncome ? prevNetIncome / currentShares : null;
-    const currentEpsGrowth = prevEps && prevEps !== 0 ? (latestEps - prevEps) / prevEps : null;
+    const prevEps = prevSharesForGrowth && prevNetIncome ? prevNetIncome / prevSharesForGrowth : null;
+    const currentEpsGrowth = prevEps !== null && prevEps !== 0 && latestEps !== null ? (latestEps - prevEps) / prevEps : null;
+    const currentRevenueGrowth = Number.isFinite(valuationRatios[valuationRatios.length - 1]?.revenueGrowth)
+      ? valuationRatios[valuationRatios.length - 1].revenueGrowth / 100
+      : revenueGrowth;
 
     const valuationRatiosSummary = {
       historical: valuationRatios,
@@ -1130,10 +1265,10 @@ export async function GET(request) {
         peRatio: currentPE,
         psRatio: currentPS,
         pbRatio: currentPB,
-        pegRatio: currentPE && currentEpsGrowth && currentEpsGrowth > 0
+        pegRatio: currentPE && currentEpsGrowth !== null && currentEpsGrowth > 0
           ? currentPE / (currentEpsGrowth * 100)
           : null,
-        psgRatio: currentPS && revenueGrowth > 0 ? currentPS / (revenueGrowth * 100) : null,
+        psgRatio: currentPS && currentRevenueGrowth > 0 ? currentPS / (currentRevenueGrowth * 100) : null,
       },
       tenYearAvg: {
         peRatio: calcAvg(valuationRatios, 'peRatio'),
@@ -1204,15 +1339,15 @@ export async function GET(request) {
     };
 
     const oracleApproxMethodConfig = [
-      { key: 'dcf20Year', label: 'Discounted Cash Flow 20-year (DCF-20)', value: calibratedOracleValue('dcf20Year', oracleRawValues.dcf20Year), rawValue: oracleRawValues.dcf20Year, weight: oracleApproxConfig.methodWeights.dcf20Year, type: 'dcf' },
-      { key: 'dfcf20Year', label: 'Discounted Free Cash Flow 20-year (DFCF-20)', value: calibratedOracleValue('dfcf20Year', oracleRawValues.dfcf20Year), rawValue: oracleRawValues.dfcf20Year, weight: oracleApproxConfig.methodWeights.dfcf20Year, type: 'dcf' },
-      { key: 'dni20Year', label: 'Discounted Net Income 20-year (DNI-20)', value: calibratedOracleValue('dni20Year', oracleRawValues.dni20Year), rawValue: oracleRawValues.dni20Year, weight: oracleApproxConfig.methodWeights.dni20Year, type: 'dcf' },
-      { key: 'dfcfTerminal', label: 'Discounted Free Cash Flow Terminal (DFCF-Terminal)', value: calibratedOracleValue('dfcfTerminal', oracleRawValues.dfcfTerminal), rawValue: oracleRawValues.dfcfTerminal, weight: oracleApproxConfig.methodWeights.dfcfTerminal, type: 'dcf' },
-      { key: 'meanPSValue', label: 'Mean Price to Sales (PS) Ratio', value: calibratedOracleValue('meanPSValue', oracleRawValues.meanPSValue), rawValue: oracleRawValues.meanPSValue, weight: oracleApproxConfig.methodWeights.meanPSValue, type: 'relative' },
-      { key: 'meanPEValue', label: 'Mean Price to Earnings (PE) Ratio without NRI', value: calibratedOracleValue('meanPEValue', oracleRawValues.meanPEValue), rawValue: oracleRawValues.meanPEValue, weight: oracleApproxConfig.methodWeights.meanPEValue, type: 'relative' },
-      { key: 'meanPBValue', label: 'Mean Price to Book (PB) Ratio', value: calibratedOracleValue('meanPBValue', oracleRawValues.meanPBValue), rawValue: oracleRawValues.meanPBValue, weight: oracleApproxConfig.methodWeights.meanPBValue, type: 'relative' },
-      { key: 'psgValue', label: 'Price to Sales Growth (PSG) Ratio', value: calibratedOracleValue('psgValue', oracleRawValues.psgValue), rawValue: oracleRawValues.psgValue, weight: oracleApproxConfig.methodWeights.psgValue, type: 'relative' },
-      { key: 'pegValue', label: 'Price to Earnings Growth (PEG) Ratio without NRI', value: calibratedOracleValue('pegValue', oracleRawValues.pegValue), rawValue: oracleRawValues.pegValue, weight: oracleApproxConfig.methodWeights.pegValue, type: 'relative' },
+      { key: 'dcf20Year', label: 'Discounted Cash Flow (20-Year Cash Flow Model)', value: calibratedOracleValue('dcf20Year', oracleRawValues.dcf20Year), rawValue: oracleRawValues.dcf20Year, weight: oracleApproxConfig.methodWeights.dcf20Year, type: 'dcf' },
+      { key: 'dfcf20Year', label: 'Discounted Free Cash Flow (20-Year Model)', value: calibratedOracleValue('dfcf20Year', oracleRawValues.dfcf20Year), rawValue: oracleRawValues.dfcf20Year, weight: oracleApproxConfig.methodWeights.dfcf20Year, type: 'dcf' },
+      { key: 'dni20Year', label: 'Discounted Net Income (20-Year Model)', value: calibratedOracleValue('dni20Year', oracleRawValues.dni20Year), rawValue: oracleRawValues.dni20Year, weight: oracleApproxConfig.methodWeights.dni20Year, type: 'dcf' },
+      { key: 'dfcfTerminal', label: 'Discounted Free Cash Flow (Terminal Value Model)', value: calibratedOracleValue('dfcfTerminal', oracleRawValues.dfcfTerminal), rawValue: oracleRawValues.dfcfTerminal, weight: oracleApproxConfig.methodWeights.dfcfTerminal, type: 'dcf' },
+      { key: 'meanPSValue', label: 'Historical Mean Price-to-Sales Ratio Value', value: calibratedOracleValue('meanPSValue', oracleRawValues.meanPSValue), rawValue: oracleRawValues.meanPSValue, weight: oracleApproxConfig.methodWeights.meanPSValue, type: 'relative' },
+      { key: 'meanPEValue', label: 'Historical Mean Price-to-Earnings Ratio Value (Excluding Non-Recurring Items)', value: calibratedOracleValue('meanPEValue', oracleRawValues.meanPEValue), rawValue: oracleRawValues.meanPEValue, weight: oracleApproxConfig.methodWeights.meanPEValue, type: 'relative' },
+      { key: 'meanPBValue', label: 'Historical Mean Price-to-Book Ratio Value', value: calibratedOracleValue('meanPBValue', oracleRawValues.meanPBValue), rawValue: oracleRawValues.meanPBValue, weight: oracleApproxConfig.methodWeights.meanPBValue, type: 'relative' },
+      { key: 'psgValue', label: 'Price-to-Sales-to-Growth Ratio Value', value: calibratedOracleValue('psgValue', oracleRawValues.psgValue), rawValue: oracleRawValues.psgValue, weight: oracleApproxConfig.methodWeights.psgValue, type: 'relative' },
+      { key: 'pegValue', label: 'Price-to-Earnings-to-Growth Ratio Value (Excluding Non-Recurring Items)', value: calibratedOracleValue('pegValue', oracleRawValues.pegValue), rawValue: oracleRawValues.pegValue, weight: oracleApproxConfig.methodWeights.pegValue, type: 'relative' },
       { key: 'analystTargetValue', label: 'Analyst Mean Target Price', value: calibratedOracleValue('analystTargetValue', oracleRawValues.analystTargetValue), rawValue: oracleRawValues.analystTargetValue, weight: oracleApproxConfig.methodWeights.analystTargetValue, type: 'analyst' },
     ];
 
@@ -1312,7 +1447,9 @@ export async function GET(request) {
         oracleApproxConfig.priceAnchorMax,
         oracleApproxConfig.priceAnchorBase + (oracleApproxConfig.priceAnchorSpread * spread) + (beta > 1.3 ? 0.04 : 0)
       );
-      const anchored = (adjusted * (1 - priceAnchor)) + (currentPrice * priceAnchor);
+      const anchored = currentPrice
+        ? (adjusted * (1 - priceAnchor)) + (currentPrice * priceAnchor)
+        : adjusted;
 
       if (!oracleMedian) return anchored;
       const floor = oracleMedian * 0.45;
@@ -1334,7 +1471,7 @@ export async function GET(request) {
       }));
       dcf.compositeValue = oracleApproxComposite;
       dcf.compositeSource = 'oracle_approx_v2_calibrated';
-      dcf.upside = ((oracleApproxComposite - currentPrice) / currentPrice) * 100;
+      dcf.upside = currentPrice ? ((oracleApproxComposite - currentPrice) / currentPrice) * 100 : null;
       dcf.oracleAssumptions = {
         oracleDiscountRate: oracleDiscountRate * 100,
         oracleTerminalGrowth: oracleTerminalGrowth * 100,
@@ -1456,6 +1593,8 @@ export async function GET(request) {
         quote: Boolean(yahooQuote),
         fundamentals: Boolean(yahooStats),
         history: Array.isArray(priceHistoryRaw) && priceHistoryRaw.length > 0,
+        historyWindowYears: 10,
+        insiderWindowDays: 183,
       },
     };
 

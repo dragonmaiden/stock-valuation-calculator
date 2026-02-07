@@ -221,13 +221,21 @@ function ChartSection({ title, chartData, dataKeys, colors, unit = '', dataKeyX 
   );
 }
 
-function MetricCard({ label, value, subtext, helpText, theme }) {
+function MetricCard({ label, value, subtext, helpText, tone = 'neutral', theme }) {
+  const toneStyles = tone === 'positive'
+    ? { background: theme.positiveBg, borderColor: theme.positiveBorder, valueColor: theme.positive }
+    : tone === 'negative'
+    ? { background: theme.negativeBg, borderColor: theme.negativeBorder, valueColor: theme.negative }
+    : tone === 'warning'
+    ? { background: theme.warningBg, borderColor: theme.warningBorder, valueColor: theme.warningStrong || theme.warning }
+    : { background: theme.bgCard, borderColor: theme.border, valueColor: theme.text };
+
   return (
     <div
       className="p-4 rounded-xl border transition-all duration-200 group"
-      style={{ background: theme.bgCard, borderColor: theme.border }}
+      style={{ background: toneStyles.background, borderColor: toneStyles.borderColor }}
       onMouseEnter={(e) => e.currentTarget.style.borderColor = theme.borderHover}
-      onMouseLeave={(e) => e.currentTarget.style.borderColor = theme.border}
+      onMouseLeave={(e) => e.currentTarget.style.borderColor = toneStyles.borderColor}
     >
       <div className="flex items-center gap-1.5 mb-1.5">
         <div className="text-[10px] tracking-wider uppercase" style={{ color: theme.textTertiary }}>{label}</div>
@@ -242,7 +250,7 @@ function MetricCard({ label, value, subtext, helpText, theme }) {
           </span>
         )}
       </div>
-      <div className="text-base font-semibold" style={{ color: theme.text }}>{value}</div>
+      <div className="text-base font-semibold" style={{ color: toneStyles.valueColor }}>{value}</div>
       {subtext && <div className="text-[10px] mt-1" style={{ color: theme.textMuted }}>{subtext}</div>}
     </div>
   );
@@ -339,7 +347,7 @@ function OverviewTab({ data, verdict, theme, formatNumber, formatPercent, format
               ))}
               {data.quote?.pe && (
                 <div className="px-4 py-3 rounded-xl border transition-colors" style={{ background: theme.bgCard, borderColor: theme.border }}>
-                  <div className="text-[10px] tracking-wide uppercase" style={{ color: theme.textTertiary }}>P/E Ratio</div>
+                  <div className="text-[10px] tracking-wide uppercase" style={{ color: theme.textTertiary }}>Price-to-Earnings Ratio</div>
                   <div className="text-lg font-semibold mt-1" style={{ color: theme.text }}>{data.quote.pe.toFixed(2)}x</div>
                 </div>
               )}
@@ -351,13 +359,13 @@ function OverviewTab({ data, verdict, theme, formatNumber, formatPercent, format
               )}
               {latestRatios?.priceToSalesRatio && (
                 <div className="px-4 py-3 rounded-xl border transition-colors" style={{ background: theme.bgCard, borderColor: theme.border }}>
-                  <div className="text-[10px] tracking-wide uppercase" style={{ color: theme.textTertiary }}>P/S Ratio</div>
+                  <div className="text-[10px] tracking-wide uppercase" style={{ color: theme.textTertiary }}>Price-to-Sales Ratio</div>
                   <div className="text-lg font-semibold mt-1" style={{ color: theme.text }}>{latestRatios.priceToSalesRatio.toFixed(2)}x</div>
                 </div>
               )}
               {latestRatios?.priceToBookRatio && (
                 <div className="px-4 py-3 rounded-xl border transition-colors" style={{ background: theme.bgCard, borderColor: theme.border }}>
-                  <div className="text-[10px] tracking-wide uppercase" style={{ color: theme.textTertiary }}>P/B Ratio</div>
+                  <div className="text-[10px] tracking-wide uppercase" style={{ color: theme.textTertiary }}>Price-to-Book Ratio</div>
                   <div className="text-lg font-semibold mt-1" style={{ color: theme.text }}>{latestRatios.priceToBookRatio.toFixed(2)}x</div>
                 </div>
               )}
@@ -495,22 +503,25 @@ function OverviewTab({ data, verdict, theme, formatNumber, formatPercent, format
 }
 
 function ValuationTab({ data, theme, formatNumber, formatRatio }) {
+  const safeRatio = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : 'N/A');
+  const safeMoney = (value, digits = 2) => (Number.isFinite(value) ? `$${value.toFixed(digits)}` : 'N/A');
+  const safePercent = (value, digits = 2) => (Number.isFinite(value) ? `${value.toFixed(digits)}%` : 'N/A');
   const shortMethodNameByKey = {
-    dcf20Year: 'DCF20-CF',
-    dfcf20Year: 'DFCF20-FCF',
-    dni20Year: 'DNI20-NI',
-    dfcfTerminal: 'DFCF-Term',
-    meanPSValue: 'Mean-PS',
-    meanPEValue: 'Mean-PE exNRI',
-    meanPBValue: 'Mean-PB',
-    psgValue: 'PSG',
-    pegValue: 'PEG exNRI',
+    dcf20Year: 'Discounted Cash Flow (20-Year, Cash Flow)',
+    dfcf20Year: 'Discounted Free Cash Flow (20-Year)',
+    dni20Year: 'Discounted Net Income (20-Year)',
+    dfcfTerminal: 'Discounted Free Cash Flow (Terminal Value)',
+    meanPSValue: 'Historical Mean Price-to-Sales Value',
+    meanPEValue: 'Historical Mean Price-to-Earnings Value (Excluding Non-Recurring Items)',
+    meanPBValue: 'Historical Mean Price-to-Book Value',
+    psgValue: 'Price-to-Sales-to-Growth Value',
+    pegValue: 'Price-to-Earnings-to-Growth Value (Excluding Non-Recurring Items)',
     analystTargetValue: 'Analyst Target',
-    dcfOperatingCashFlow: 'DCF (Unlevered FCF)',
-    dcfTerminal: 'DCF Terminal (15x FCF)',
-    fairValuePS: 'Fair Value (P/S)',
-    fairValuePE: 'Fair Value (P/E)',
-    fairValuePB: 'Fair Value (P/B)',
+    dcfOperatingCashFlow: 'Discounted Cash Flow (Unlevered Free Cash Flow)',
+    dcfTerminal: 'Discounted Cash Flow Terminal Value (15x Free Cash Flow)',
+    fairValuePS: 'Fair Value (Price-to-Sales)',
+    fairValuePE: 'Fair Value (Price-to-Earnings)',
+    fairValuePB: 'Fair Value (Price-to-Book)',
     earningsPowerValue: 'Earnings Power Value',
     grahamNumber: 'Graham Number',
   };
@@ -559,11 +570,11 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
   const valuationMethodsForChart = valuationMethods.length > 0
     ? valuationMethods
     : [
-      { name: 'DCF (Unlevered FCF)', value: data?.dcf?.dcfOperatingCashFlow, key: 'dcfOperatingCashFlow' },
-      { name: 'DCF Terminal (15x FCF)', value: data?.dcf?.dcfTerminal, key: 'dcfTerminal' },
-      { name: 'Fair Value (P/S)', value: data?.dcf?.fairValuePS, key: 'fairValuePS' },
-      { name: 'Fair Value (P/E)', value: data?.dcf?.fairValuePE, key: 'fairValuePE' },
-      { name: 'Fair Value (P/B)', value: data?.dcf?.fairValuePB, key: 'fairValuePB' },
+      { name: 'Discounted Cash Flow (Unlevered Free Cash Flow)', value: data?.dcf?.dcfOperatingCashFlow, key: 'dcfOperatingCashFlow' },
+      { name: 'Discounted Cash Flow Terminal Value (15x Free Cash Flow)', value: data?.dcf?.dcfTerminal, key: 'dcfTerminal' },
+      { name: 'Fair Value (Price-to-Sales)', value: data?.dcf?.fairValuePS, key: 'fairValuePS' },
+      { name: 'Fair Value (Price-to-Earnings)', value: data?.dcf?.fairValuePE, key: 'fairValuePE' },
+      { name: 'Fair Value (Price-to-Book)', value: data?.dcf?.fairValuePB, key: 'fairValuePB' },
       { name: 'Earnings Power Value', value: data?.dcf?.earningsPowerValue, key: 'earningsPowerValue' },
       { name: 'Graham Number', value: data?.dcf?.grahamNumber, key: 'grahamNumber' },
     ]
@@ -601,15 +612,17 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
             <div className="text-left sm:text-right">
               <div className="text-[10px] tracking-wider uppercase" style={{ color: theme.textTertiary }}>Fair Value Estimate</div>
               <div className="text-2xl font-bold" style={{ color: data.dcf.upside > 0 ? theme.positive : theme.negative }}>
-                ${data.dcf.compositeValue?.toFixed(2)}
+                {safeMoney(data.dcf.compositeValue)}
               </div>
               <div className="text-xs font-medium" style={{ color: data.dcf.upside > 0 ? theme.positive : theme.negative, opacity: 0.7 }}>
-                {data.dcf.upside > 0 ? '+' : ''}{data.dcf.upside?.toFixed(1)}% vs Current
+                {Number.isFinite(data.dcf.upside)
+                  ? `${data.dcf.upside > 0 ? '+' : ''}${data.dcf.upside.toFixed(1)}% vs Current`
+                  : 'N/A vs Current'}
               </div>
             </div>
           </div>
 
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={460}>
             <BarChart
               layout="vertical"
               data={valuationMethodsForChart}
@@ -628,7 +641,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
                 dataKey="name"
                 type="category"
                 tick={{ fontSize: 12, fill: theme.textSecondary }}
-                width={160}
+                width={350}
                 axisLine={{ stroke: theme.chartGrid }}
                 tickLine={false}
               />
@@ -668,7 +681,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
           </div>
 
           <div className="mt-5 p-4 rounded-xl text-[10px] border" style={{ background: theme.bg, borderColor: theme.border, color: theme.textTertiary }}>
-            <span style={{ color: theme.textSecondary }}>Assumptions:</span> Discount Rate: {data.dcf.discountRate?.toFixed(1)}% (WACC) | Terminal Growth: {data.dcf.terminalGrowth?.toFixed(1)}% | Projection: 10 years | Composite Source: {data.dcf.compositeSource || 'core'}
+            <span style={{ color: theme.textSecondary }}>Assumptions:</span> Discount Rate: {safePercent(data.dcf.discountRate, 1)} (WACC) | Terminal Growth: {safePercent(data.dcf.terminalGrowth, 1)} | Projection: 10 years | Composite Source: {data.dcf.compositeSource || 'core'}
           </div>
 
           <div className="mt-4 p-4 rounded-xl text-[10px] border" style={{ background: theme.bg, borderColor: theme.border, color: theme.textTertiary }}>
@@ -782,11 +795,11 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
               </thead>
               <tbody>
                 {[
-                  { label: 'P/E Ratio', key: 'peRatio' },
-                  { label: 'P/S Ratio', key: 'psRatio' },
-                  { label: 'P/B Ratio', key: 'pbRatio' },
-                  { label: 'PEG Ratio', key: 'pegRatio' },
-                  { label: 'PSG Ratio', key: 'psgRatio' },
+                  { label: 'Price to Earnings (P/E) Ratio', key: 'peRatio' },
+                  { label: 'Price to Sales (P/S) Ratio', key: 'psRatio' },
+                  { label: 'Price to Book (P/B) Ratio', key: 'pbRatio' },
+                  { label: 'Price to Earnings Growth (PEG) Ratio', key: 'pegRatio' },
+                  { label: 'Price to Sales Growth (PSG) Ratio', key: 'psgRatio' },
                 ].map(({ label, key }) => (
                   <tr key={key} style={{ borderBottom: `1px solid ${theme.border}` }}
                     onMouseEnter={(e) => e.currentTarget.style.background = theme.tableRowHover}
@@ -794,15 +807,15 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
                   >
                     <td className="px-3 py-3 font-medium sticky left-0" style={{ color: theme.text, background: theme.stickyBg }}>{label}</td>
                     {data.valuationRatios.historical.map((h) => (
-                      <td key={h.year} className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{h[key]?.toFixed(2) || '-'}</td>
+                      <td key={h.year} className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{Number.isFinite(h[key]) ? h[key].toFixed(2) : '-'}</td>
                     ))}
-                    <td className="px-3 py-3 text-right font-semibold" style={{ color: theme.accent, background: theme.accent + '0d' }}>{data.valuationRatios.current?.[key]?.toFixed(2) || '-'}</td>
-                    <td className="px-3 py-3 text-right font-semibold" style={{ color: theme.accentAlt, background: theme.accentAlt + '0d' }}>{data.valuationRatios.tenYearAvg?.[key]?.toFixed(2) || '-'}</td>
+                    <td className="px-3 py-3 text-right font-semibold" style={{ color: theme.accent, background: theme.accent + '0d' }}>{Number.isFinite(data.valuationRatios.current?.[key]) ? data.valuationRatios.current[key].toFixed(2) : '-'}</td>
+                    <td className="px-3 py-3 text-right font-semibold" style={{ color: theme.accentAlt, background: theme.accentAlt + '0d' }}>{Number.isFinite(data.valuationRatios.tenYearAvg?.[key]) ? data.valuationRatios.tenYearAvg[key].toFixed(2) : '-'}</td>
                   </tr>
                 ))}
                 {[
-                  { label: 'EPS Growth', key: 'epsGrowth' },
-                  { label: 'Rev Growth', key: 'revenueGrowth' },
+                  { label: 'Earnings Per Share (EPS) Growth', key: 'epsGrowth' },
+                  { label: 'Revenue Growth', key: 'revenueGrowth' },
                 ].map(({ label, key }) => (
                   <tr key={key} style={{ borderBottom: `1px solid ${theme.border}` }}
                     onMouseEnter={(e) => e.currentTarget.style.background = theme.tableRowHover}
@@ -822,7 +835,7 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
             </table>
           </div>
           <div className="mt-4 text-[10px]" style={{ color: theme.textMuted }}>
-            Note: Historical ratios calculated using current price vs historical earnings/sales/book value.
+            Note: Historical ratios are calculated using each period&apos;s historical price and that period&apos;s earnings/sales/book value.
           </div>
         </div>
       )}
@@ -834,46 +847,46 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div className="space-y-3">
               <h4 className="text-[10px] font-semibold uppercase tracking-widest pb-2" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Per Share & Yield</h4>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EBITDA per Share</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.ebitdaPerShare?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Earnings Yield</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.earningsYield?.toFixed(2) || 'N/A'}%</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EBITDA per Share</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.ebitdaPerShare)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Earnings Yield</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safePercent(data.valuationRatios.other.earningsYield)}</span></div>
             </div>
             <div className="space-y-3">
               <h4 className="text-[10px] font-semibold uppercase tracking-widest pb-2" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Enterprise Value</h4>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Enterprise Value</span><span className="text-xs font-semibold" style={{ color: theme.text }}>${(data.valuationRatios.other.enterpriseValue / 1e9)?.toFixed(2) || 'N/A'}B</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EV / FCF</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.evToFCF?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EV / EBIT</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.evToEBIT?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EV / EBITDA</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.evToEBITDA?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EV / Revenue</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.evToRevenue?.toFixed(2) || 'N/A'}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Enterprise Value</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{formatNumber(data.valuationRatios.other.enterpriseValue)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EV / FCF</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.evToFCF)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EV / EBIT</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.evToEBIT)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EV / EBITDA</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.evToEBITDA)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EV / Revenue</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.evToRevenue)}</span></div>
             </div>
             <div className="space-y-3">
               <h4 className="text-[10px] font-semibold uppercase tracking-widest pb-2" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Forward Metrics</h4>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Forward P/E</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.forwardPE?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Rule of 40</span><span className="text-xs font-semibold" style={{ color: data.valuationRatios.other.ruleOf40 >= 40 ? theme.positive : theme.warning }}>{data.valuationRatios.other.ruleOf40?.toFixed(2) || 'N/A'}%</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Forward P/E</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.forwardPE)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Rule of 40</span><span className="text-xs font-semibold" style={{ color: data.valuationRatios.other.ruleOf40 >= 40 ? theme.positive : theme.warning }}>{safePercent(data.valuationRatios.other.ruleOf40)}</span></div>
             </div>
             <div className="space-y-3">
               <h4 className="text-[10px] font-semibold uppercase tracking-widest pb-2" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Mean Valuations</h4>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean P/E Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.meanPE?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean P/E Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>${data.valuationRatios.other.meanPEValue?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean P/S Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.meanPS?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean P/S Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>${data.valuationRatios.other.meanPSValue?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean P/B Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.meanPB?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean P/B Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>${data.valuationRatios.other.meanPBValue?.toFixed(2) || 'N/A'}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean Price to Earnings Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.meanPE)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean Price to Earnings Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>{safeMoney(data.valuationRatios.other.meanPEValue)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean Price to Sales Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.meanPS)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean Price to Sales Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>{safeMoney(data.valuationRatios.other.meanPSValue)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean Price to Book Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.meanPB)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean Price to Book Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>{safeMoney(data.valuationRatios.other.meanPBValue)}</span></div>
             </div>
             <div className="space-y-3">
               <h4 className="text-[10px] font-semibold uppercase tracking-widest pb-2" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Median Valuations</h4>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median P/E Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.medianPE?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median P/E Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>${data.valuationRatios.other.medianPEValue?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median P/S Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.medianPS?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median P/S Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>${data.valuationRatios.other.medianPSValue?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median P/B Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{data.valuationRatios.other.medianPB?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median P/B Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>${data.valuationRatios.other.medianPBValue?.toFixed(2) || 'N/A'}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median Price to Earnings Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.medianPE)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median Price to Earnings Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>{safeMoney(data.valuationRatios.other.medianPEValue)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median Price to Sales Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.medianPS)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median Price to Sales Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>{safeMoney(data.valuationRatios.other.medianPSValue)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median Price to Book Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.medianPB)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median Price to Book Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>{safeMoney(data.valuationRatios.other.medianPBValue)}</span></div>
             </div>
             <div className="space-y-3">
               <h4 className="text-[10px] font-semibold uppercase tracking-widest pb-2" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>DCF Valuations (20Y)</h4>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>DCF-20 Value</span><span className="text-xs font-semibold" style={{ color: theme.accent }}>${data.valuationRatios.other.dcf20Year?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>DFCF-20 Value</span><span className="text-xs font-semibold" style={{ color: theme.accent }}>${data.valuationRatios.other.dfcf20Year?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>DNI-20 Value</span><span className="text-xs font-semibold" style={{ color: theme.accent }}>${data.valuationRatios.other.dni20Year?.toFixed(2) || 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>DFCF-Terminal</span><span className="text-xs font-semibold" style={{ color: theme.accent }}>${data.valuationRatios.other.dfcfTerminal?.toFixed(2) || 'N/A'}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Discounted Cash Flow (20-Year) Value</span><span className="text-xs font-semibold" style={{ color: theme.accent }}>{safeMoney(data.valuationRatios.other.dcf20Year)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Discounted Free Cash Flow (20-Year) Value</span><span className="text-xs font-semibold" style={{ color: theme.accent }}>{safeMoney(data.valuationRatios.other.dfcf20Year)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Discounted Net Income (20-Year) Value</span><span className="text-xs font-semibold" style={{ color: theme.accent }}>{safeMoney(data.valuationRatios.other.dni20Year)}</span></div>
+              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Discounted Free Cash Flow (Terminal) Value</span><span className="text-xs font-semibold" style={{ color: theme.accent }}>{safeMoney(data.valuationRatios.other.dfcfTerminal)}</span></div>
             </div>
           </div>
         </div>
@@ -1284,6 +1297,13 @@ function ProfileTab({ data, theme }) {
 
 function InsiderActivityTab({ data, theme }) {
   const transactions = data?.insiderTransactions || [];
+  const sixMonthTransactions = useMemo(
+    () => {
+      const cutoff = Date.now() - (183 * 24 * 60 * 60 * 1000);
+      return transactions.filter((tx) => Number.isFinite(tx?.epochMs) && tx.epochMs >= cutoff);
+    },
+    [transactions]
+  );
 
   const formatShares = (num) => {
     if (num === null || num === undefined || !Number.isFinite(num)) return 'N/A';
@@ -1297,31 +1317,148 @@ function InsiderActivityTab({ data, theme }) {
     if (Math.abs(num) >= 1e3) return `$${(num / 1e3).toFixed(1)}K`;
     return `$${num.toFixed(0)}`;
   };
+  const formatMoneyCompact = (num) => {
+    if (num === null || num === undefined || !Number.isFinite(num)) return 'N/A';
+    if (Math.abs(num) >= 1e9) return `${(num / 1e9).toFixed(2)}B`;
+    if (Math.abs(num) >= 1e6) return `${(num / 1e6).toFixed(2)}M`;
+    if (Math.abs(num) >= 1e3) return `${(num / 1e3).toFixed(1)}K`;
+    return `${num.toFixed(0)}`;
+  };
 
-  const sells = transactions.filter((tx) => tx.side === 'SELL');
-  const buys = transactions.filter((tx) => tx.side === 'BUY');
+  const sells = sixMonthTransactions.filter((tx) => tx.side === 'SELL');
+  const buys = sixMonthTransactions.filter((tx) => tx.side === 'BUY');
 
   const sellShares = sells.reduce((sum, tx) => sum + (tx.shares || 0), 0);
   const buyShares = buys.reduce((sum, tx) => sum + (tx.shares || 0), 0);
   const sellValue = sells.reduce((sum, tx) => sum + (tx.value || 0), 0);
   const buyValue = buys.reduce((sum, tx) => sum + (tx.value || 0), 0);
+  const netValue = buyValue - sellValue;
+
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(0, 0, 0, 0);
+  monthStart.setUTCMonth(monthStart.getUTCMonth() - 5);
+  const monthKeys = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + i, 1));
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+    return { key, label };
+  });
+  const monthlyMap = new Map(monthKeys.map((m) => [m.key, { label: m.label, buyValue: 0, sellValue: 0, buyCount: 0, sellCount: 0 }]));
+  for (const tx of sixMonthTransactions) {
+    const d = new Date(tx.epochMs);
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    const bucket = monthlyMap.get(key);
+    if (!bucket) continue;
+    if (tx.side === 'BUY') {
+      bucket.buyValue += tx.value || 0;
+      bucket.buyCount += 1;
+    } else if (tx.side === 'SELL') {
+      bucket.sellValue += tx.value || 0;
+      bucket.sellCount += 1;
+    }
+  }
+  const monthlyFlow = Array.from(monthlyMap.values()).map((m) => ({
+    ...m,
+    netValue: m.buyValue - m.sellValue,
+  }));
+  const topInsiders = Object.values(sixMonthTransactions.reduce((acc, tx) => {
+    const k = tx.insider || 'Unknown';
+    if (!acc[k]) acc[k] = { insider: k, buyValue: 0, sellValue: 0, txCount: 0 };
+    acc[k].txCount += 1;
+    if (tx.side === 'BUY') acc[k].buyValue += tx.value || 0;
+    if (tx.side === 'SELL') acc[k].sellValue += tx.value || 0;
+    return acc;
+  }, {}))
+    .map((r) => ({ ...r, netValue: r.buyValue - r.sellValue }))
+    .sort((a, b) => Math.abs(b.netValue) - Math.abs(a.netValue))
+    .slice(0, 5);
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-insider" aria-labelledby="tab-insider">
+      <div className="text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+        Insider activity window: <b>last 6 months</b>. Green = buying pressure, red = selling pressure. Net value helps gauge insider conviction direction.
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard theme={theme} label="Sell Transactions" value={String(sells.length)} subtext={formatMoney(sellValue)} />
-        <MetricCard theme={theme} label="Buy Transactions" value={String(buys.length)} subtext={formatMoney(buyValue)} />
-        <MetricCard theme={theme} label="Net Shares" value={formatShares(buyShares - sellShares)} subtext="Buys - Sells" />
-        <MetricCard theme={theme} label="Net Value" value={formatMoney(buyValue - sellValue)} subtext="Buys - Sells" />
+        <MetricCard theme={theme} label="Sell Transactions" value={String(sells.length)} subtext={formatMoney(sellValue)} tone={sells.length > buys.length ? 'negative' : 'neutral'} />
+        <MetricCard theme={theme} label="Buy Transactions" value={String(buys.length)} subtext={formatMoney(buyValue)} tone={buys.length > sells.length ? 'positive' : 'neutral'} />
+        <MetricCard theme={theme} label="Net Shares" value={formatShares(buyShares - sellShares)} subtext="Buys - Sells" tone={buyShares - sellShares >= 0 ? 'positive' : 'negative'} />
+        <MetricCard theme={theme} label="Net Value" value={formatMoney(netValue)} subtext="Buys - Sells" tone={netValue >= 0 ? 'positive' : 'negative'} />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h3 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Monthly Buy vs Sell Value</h3>
+          <div className="text-[11px] mb-3" style={{ color: theme.textMuted }}>
+            X-axis: month. Y-axis: insider transaction value. Compare green buys vs red sells.
+          </div>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={monthlyFlow} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} tickFormatter={(v) => formatMoneyCompact(v)} />
+              <Tooltip
+                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                formatter={(v, key) => [formatMoney(v), key === 'buyValue' ? 'Buy Value' : 'Sell Value']}
+              />
+              <Legend wrapperStyle={{ fontSize: 10 }} />
+              <Bar dataKey="buyValue" name="Buy Value" fill={theme.positive} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="sellValue" name="Sell Value" fill={theme.negative} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h3 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Monthly Net Insider Flow</h3>
+          <div className="text-[11px] mb-3" style={{ color: theme.textMuted }}>
+            Positive bars mean insiders bought more than sold in that month; negative bars mean the opposite.
+          </div>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={monthlyFlow} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} tickFormatter={(v) => formatMoneyCompact(v)} />
+              <Tooltip
+                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                formatter={(v) => [formatMoney(v), 'Net Flow']}
+              />
+              <ReferenceLine y={0} stroke={theme.borderStrong} />
+              <Bar dataKey="netValue" name="Net Flow" radius={[4, 4, 0, 0]}>
+                {monthlyFlow.map((row, idx) => (
+                  <Cell key={`net-${idx}`} fill={row.netValue >= 0 ? theme.positive : theme.negative} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: theme.textSecondary }}>Top Insider Net Activity (6M)</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+          {topInsiders.length > 0 ? topInsiders.map((insider) => (
+            <MetricCard
+              key={insider.insider}
+              theme={theme}
+              label={insider.insider}
+              value={formatMoney(insider.netValue)}
+              subtext={`${insider.txCount} tx | Buy ${formatMoney(insider.buyValue)} / Sell ${formatMoney(insider.sellValue)}`}
+              tone={insider.netValue >= 0 ? 'positive' : 'negative'}
+            />
+          )) : (
+            <div className="text-xs" style={{ color: theme.textTertiary }}>No insider activity data in the last 6 months.</div>
+          )}
+        </div>
       </div>
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-start justify-between gap-3 mb-4">
-          <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Recent Insider Transactions</h3>
-          <div className="text-[10px]" style={{ color: theme.textMuted }}>Latest reported insider activity</div>
+          <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Recent Insider Transactions (6M)</h3>
+          <div className="text-[10px]" style={{ color: theme.textMuted }}>Most recent filings in the last 6 months</div>
         </div>
 
-        {transactions.length > 0 ? (
+        {sixMonthTransactions.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -1335,7 +1472,7 @@ function InsiderActivityTab({ data, theme }) {
                 </tr>
               </thead>
               <tbody>
-                {transactions.slice(0, 20).map((tx, idx) => {
+                {sixMonthTransactions.slice(0, 40).map((tx, idx) => {
                   const tone = tx.side === 'SELL' ? theme.negative : tx.side === 'BUY' ? theme.positive : theme.textTertiary;
                   return (
                     <tr
@@ -1353,7 +1490,10 @@ function InsiderActivityTab({ data, theme }) {
                         </span>
                       </td>
                       <td className="px-3 py-3 text-right" style={{ color: tone }}>{formatShares(tx.shares)}</td>
-                      <td className="px-3 py-3 text-right" style={{ color: tone }}>{formatMoney(tx.value)}</td>
+                      <td className="px-3 py-3 text-right" style={{ color: tone }}>
+                        {formatMoney(tx.value)}
+                        {tx.valueIsEstimated ? ' (est.)' : ''}
+                      </td>
                     </tr>
                   );
                 })}
@@ -1365,6 +1505,9 @@ function InsiderActivityTab({ data, theme }) {
             No insider activity data found for this ticker.
           </p>
         )}
+        <div className="mt-3 text-[10px]" style={{ color: theme.textMuted }}>
+          `Value (est.)` means filing did not include dollar amount; computed from shares × transaction price when available.
+        </div>
       </div>
     </div>
   );
@@ -1544,6 +1687,61 @@ function TradingTab({ data, theme }) {
     const currentAtr = atr14[atr14.length - 1];
     const atrPrev = atr14[Math.max(0, atr14.length - 21)];
     const atrExpansion = Number.isFinite(currentAtr) && Number.isFinite(atrPrev) && currentAtr > atrPrev * 1.15;
+    const latestVolume = latest?.volume;
+    const prior20Volumes = history.slice(-21, -1).map((r) => r.volume).filter((v) => Number.isFinite(v));
+    const avgVolume20 = prior20Volumes.length
+      ? prior20Volumes.reduce((a, b) => a + b, 0) / prior20Volumes.length
+      : null;
+    const rvol20 = Number.isFinite(latestVolume) && Number.isFinite(avgVolume20) && avgVolume20 > 0
+      ? latestVolume / avgVolume20
+      : null;
+    const rvolRegime = !Number.isFinite(rvol20)
+      ? 'N/A'
+      : rvol20 >= 1.5
+      ? 'High'
+      : rvol20 >= 0.8
+      ? 'Normal'
+      : 'Low';
+
+    const distToPocPct = Number.isFinite(latest?.close) && Number.isFinite(poc) && poc > 0
+      ? ((latest.close - poc) / poc) * 100
+      : null;
+    const distToVahPct = Number.isFinite(latest?.close) && Number.isFinite(vah) && vah > 0
+      ? ((latest.close - vah) / vah) * 100
+      : null;
+    const distToValPct = Number.isFinite(latest?.close) && Number.isFinite(val) && val > 0
+      ? ((latest.close - val) / val) * 100
+      : null;
+
+    const atrBand1Upper = Number.isFinite(latest?.close) && Number.isFinite(currentAtr) ? latest.close + currentAtr : null;
+    const atrBand1Lower = Number.isFinite(latest?.close) && Number.isFinite(currentAtr) ? latest.close - currentAtr : null;
+    const atrBand2Upper = Number.isFinite(latest?.close) && Number.isFinite(currentAtr) ? latest.close + (2 * currentAtr) : null;
+    const atrBand2Lower = Number.isFinite(latest?.close) && Number.isFinite(currentAtr) ? latest.close - (2 * currentAtr) : null;
+
+    const yearlyRange = Number.isFinite(yearlyHigh) && Number.isFinite(yearlyLow) ? (yearlyHigh - yearlyLow) : null;
+    const yearlyPercentile = Number.isFinite(latest?.close) && Number.isFinite(yearlyRange) && yearlyRange > 0
+      ? ((latest.close - yearlyLow) / yearlyRange) * 100
+      : null;
+
+    const ma50Latest = ma50[ma50.length - 1];
+    const ma200Latest = ma200[ma200.length - 1];
+    const ma50Prev20 = ma50[Math.max(0, ma50.length - 21)];
+    const spreadPct = Number.isFinite(ma50Latest) && Number.isFinite(ma200Latest) && ma200Latest !== 0
+      ? ((ma50Latest - ma200Latest) / ma200Latest) * 100
+      : null;
+    const slope50Pct = Number.isFinite(ma50Latest) && Number.isFinite(ma50Prev20) && ma50Prev20 !== 0
+      ? ((ma50Latest - ma50Prev20) / ma50Prev20) * 100
+      : null;
+    const trendStrengthScore = Number.isFinite(spreadPct) && Number.isFinite(slope50Pct)
+      ? Math.max(0, Math.min(100, (Math.abs(spreadPct) * 6) + (Math.abs(slope50Pct) * 10)))
+      : null;
+    const trendStrengthLabel = !Number.isFinite(trendStrengthScore)
+      ? 'N/A'
+      : trendStrengthScore >= 60
+      ? 'Strong Trend'
+      : trendStrengthScore >= 35
+      ? 'Moderate Trend'
+      : 'Range-like';
 
     const regime = latest.close > latestYearlyVWAP && vahHold && hhhl && weeklyStrong
       ? 'Bullish'
@@ -1763,6 +1961,18 @@ function TradingTab({ data, theme }) {
       ma200: ma200[ma200.length - 1],
       ema20w: ema20w[ema20w.length - 1],
       atrExpansion,
+      rvol20,
+      rvolRegime,
+      distToPocPct,
+      distToVahPct,
+      distToValPct,
+      atrBand1Upper,
+      atrBand1Lower,
+      atrBand2Upper,
+      atrBand2Lower,
+      yearlyPercentile,
+      trendStrengthScore,
+      trendStrengthLabel,
       volPercentile,
       poc,
       vah,
@@ -1806,10 +2016,51 @@ function TradingTab({ data, theme }) {
     ? theme.warning
     : theme.textSecondary;
   const formatPx = (v) => (Number.isFinite(v) ? `$${v.toFixed(2)}` : 'N/A');
+  const formatPctSigned = (v) => (Number.isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` : 'N/A');
   const zScoreForLadder = Number.isFinite(signal?.zScore) ? signal.zScore : null;
   const ladderPositionPct = zScoreForLadder === null
     ? 50
     : Math.max(0, Math.min(100, ((zScoreForLadder + 3) / 6) * 100));
+  const rvolTone = !Number.isFinite(analysis.rvol20)
+    ? 'neutral'
+    : analysis.rvol20 >= 1.5
+    ? 'positive'
+    : analysis.rvol20 >= 0.8
+    ? 'neutral'
+    : 'warning';
+  const pocTone = !Number.isFinite(analysis.distToPocPct)
+    ? 'neutral'
+    : Math.abs(analysis.distToPocPct) <= 1
+    ? 'positive'
+    : Math.abs(analysis.distToPocPct) <= 3
+    ? 'warning'
+    : 'negative';
+  const vahTone = !Number.isFinite(analysis.distToVahPct)
+    ? 'neutral'
+    : analysis.distToVahPct >= 0
+    ? 'positive'
+    : Math.abs(analysis.distToVahPct) <= 2
+    ? 'warning'
+    : 'negative';
+  const valTone = !Number.isFinite(analysis.distToValPct)
+    ? 'neutral'
+    : analysis.distToValPct >= 0
+    ? 'positive'
+    : 'negative';
+  const yearlyPctTone = !Number.isFinite(analysis.yearlyPercentile)
+    ? 'neutral'
+    : analysis.yearlyPercentile <= 20 || analysis.yearlyPercentile >= 80
+    ? 'warning'
+    : analysis.yearlyPercentile >= 35 && analysis.yearlyPercentile <= 65
+    ? 'positive'
+    : 'neutral';
+  const trendTone = !Number.isFinite(analysis.trendStrengthScore)
+    ? 'neutral'
+    : analysis.trendStrengthScore >= 60
+    ? 'positive'
+    : analysis.trendStrengthScore >= 35
+    ? 'warning'
+    : 'neutral';
   const deviationSummary = Number.isFinite(analysis.latestDeviationPct)
     ? analysis.latestDeviationPct < 0
       ? `Price is ${Math.abs(analysis.latestDeviationPct).toFixed(2)}% below 50DMA.`
@@ -1932,7 +2183,10 @@ function TradingTab({ data, theme }) {
           </div>
         </div>
         <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-          How to read this chart: <b>X-axis</b> is date. <b>Y-axis</b> is price. Colored lines are trend/mean references (VWAP, moving averages). Dashed horizontal lines mark sigma rails and liquidity levels.
+          How to read this chart: <b>X-axis</b> is date. <b>Y-axis</b> is price. Colored lines are trend references (VWAP, moving averages). Dashed horizontal lines mark liquidity/value levels.
+        </div>
+        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+          <b>Note:</b> Sigma/std-dev analytics are shown in dedicated sections below. This chart focuses on market structure and trading indicators.
         </div>
         <ResponsiveContainer width="100%" height={420}>
           <LineChart data={analysis.chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
@@ -1949,34 +2203,19 @@ function TradingTab({ data, theme }) {
             <Line type="monotone" dataKey="ma50" stroke="#f97316" dot={false} name="50 DMA" />
             <Line type="monotone" dataKey="ma200" stroke="#ef4444" dot={false} name="200 DMA" />
             <Line type="monotone" dataKey="ema20w" stroke="#94a3b8" dot={false} strokeDasharray="4 3" name="20 EMA (weekly proxy)" />
-            {Number.isFinite(signal?.levels?.mean) && (
-              <ReferenceLine y={signal.levels.mean} stroke={theme.accent} strokeDasharray="5 3" label={{ value: '0σ Mean', position: 'right', fill: theme.accent, fontSize: 10 }} />
-            )}
-            {Number.isFinite(signal?.levels?.sigma1) && (
-              <ReferenceLine y={signal.levels.sigma1} stroke={theme.warning} strokeDasharray="3 4" label={{ value: '+1σ', position: 'right', fill: theme.warning, fontSize: 10 }} />
-            )}
-            {Number.isFinite(signal?.levels?.sigmaNeg1) && (
-              <ReferenceLine y={signal.levels.sigmaNeg1} stroke={theme.warning} strokeDasharray="3 4" label={{ value: '-1σ', position: 'right', fill: theme.warning, fontSize: 10 }} />
-            )}
-            {Number.isFinite(signal?.levels?.sigma2) && (
-              <ReferenceLine y={signal.levels.sigma2} stroke={theme.negative} strokeDasharray="2 4" label={{ value: '+2σ', position: 'right', fill: theme.negative, fontSize: 10 }} />
-            )}
-            {Number.isFinite(signal?.levels?.sigmaNeg2) && (
-              <ReferenceLine y={signal.levels.sigmaNeg2} stroke={theme.positive} strokeDasharray="2 4" label={{ value: '-2σ', position: 'right', fill: theme.positive, fontSize: 10 }} />
-            )}
-            <ReferenceLine y={analysis.yearlyHigh} stroke="#1d4ed8" strokeDasharray="4 3" label={{ value: 'YH', position: 'right', fill: '#1d4ed8', fontSize: 10 }} />
-            <ReferenceLine y={analysis.yearlyLow} stroke="#1d4ed8" strokeDasharray="4 3" label={{ value: 'YL', position: 'right', fill: '#1d4ed8', fontSize: 10 }} />
-            <ReferenceLine y={analysis.poc} stroke="#334155" strokeDasharray="5 4" label={{ value: 'POC', position: 'right', fill: '#64748b', fontSize: 10 }} />
-            <ReferenceLine y={analysis.vah} stroke="#0ea5e9" strokeDasharray="5 4" label={{ value: 'VAH', position: 'right', fill: '#0284c7', fontSize: 10 }} />
-            <ReferenceLine y={analysis.val} stroke="#0ea5e9" strokeDasharray="5 4" label={{ value: 'VAL', position: 'right', fill: '#0284c7', fontSize: 10 }} />
+            <ReferenceLine y={analysis.yearlyHigh} stroke="#1d4ed8" strokeDasharray="4 3" label={{ value: 'YH', position: 'insideRight', fill: '#1d4ed8', fontSize: 10 }} />
+            <ReferenceLine y={analysis.yearlyLow} stroke="#1d4ed8" strokeDasharray="4 3" label={{ value: 'YL', position: 'insideRight', fill: '#1d4ed8', fontSize: 10 }} />
+            <ReferenceLine y={analysis.poc} stroke="#334155" strokeDasharray="5 4" label={{ value: 'POC', position: 'insideRight', fill: '#64748b', fontSize: 10 }} />
+            <ReferenceLine y={analysis.vah} stroke="#0ea5e9" strokeDasharray="5 4" label={{ value: 'VAH', position: 'insideRight', fill: '#0284c7', fontSize: 10 }} />
+            <ReferenceLine y={analysis.val} stroke="#0ea5e9" strokeDasharray="5 4" label={{ value: 'VAL', position: 'insideRight', fill: '#0284c7', fontSize: 10 }} />
             {analysis?.markers?.entry?.date && (
-              <ReferenceLine x={analysis.markers.entry.date} stroke="#22c55e" strokeDasharray="4 3" label={{ value: 'Entry', position: 'top', fill: '#22c55e', fontSize: 10 }} />
+              <ReferenceLine x={analysis.markers.entry.date} stroke="#22c55e" strokeDasharray="4 3" label={{ value: 'Entry', position: 'insideTopRight', fill: '#22c55e', fontSize: 10 }} />
             )}
             {analysis?.markers?.reclaim?.date && (
-              <ReferenceLine x={analysis.markers.reclaim.date} stroke="#10b981" strokeDasharray="4 3" label={{ value: 'Reclaim', position: 'top', fill: '#10b981', fontSize: 10 }} />
+              <ReferenceLine x={analysis.markers.reclaim.date} stroke="#10b981" strokeDasharray="4 3" label={{ value: 'Reclaim', position: 'insideTopRight', fill: '#10b981', fontSize: 10 }} />
             )}
             {analysis?.markers?.invalidation?.date && (
-              <ReferenceLine x={analysis.markers.invalidation.date} stroke="#ef4444" strokeDasharray="4 3" label={{ value: 'Invalid', position: 'top', fill: '#ef4444', fontSize: 10 }} />
+              <ReferenceLine x={analysis.markers.invalidation.date} stroke="#ef4444" strokeDasharray="4 3" label={{ value: 'Invalid', position: 'insideTopRight', fill: '#ef4444', fontSize: 10 }} />
             )}
           </LineChart>
         </ResponsiveContainer>
@@ -2195,6 +2434,69 @@ function TradingTab({ data, theme }) {
         <MetricCard theme={theme} label="Value Area Status" value={inValue ? 'Inside Value (Chop)' : analysis.latest.close > analysis.vah ? 'Above VAH (Trend)' : 'Below VAL (Weakness)'} />
         <MetricCard theme={theme} label="Structure" value={analysis.hhhl ? 'HH + HL' : analysis.lhll ? 'LH + LL' : 'Mixed'} />
         <MetricCard theme={theme} label="ATR Regime" value={analysis.atrExpansion ? 'Expansion' : 'Compression'} subtext={Number.isFinite(analysis.volPercentile) ? `RV Percentile ${analysis.volPercentile.toFixed(1)}%` : 'RV N/A'} />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <MetricCard
+          theme={theme}
+          label="RVOL (20d)"
+          value={Number.isFinite(analysis.rvol20) ? `${analysis.rvol20.toFixed(2)}x` : 'N/A'}
+          subtext={`Volume regime: ${analysis.rvolRegime}`}
+          helpText="Relative Volume = today's volume / average daily volume of the prior 20 sessions."
+          tone={rvolTone}
+        />
+        <MetricCard
+          theme={theme}
+          label="Dist to POC"
+          value={formatPctSigned(analysis.distToPocPct)}
+          helpText="Percent distance from Point of Control (highest volume price in the profile window)."
+          tone={pocTone}
+        />
+        <MetricCard
+          theme={theme}
+          label="Dist to VAH"
+          value={formatPctSigned(analysis.distToVahPct)}
+          helpText="Percent distance from Value Area High (upper boundary of the 70% volume area)."
+          tone={vahTone}
+        />
+        <MetricCard
+          theme={theme}
+          label="Dist to VAL"
+          value={formatPctSigned(analysis.distToValPct)}
+          helpText="Percent distance from Value Area Low (lower boundary of the 70% volume area)."
+          tone={valTone}
+        />
+        <MetricCard
+          theme={theme}
+          label="52W Percentile"
+          value={Number.isFinite(analysis.yearlyPercentile) ? `${analysis.yearlyPercentile.toFixed(1)}%` : 'N/A'}
+          subtext="0%=near 52W low, 100%=near 52W high"
+          helpText="Current position within the 52-week high/low range."
+          tone={yearlyPctTone}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <MetricCard
+          theme={theme}
+          label="Trend Strength"
+          value={analysis.trendStrengthLabel}
+          subtext={Number.isFinite(analysis.trendStrengthScore) ? `Score ${analysis.trendStrengthScore.toFixed(0)}/100` : 'N/A'}
+          helpText="Composite score from MA50-MA200 spread and MA50 slope. Higher means stronger directional trend."
+          tone={trendTone}
+        />
+        <MetricCard
+          theme={theme}
+          label="ATR Band (1x)"
+          value={`${formatPx(analysis.atrBand1Lower)} to ${formatPx(analysis.atrBand1Upper)}`}
+          helpText="Price +/- 1 ATR from current close. Useful for near-term stop/target framing."
+        />
+        <MetricCard
+          theme={theme}
+          label="ATR Band (2x)"
+          value={`${formatPx(analysis.atrBand2Lower)} to ${formatPx(analysis.atrBand2Upper)}`}
+          helpText="Price +/- 2 ATR from current close. Wider risk envelope for swing scenarios."
+        />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
