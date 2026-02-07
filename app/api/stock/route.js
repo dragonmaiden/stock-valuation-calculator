@@ -245,6 +245,61 @@ function normalizeInsiderTransactions(rows = []) {
     .sort((a, b) => (b.epochMs || 0) - (a.epochMs || 0));
 }
 
+function normalizePctFraction(value) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null;
+  if (Math.abs(value) > 1) return value / 100;
+  return value;
+}
+
+function classifyHoldingAction(changeShares, changePct) {
+  if (Number.isFinite(changeShares)) {
+    if (changeShares > 0) return 'BUYING';
+    if (changeShares < 0) return 'SELLING';
+    return 'NO_CHANGE';
+  }
+  if (Number.isFinite(changePct)) {
+    if (changePct > 0) return 'BUYING';
+    if (changePct < 0) return 'SELLING';
+    return 'NO_CHANGE';
+  }
+  return 'UNKNOWN';
+}
+
+function normalizeOwnershipRows(rows = [], source = 'institution') {
+  return rows
+    .map((row) => {
+      const dateMs = toEpochMs(row?.reportDate ?? row?.dateReported ?? row?.date);
+      const shares = toNumber(row?.position ?? row?.shares ?? row?.sharesHeld);
+      const marketValue = toNumber(row?.value ?? row?.marketValue ?? row?.holdingValue);
+      const pctHeld = normalizePctFraction(toNumber(row?.pctHeld ?? row?.percentHeld ?? row?.ownershipPercent));
+      const changeShares = toNumber(row?.change ?? row?.positionChange ?? row?.sharesChange ?? row?.changeInShares);
+      const changePct = normalizePctFraction(toNumber(row?.changePercent ?? row?.percentChange ?? row?.pctChange ?? row?.changePct));
+      const holderName = row?.organization || row?.holder || row?.institution || row?.name || 'Unknown';
+
+      return {
+        source,
+        holder: holderName,
+        reportDate: dateMs ? new Date(dateMs).toISOString().slice(0, 10) : null,
+        epochMs: dateMs,
+        shares: shares !== null ? Math.abs(shares) : null,
+        marketValue: marketValue !== null ? Math.abs(marketValue) : null,
+        pctHeld,
+        changeShares,
+        changePct,
+        action: classifyHoldingAction(changeShares, changePct),
+      };
+    })
+    .filter((row) => row.holder && (row.shares !== null || row.marketValue !== null))
+    .sort((a, b) => {
+      const av = a.marketValue ?? 0;
+      const bv = b.marketValue ?? 0;
+      if (bv !== av) return bv - av;
+      const as = a.shares ?? 0;
+      const bs = b.shares ?? 0;
+      return bs - as;
+    });
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const ticker = searchParams.get('ticker');
@@ -265,7 +320,16 @@ export async function GET(request) {
       withTimeout(yahooFinance.quote(symbol), EXTERNAL_FETCH_TIMEOUT_MS, 'yahoo quote').catch(() => null),
       withTimeout(
         yahooFinance.quoteSummary(symbol, {
-          modules: ['summaryDetail', 'defaultKeyStatistics', 'financialData', 'insiderTransactions', 'assetProfile'],
+          modules: [
+            'summaryDetail',
+            'defaultKeyStatistics',
+            'financialData',
+            'insiderTransactions',
+            'assetProfile',
+            'institutionOwnership',
+            'fundOwnership',
+            'majorHoldersBreakdown',
+          ],
         }),
         EXTERNAL_FETCH_TIMEOUT_MS,
         'yahoo quoteSummary'
@@ -717,6 +781,8 @@ export async function GET(request) {
     const keyStats = yahooStats?.defaultKeyStatistics || {};
     const financialData = yahooStats?.financialData || {};
     const insiderTransactionsRaw = yahooStats?.insiderTransactions?.transactions || [];
+    const institutionOwnershipRaw = yahooStats?.institutionOwnership?.ownershipList || [];
+    const fundOwnershipRaw = yahooStats?.fundOwnership?.ownershipList || [];
     const allInsiderTransactions = normalizeInsiderTransactions(insiderTransactionsRaw);
     const sixMonthsAgoMs = Date.now() - (183 * 24 * 60 * 60 * 1000);
     const insiderTransactions = allInsiderTransactions
@@ -725,6 +791,47 @@ export async function GET(request) {
     const insiderSelling = insiderTransactions
       .filter((tx) => tx.side === 'SELL')
       .slice(0, 100);
+
+    const institutionHolders = normalizeOwnershipRows(institutionOwnershipRaw, 'institution');
+    const fundHolders = normalizeOwnershipRows(fundOwnershipRaw, 'fund');
+    const largestHolders = [...institutionHolders, ...fundHolders]
+      .sort((a, b) => {
+        const av = a.marketValue ?? 0;
+        const bv = b.marketValue ?? 0;
+        if (bv !== av) return bv - av;
+        const as = a.shares ?? 0;
+        const bs = b.shares ?? 0;
+        return bs - as;
+      })
+      .slice(0, 30);
+
+    const ownershipActionSummary = ((rows) => {
+      const buyingCount = rows.filter((r) => r.action === 'BUYING').length;
+      const sellingCount = rows.filter((r) => r.action === 'SELLING').length;
+      const unchangedCount = rows.filter((r) => r.action === 'NO_CHANGE').length;
+      const unknownCount = rows.filter((r) => r.action === 'UNKNOWN').length;
+      const reportedActionCount = rows.filter((r) => Number.isFinite(r.changeShares) || Number.isFinite(r.changePct)).length;
+      const netChangeShares = rows.reduce((sum, r) => sum + (Number.isFinite(r.changeShares) ? r.changeShares : 0), 0);
+      const totalReportedValue = rows.reduce((sum, r) => sum + (Number.isFinite(r.marketValue) ? r.marketValue : 0), 0);
+      return {
+        totalTracked: rows.length,
+        reportedActionCount,
+        buyingCount,
+        sellingCount,
+        unchangedCount,
+        unknownCount,
+        netChangeShares,
+        totalReportedValue,
+      };
+    })(largestHolders);
+
+    const institutionalOwnership = {
+      institutions: institutionHolders.slice(0, 60),
+      funds: fundHolders.slice(0, 60),
+      largestHolders,
+      summary: ownershipActionSummary,
+      asOfDate: largestHolders[0]?.reportDate || null,
+    };
 
     const favorites = {
       peRatio: yahooQuote?.trailingPE || null,
@@ -1593,6 +1700,8 @@ export async function GET(request) {
         quote: Boolean(yahooQuote),
         fundamentals: Boolean(yahooStats),
         history: Array.isArray(priceHistoryRaw) && priceHistoryRaw.length > 0,
+        institutionOwnership: institutionHolders.length > 0,
+        fundOwnership: fundHolders.length > 0,
         historyWindowYears: 10,
         insiderWindowDays: 183,
       },
@@ -1615,6 +1724,7 @@ export async function GET(request) {
       factorRankings,
       insiderTransactions,
       insiderSelling,
+      institutionalOwnership,
       priceHistory,
       tradingSignals,
       dataQuality,

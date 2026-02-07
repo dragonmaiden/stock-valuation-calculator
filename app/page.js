@@ -98,6 +98,7 @@ const NAV_TABS = [
   { id: 'operating-metrics', label: 'Operating Metrics' },
   { id: 'charts', label: 'Charts' },
   { id: 'trading', label: 'Trading' },
+  { id: 'institutional', label: 'Institutional Ownership' },
   { id: 'insider', label: 'Insider Activity' },
   { id: 'profile', label: 'Profile' },
 ];
@@ -1513,6 +1514,182 @@ function InsiderActivityTab({ data, theme }) {
   );
 }
 
+function InstitutionalOwnershipTab({ data, theme }) {
+  const ownership = data?.institutionalOwnership || {};
+  const holders = ownership?.largestHolders || [];
+  const institutions = ownership?.institutions || [];
+  const funds = ownership?.funds || [];
+  const summary = ownership?.summary || {};
+
+  const formatShares = (num) => {
+    if (num === null || num === undefined || !Number.isFinite(num)) return 'N/A';
+    return num.toLocaleString();
+  };
+  const formatMoney = (num) => {
+    if (num === null || num === undefined || !Number.isFinite(num)) return 'N/A';
+    if (Math.abs(num) >= 1e9) return `$${(num / 1e9).toFixed(2)}B`;
+    if (Math.abs(num) >= 1e6) return `$${(num / 1e6).toFixed(2)}M`;
+    if (Math.abs(num) >= 1e3) return `$${(num / 1e3).toFixed(1)}K`;
+    return `$${num.toFixed(0)}`;
+  };
+  const formatPct = (num) => {
+    if (num === null || num === undefined || !Number.isFinite(num)) return 'N/A';
+    return `${(num * 100).toFixed(2)}%`;
+  };
+
+  const actionBars = useMemo(
+    () => [
+      { action: 'Buying', count: summary.buyingCount || 0, fill: theme.positive },
+      { action: 'Selling', count: summary.sellingCount || 0, fill: theme.negative },
+      { action: 'No Change', count: summary.unchangedCount || 0, fill: theme.textSecondary },
+      { action: 'Unknown', count: summary.unknownCount || 0, fill: theme.textTertiary },
+    ],
+    [summary.buyingCount, summary.sellingCount, summary.unchangedCount, summary.unknownCount, theme]
+  );
+
+  const topHoldersChart = useMemo(
+    () => holders
+      .slice(0, 12)
+      .map((h) => ({
+        holder: (h.holder || '').length > 28 ? `${h.holder.slice(0, 28)}...` : h.holder,
+        value: Number.isFinite(h.marketValue) ? h.marketValue : 0,
+        source: h.source === 'fund' ? 'Fund' : 'Institution',
+      }))
+      .reverse(),
+    [holders]
+  );
+
+  const actionTone = (action) => {
+    if (action === 'BUYING') return theme.positive;
+    if (action === 'SELLING') return theme.negative;
+    if (action === 'NO_CHANGE') return theme.textSecondary;
+    return theme.textTertiary;
+  };
+
+  return (
+    <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-institutional" aria-labelledby="tab-institutional">
+      <div className="text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+        Institutional ownership shows the largest reporting institutions/funds and whether they are increasing or reducing holdings when reported changes are available.
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <MetricCard theme={theme} label="Total Tracked Holders" value={String(summary.totalTracked || holders.length || 0)} subtext={`${institutions.length} institutions | ${funds.length} funds`} tone="neutral" />
+        <MetricCard theme={theme} label="Buying Holders" value={String(summary.buyingCount || 0)} subtext="Reported increases" tone="positive" />
+        <MetricCard theme={theme} label="Selling Holders" value={String(summary.sellingCount || 0)} subtext="Reported reductions" tone="negative" />
+        <MetricCard theme={theme} label="Net Share Change" value={formatShares(summary.netChangeShares)} subtext="Sum of reported share deltas" tone={summary.netChangeShares >= 0 ? 'positive' : 'negative'} />
+        <MetricCard theme={theme} label="Total Reported Value" value={formatMoney(summary.totalReportedValue)} subtext={ownership?.asOfDate ? `Latest report date ${ownership.asOfDate}` : 'As reported by filings'} tone="neutral" />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h3 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Largest Holders by Reported Value</h3>
+          <div className="text-[11px] mb-3" style={{ color: theme.textMuted }}>
+            X-axis: reported market value. Y-axis: institution/fund name. This highlights concentration among top holders.
+          </div>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={topHoldersChart} layout="vertical" margin={{ top: 8, right: 18, left: 0, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} tickFormatter={(v) => formatMoney(v)} />
+              <YAxis dataKey="holder" type="category" width={170} tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
+              <Tooltip
+                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                formatter={(v, _, row) => [formatMoney(v), `${row?.payload?.source || 'Holder'} Value`]}
+              />
+              <Bar dataKey="value" name="Reported Value" radius={[0, 4, 4, 0]}>
+                {topHoldersChart.map((row, idx) => (
+                  <Cell key={`holder-${idx}`} fill={row.source === 'Fund' ? theme.accentAlt : theme.accent} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h3 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Holder Action Distribution</h3>
+          <div className="text-[11px] mb-3" style={{ color: theme.textMuted }}>
+            Based on reported share or percentage change in holdings. `Unknown` means the data source did not include change fields.
+          </div>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={actionBars} margin={{ top: 8, right: 18, left: 0, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
+              <XAxis dataKey="action" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
+              <Tooltip
+                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                formatter={(v) => [v, 'Holder Count']}
+              />
+              <ReferenceLine y={0} stroke={theme.borderStrong} />
+              <Bar dataKey="count" name="Holder Count" radius={[4, 4, 0, 0]}>
+                {actionBars.map((row, idx) => (
+                  <Cell key={`action-${idx}`} fill={row.fill} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Largest Institutional and Fund Holders</h3>
+          <div className="text-[10px]" style={{ color: theme.textMuted }}>Sorted by reported position value</div>
+        </div>
+        {holders.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ background: theme.tableBg }}>
+                  <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Holder</th>
+                  <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Type</th>
+                  <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Report Date</th>
+                  <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Shares</th>
+                  <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Value</th>
+                  <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>% Held</th>
+                  <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Change</th>
+                  <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {holders.slice(0, 30).map((h, idx) => {
+                  const tone = actionTone(h.action);
+                  const changeText = Number.isFinite(h.changeShares)
+                    ? formatShares(h.changeShares)
+                    : Number.isFinite(h.changePct)
+                    ? formatPct(h.changePct)
+                    : 'N/A';
+                  return (
+                    <tr
+                      key={`${h.holder}-${h.reportDate}-${idx}`}
+                      style={{ borderBottom: `1px solid ${theme.border}` }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = theme.tableRowHover}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td className="px-3 py-3 font-medium" style={{ color: theme.text }}>{h.holder}</td>
+                      <td className="px-3 py-3" style={{ color: theme.textSecondary }}>{h.source === 'fund' ? 'Fund' : 'Institution'}</td>
+                      <td className="px-3 py-3" style={{ color: theme.textSecondary }}>{h.reportDate || 'N/A'}</td>
+                      <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{formatShares(h.shares)}</td>
+                      <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{formatMoney(h.marketValue)}</td>
+                      <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{formatPct(h.pctHeld)}</td>
+                      <td className="px-3 py-3 text-right" style={{ color: tone }}>{changeText}</td>
+                      <td className="px-3 py-3">
+                        <span className="px-2 py-1 rounded-full text-[10px] font-semibold" style={{ background: `${tone}22`, color: tone }}>
+                          {h.action.replace('_', ' ')}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-xs" style={{ color: theme.textTertiary }}>No institutional ownership data available for this ticker.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TradingTab({ data, theme }) {
   const [timeframe, setTimeframe] = useState('1Y');
 
@@ -2747,6 +2924,7 @@ export default function StockValuationCalculator() {
       case 'operating-metrics': return <OperatingMetricsTab data={data} theme={t} />;
       case 'charts': return <ChartsTab theme={t} viewMode={viewMode} setViewMode={setViewMode} marginData={marginData} returnData={returnData} incomeData={incomeData} cashFlowData={cashFlowData} balanceData={balanceData} />;
       case 'trading': return <TradingTab data={data} theme={t} />;
+      case 'institutional': return <InstitutionalOwnershipTab data={data} theme={t} />;
       case 'insider': return <InsiderActivityTab data={data} theme={t} />;
       case 'profile': return <ProfileTab data={data} theme={t} />;
       default: return <OverviewTab data={data} verdict={verdict} theme={t} formatNumber={formatNumber} formatPercent={formatPercent} formatRatio={formatRatio} calculatePEGValue={calculatePEGValue} revenueCagr={revenueCagr} fcfCagr={fcfCagr} netMargin={netMargin} marginDelta={marginDelta} />;
