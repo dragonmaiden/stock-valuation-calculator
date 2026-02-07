@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import YahooFinance from 'yahoo-finance2';
 
+export const runtime = 'nodejs';
+
 const yahooFinance = new YahooFinance();
 const SEC_BASE = 'https://data.sec.gov';
 const USER_AGENT = `StockValuationCalculator/1.0 (${process.env.SEC_CONTACT_EMAIL || 'admin@stockvaluationcalculator.app'})`;
@@ -17,6 +19,10 @@ async function getTickerMap() {
   const response = await fetch(`https://www.sec.gov/files/company_tickers.json`, {
     headers: { 'User-Agent': USER_AGENT },
   });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`SEC ticker map fetch failed (${response.status}): ${text.slice(0, 200)}`);
+  }
   const data = await response.json();
   tickerCache = { data, fetchedAt: now };
   return data;
@@ -177,54 +183,81 @@ export async function GET(request) {
   }
 
   try {
-    // Get CIK from ticker
-    const cik = await getCIK(ticker);
-    if (!cik) {
-      return NextResponse.json({ error: 'Ticker not found' }, { status: 404 });
-    }
+    const symbol = ticker.toUpperCase();
 
-    // Fetch company facts (financial data) from SEC and price/stats from Yahoo
+    // Always fetch market data first so SEC outages do not take the whole API down.
     const period2 = new Date();
-    const period1 = new Date(period2);
-    period1.setFullYear(period1.getFullYear() - 2);
+    const period1 = new Date('1900-01-01T00:00:00Z');
 
-    const [factsRes, submissionsRes, yahooQuote, yahooStats, priceHistoryRaw] = await Promise.all([
-      fetch(`${SEC_BASE}/api/xbrl/companyfacts/CIK${cik}.json`, {
-        headers: { 'User-Agent': USER_AGENT },
-      }),
-      fetch(`${SEC_BASE}/submissions/CIK${cik}.json`, {
-        headers: { 'User-Agent': USER_AGENT },
-      }),
-      yahooFinance.quote(ticker.toUpperCase()).catch(() => null),
-      yahooFinance.quoteSummary(ticker.toUpperCase(), {
-        modules: ['summaryDetail', 'defaultKeyStatistics', 'financialData', 'insiderTransactions'],
+    const [yahooQuote, yahooStats, priceHistoryRaw] = await Promise.all([
+      yahooFinance.quote(symbol).catch(() => null),
+      yahooFinance.quoteSummary(symbol, {
+        modules: ['summaryDetail', 'defaultKeyStatistics', 'financialData', 'insiderTransactions', 'assetProfile'],
       }).catch(() => null),
-      yahooFinance.historical(ticker.toUpperCase(), {
+      yahooFinance.historical(symbol, {
         period1,
         period2,
         interval: '1d',
       }).catch(() => null),
     ]);
 
-    if (!factsRes.ok) {
-      return NextResponse.json({ error: 'Failed to fetch financial data' }, { status: 500 });
+    const hasYahooData = Boolean(yahooQuote) || (Array.isArray(priceHistoryRaw) && priceHistoryRaw.length > 0);
+    if (!hasYahooData) {
+      return NextResponse.json({ error: 'Ticker not found' }, { status: 404 });
     }
 
-    const facts = await factsRes.json();
-    const submissions = await submissionsRes.json();
+    // SEC path is best-effort: valuation gets richer when available, but route stays up without it.
+    const secIssues = [];
+    let cik = null;
+    try {
+      cik = await getCIK(symbol);
+    } catch (err) {
+      secIssues.push(`CIK lookup failed: ${err?.message || 'unknown_error'}`);
+    }
+
+    let facts = {};
+    let submissions = {};
+    if (cik) {
+      const [factsRes, submissionsRes] = await Promise.all([
+        fetch(`${SEC_BASE}/api/xbrl/companyfacts/CIK${cik}.json`, {
+          headers: { 'User-Agent': USER_AGENT },
+        }).catch((error) => ({ ok: false, status: 0, _error: error })),
+        fetch(`${SEC_BASE}/submissions/CIK${cik}.json`, {
+          headers: { 'User-Agent': USER_AGENT },
+        }).catch((error) => ({ ok: false, status: 0, _error: error })),
+      ]);
+
+      if (factsRes?.ok) {
+        facts = await factsRes.json();
+      } else {
+        const detail = factsRes?._error?.message || (typeof factsRes?.text === 'function' ? (await factsRes.text()).slice(0, 200) : 'request_failed');
+        secIssues.push(`companyfacts unavailable (${factsRes?.status ?? 'n/a'}): ${detail}`);
+      }
+
+      if (submissionsRes?.ok) {
+        submissions = await submissionsRes.json();
+      } else {
+        const detail = submissionsRes?._error?.message || (typeof submissionsRes?.text === 'function' ? (await submissionsRes.text()).slice(0, 200) : 'request_failed');
+        secIssues.push(`submissions unavailable (${submissionsRes?.status ?? 'n/a'}): ${detail}`);
+      }
+    } else {
+      secIssues.push('CIK not available for ticker');
+    }
+
     const usGaap = facts?.facts?.['us-gaap'] || {};
+    const assetProfile = yahooStats?.assetProfile || {};
 
     // Build profile
     const profile = {
-      symbol: ticker.toUpperCase(),
-      companyName: facts.entityName || submissions.name || ticker,
+      symbol,
+      companyName: facts.entityName || submissions.name || yahooQuote?.longName || yahooQuote?.shortName || symbol,
       exchangeShortName: submissions.exchanges?.[0] || '',
-      sector: submissions.sicDescription || '',
-      industry: submissions.sicDescription || '',
-      description: '',
-      ceo: '',
+      sector: assetProfile.sector || submissions.sicDescription || '',
+      industry: assetProfile.industry || submissions.sicDescription || '',
+      description: assetProfile.longBusinessSummary || '',
+      ceo: assetProfile.companyOfficers?.[0]?.name || '',
       fullTimeEmployees: 0,
-      website: submissions.website || '',
+      website: assetProfile.website || submissions.website || '',
     };
 
     // Field mappings for different metrics
@@ -427,6 +460,163 @@ export async function GET(request) {
           .sort((a, b) => a.date.localeCompare(b.date))
       : [];
 
+    const calculateTradingSignals = (historyRows, latestPrice) => {
+      const rows = Array.isArray(historyRows)
+        ? historyRows.filter((r) =>
+            Number.isFinite(r?.close) &&
+            Number.isFinite(r?.high) &&
+            Number.isFinite(r?.low) &&
+            Number.isFinite(r?.volume)
+          )
+        : [];
+
+      if (!Number.isFinite(latestPrice) || latestPrice <= 0 || rows.length < 60) {
+        return {
+          action: 'WAIT',
+          regime: 'UNKNOWN',
+          confidence: 0,
+          reason: 'insufficient_data',
+        };
+      }
+
+      const sma = (arr, period) => {
+        if (arr.length < period) return null;
+        const slice = arr.slice(arr.length - period);
+        return slice.reduce((sum, v) => sum + v, 0) / period;
+      };
+
+      const closes = rows.map((r) => r.close);
+      const sma50 = sma(closes, 50);
+      const sma200 = sma(closes, 200);
+      const sma50Prev = closes.length >= 70
+        ? closes.slice(0, closes.length - 20).slice(-50).reduce((sum, v) => sum + v, 0) / 50
+        : null;
+
+      let vwma20 = null;
+      if (rows.length >= 20) {
+        const s = rows.slice(-20);
+        const pv = s.reduce((sum, r) => sum + (r.close * (r.volume || 0)), 0);
+        const vv = s.reduce((sum, r) => sum + (r.volume || 0), 0);
+        vwma20 = vv > 0 ? pv / vv : null;
+      }
+
+      const nowYear = new Date().getUTCFullYear();
+      const ytdStartIndex = rows.findIndex((r) => new Date(`${r.date}T00:00:00Z`).getUTCFullYear() === nowYear);
+      const anchorIndex = ytdStartIndex >= 0 ? ytdStartIndex : Math.max(0, rows.length - 252);
+      let avwap = null;
+      {
+        let pv = 0;
+        let vv = 0;
+        for (let i = anchorIndex; i < rows.length; i++) {
+          const typical = (rows[i].high + rows[i].low + rows[i].close) / 3;
+          const vol = rows[i].volume || 0;
+          pv += typical * vol;
+          vv += vol;
+        }
+        avwap = vv > 0 ? pv / vv : null;
+      }
+
+      const meanType = Number.isFinite(avwap)
+        ? 'Anchored VWAP (YTD)'
+        : Number.isFinite(vwma20)
+        ? 'VWMA-20'
+        : 'SMA-50';
+      const mean = Number.isFinite(avwap) ? avwap : (Number.isFinite(vwma20) ? vwma20 : sma50);
+
+      const stdWindow = closes.slice(-60);
+      const stdMean = stdWindow.reduce((a, b) => a + b, 0) / stdWindow.length;
+      const variance = stdWindow.reduce((sum, v) => sum + ((v - stdMean) ** 2), 0) / stdWindow.length;
+      const stdDev = Math.sqrt(variance);
+      const zScore = Number.isFinite(mean) && stdDev > 0 ? (latestPrice - mean) / stdDev : null;
+
+      const spread = Number.isFinite(sma50) && Number.isFinite(sma200) && sma200 !== 0
+        ? (sma50 - sma200) / sma200
+        : 0;
+      const slope = Number.isFinite(sma50) && Number.isFinite(sma50Prev) && sma50Prev !== 0
+        ? (sma50 - sma50Prev) / sma50Prev
+        : 0;
+      const trendUp = spread >= 0.01 && slope >= 0.005;
+      const trendDown = spread <= -0.01 && slope <= -0.005;
+      const regime = trendUp ? 'TREND_UP' : trendDown ? 'TREND_DOWN' : 'RANGE';
+
+      let action = 'WAIT';
+      if (Number.isFinite(zScore)) {
+        if (regime === 'RANGE') {
+          if (zScore <= -2.5) action = 'ACCUMULATE';
+          else if (zScore <= -1.8) action = 'SCALE IN';
+          else if (zScore >= 2.5) action = 'REDUCE EXPOSURE';
+          else if (zScore >= 1.8) action = 'TAKE PROFIT';
+        } else if (regime === 'TREND_UP') {
+          if (zScore <= -2.0) action = 'ACCUMULATE';
+          else if (zScore <= -1.0) action = 'SCALE IN';
+          else if (zScore >= 2.5) action = 'TAKE PROFIT';
+          else action = 'WAIT';
+        } else if (regime === 'TREND_DOWN') {
+          if (zScore <= -2.8) action = 'SCALE IN';
+          else if (zScore >= 2.0) action = 'REDUCE EXPOSURE';
+          else action = 'WAIT';
+        }
+      }
+
+      const zStrength = Number.isFinite(zScore) ? Math.min(100, (Math.abs(zScore) / 3) * 100) : 0;
+      const regimeFit = action === 'WAIT' ? 40 : (regime === 'RANGE' ? 85 : 75);
+      const trendFit = Number.isFinite(spread) && Number.isFinite(slope)
+        ? Math.min(100, (Math.abs(spread) * 1500) + (Math.abs(slope) * 1500))
+        : 0;
+      const confidence = Math.round((zStrength * 0.55) + (regimeFit * 0.30) + (trendFit * 0.15));
+
+      const sigma1 = Number.isFinite(mean) && Number.isFinite(stdDev) ? mean + stdDev : null;
+      const sigmaNeg1 = Number.isFinite(mean) && Number.isFinite(stdDev) ? mean - stdDev : null;
+      const sigma2 = Number.isFinite(mean) && Number.isFinite(stdDev) ? mean + (2 * stdDev) : null;
+      const sigmaNeg2 = Number.isFinite(mean) && Number.isFinite(stdDev) ? mean - (2 * stdDev) : null;
+
+      let entryZone = null;
+      if (action === 'ACCUMULATE' || action === 'SCALE IN') {
+        entryZone = Number.isFinite(sigmaNeg2) && Number.isFinite(sigmaNeg1)
+          ? { low: Math.min(sigmaNeg2, sigmaNeg1), high: Math.max(sigmaNeg2, sigmaNeg1), side: 'BUY' }
+          : null;
+      } else if (action === 'TAKE PROFIT' || action === 'REDUCE EXPOSURE') {
+        entryZone = Number.isFinite(sigma1) && Number.isFinite(sigma2)
+          ? { low: Math.min(sigma1, sigma2), high: Math.max(sigma1, sigma2), side: 'SELL' }
+          : null;
+      }
+
+      const targets = (() => {
+        if (action === 'TAKE PROFIT' || action === 'REDUCE EXPOSURE') {
+          return { tp1: sigma1, tp2: mean, tp3: sigmaNeg1 };
+        }
+        if (action === 'ACCUMULATE' || action === 'SCALE IN') {
+          return { tp1: sigmaNeg1, tp2: mean, tp3: sigma1 };
+        }
+        return { tp1: mean, tp2: sigma1, tp3: sigma2 };
+      })();
+
+      return {
+        action,
+        regime,
+        confidence,
+        meanType,
+        mean,
+        stdDev,
+        zScore,
+        slope50v200: slope,
+        levels: {
+          sigmaNeg2,
+          sigmaNeg1,
+          mean,
+          sigma1,
+          sigma2,
+        },
+        entryZone,
+        targets,
+        rationale: [
+          `Mean model: ${meanType}`,
+          Number.isFinite(zScore) ? `Current Z-score: ${zScore.toFixed(2)}σ` : 'Z-score unavailable',
+          `Regime: ${regime}`,
+        ],
+      };
+    };
+
     // Build favorites metrics
     const summaryDetail = yahooStats?.summaryDetail || {};
     const keyStats = yahooStats?.defaultKeyStatistics || {};
@@ -481,26 +671,6 @@ export async function GET(request) {
       if (!start || !end || start <= 0 || end <= 0) return null;
       const years = values.length - 1;
       return Math.pow(end / start, 1 / years) - 1;
-    };
-
-    // Simple DCF helper for projections
-    const calcDCF = (baseValue, growthRate, years, shares, options = {}) => {
-      if (!baseValue || baseValue <= 0 || !isFinite(baseValue)) return null;
-      const dr = options.discountRate ?? discountRate ?? 0.10;
-      const terminal = options.terminalGrowth ?? 0.025;
-      const growthCap = options.growthCap ?? 0.15;
-      const gr = Math.min(growthRate || 0, growthCap);
-      if (dr <= terminal + 0.005) return null;
-      let totalPV = 0;
-      for (let i = 1; i <= years; i++) {
-        const cfVal = baseValue * Math.pow(1 + gr, i);
-        totalPV += cfVal / Math.pow(1 + dr, i);
-      }
-      // Add terminal value
-      const terminalCF = baseValue * Math.pow(1 + gr, years) * (1 + terminal);
-      const terminalValue = terminalCF / (dr - terminal);
-      const pvTerminal = terminalValue / Math.pow(1 + dr, years);
-      return (totalPV + pvTerminal) / (shares || 1);
     };
 
     const revenueSeries = recentIncome.map(d => d.revenue).filter(v => v > 0);
@@ -1092,6 +1262,8 @@ export async function GET(request) {
       return parts.reduce((sum, p) => sum + (p.value * (p.weight / w)), 0);
     })();
 
+    const netMargin = latestRevenue > 0 ? (latestNetIncome / latestRevenue) : 0;
+
     const oracleApproxComposite = (() => {
       if (!blendedBucketFair) return null;
       const baseNoPrice = oracleMedian
@@ -1213,7 +1385,6 @@ export async function GET(request) {
     const predictabilityScore = Math.max(0, Math.min(100, 100 - (earningsVariance * 200)));
 
     // 2. Profitability Rank - Based on margins and returns
-    const netMargin = latestRevenue > 0 ? (latestNetIncome / latestRevenue) : 0;
     const roe = favorites.roe || 0;
     const roic = favorites.roic || 0;
     const profitabilityScore = Math.min(100, (
@@ -1274,6 +1445,20 @@ export async function GET(request) {
       },
     };
 
+    const tradingSignals = calculateTradingSignals(priceHistory, quote.price);
+    const dataQuality = {
+      sec: {
+        cik,
+        available: Boolean(cik) && secIssues.length === 0,
+        issues: secIssues,
+      },
+      yahoo: {
+        quote: Boolean(yahooQuote),
+        fundamentals: Boolean(yahooStats),
+        history: Array.isArray(priceHistoryRaw) && priceHistoryRaw.length > 0,
+      },
+    };
+
     return NextResponse.json({
       profile,
       quote,
@@ -1292,10 +1477,18 @@ export async function GET(request) {
       insiderTransactions,
       insiderSelling,
       priceHistory,
+      tradingSignals,
+      dataQuality,
     });
 
   } catch (error) {
     console.error('API Error:', error);
-    return NextResponse.json({ error: 'Failed to fetch stock data' }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: 'Failed to fetch stock data',
+        detail: error?.message || 'unknown_error',
+      },
+      { status: 500 }
+    );
   }
 }

@@ -13,6 +13,7 @@ import {
   Legend,
   ResponsiveContainer,
   ReferenceLine,
+  ReferenceArea,
   Cell,
 } from 'recharts';
 
@@ -163,6 +164,21 @@ function ChartSection({ title, chartData, dataKeys, colors, unit = '', dataKeyX 
     return `${value}${unit}`;
   }, [formatBillionsValue, unit]);
 
+  const chartGuide = useMemo(() => {
+    const xLabel = dataKeyX === 'year' ? 'fiscal year' : dataKeyX === 'period' ? 'reporting period' : dataKeyX;
+    const yLabel = unit === 'B'
+      ? 'billions of USD'
+      : unit === '%'
+      ? 'percentage'
+      : 'raw metric value';
+    const seriesText = dataKeys.join(', ');
+    return {
+      xLabel,
+      yLabel,
+      seriesText,
+    };
+  }, [dataKeyX, unit, dataKeys]);
+
   return (
     <div
       className="p-5 rounded-2xl border transition-colors"
@@ -196,11 +212,16 @@ function ChartSection({ title, chartData, dataKeys, colors, unit = '', dataKeyX 
           ))}
         </BarChart>
       </ResponsiveContainer>
+      <div className="mt-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+        <div><b>X-axis:</b> {chartGuide.xLabel}</div>
+        <div><b>Y-axis:</b> {chartGuide.yLabel}</div>
+        <div><b>Bars:</b> {chartGuide.seriesText}</div>
+      </div>
     </div>
   );
 }
 
-function MetricCard({ label, value, subtext, theme }) {
+function MetricCard({ label, value, subtext, helpText, theme }) {
   return (
     <div
       className="p-4 rounded-xl border transition-all duration-200 group"
@@ -208,7 +229,19 @@ function MetricCard({ label, value, subtext, theme }) {
       onMouseEnter={(e) => e.currentTarget.style.borderColor = theme.borderHover}
       onMouseLeave={(e) => e.currentTarget.style.borderColor = theme.border}
     >
-      <div className="text-[10px] mb-1.5 tracking-wider uppercase" style={{ color: theme.textTertiary }}>{label}</div>
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <div className="text-[10px] tracking-wider uppercase" style={{ color: theme.textTertiary }}>{label}</div>
+        {helpText && (
+          <span
+            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border text-[9px] font-bold cursor-help"
+            style={{ color: theme.textTertiary, borderColor: theme.borderStrong, background: theme.bgElevated }}
+            title={helpText}
+            aria-label={helpText}
+          >
+            i
+          </span>
+        )}
+      </div>
       <div className="text-base font-semibold" style={{ color: theme.text }}>{value}</div>
       {subtext && <div className="text-[10px] mt-1" style={{ color: theme.textMuted }}>{subtext}</div>}
     </div>
@@ -1418,7 +1451,21 @@ function TradingTab({ data, theme }) {
     const ma200 = smaSeries(history, 200);
     const ema20w = emaSeries(history, 100);
     const atr14 = calcATR(history, 14);
-
+    const rollingMean60 = smaSeries(history, 60);
+    const rollingStd60 = history.map((_, i) => {
+      if (i < 59) return null;
+      const slice = history.slice(i - 59, i + 1).map((r) => r.close).filter((v) => Number.isFinite(v));
+      if (slice.length < 60) return null;
+      const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
+      const variance = slice.reduce((sum, v) => sum + ((v - mean) ** 2), 0) / slice.length;
+      return Math.sqrt(variance);
+    });
+    const zScoreSeries = history.map((r, i) => {
+      const mean = rollingMean60[i];
+      const sd = rollingStd60[i];
+      const z = Number.isFinite(mean) && Number.isFinite(sd) && sd > 0 ? (r.close - mean) / sd : null;
+      return { date: r.date, zScore: z };
+    });
     const returns = history.map((r, i) => (i === 0 ? null : Math.log(r.close / history[i - 1].close))).filter((v) => Number.isFinite(v));
     const realizedVol20 = [];
     for (let i = 0; i < returns.length; i++) {
@@ -1574,11 +1621,137 @@ function TradingTab({ data, theme }) {
         ma50: ma50[idx],
         ma200: ma200[idx],
         ema20w: ema20w[idx],
+        zScore60: zScoreSeries[idx]?.zScore ?? null,
       };
     });
+    const zScoreRows = chartRows.map((r) => ({ date: r.date, zScore: r.zScore60 }));
+    const zScoreVals = zScoreRows.map((r) => r.zScore).filter((v) => Number.isFinite(v));
+    const histBins = [
+      { label: '<-3', low: -Infinity, high: -3, count: 0 },
+      { label: '-3:-2.5', low: -3, high: -2.5, count: 0 },
+      { label: '-2.5:-2', low: -2.5, high: -2, count: 0 },
+      { label: '-2:-1.5', low: -2, high: -1.5, count: 0 },
+      { label: '-1.5:-1', low: -1.5, high: -1, count: 0 },
+      { label: '-1:-0.5', low: -1, high: -0.5, count: 0 },
+      { label: '-0.5:0', low: -0.5, high: 0, count: 0 },
+      { label: '0:+0.5', low: 0, high: 0.5, count: 0 },
+      { label: '+0.5:+1', low: 0.5, high: 1, count: 0 },
+      { label: '+1:+1.5', low: 1, high: 1.5, count: 0 },
+      { label: '+1.5:+2', low: 1.5, high: 2, count: 0 },
+      { label: '+2:+2.5', low: 2, high: 2.5, count: 0 },
+      { label: '+2.5:+3', low: 2.5, high: 3, count: 0 },
+      { label: '>+3', low: 3, high: Infinity, count: 0 },
+    ];
+    for (const z of zScoreVals) {
+      const idx = histBins.findIndex((b) => z >= b.low && z < b.high);
+      if (idx >= 0) histBins[idx].count += 1;
+    }
+    const histTotal = zScoreVals.length || 1;
+    const zScoreHistogram = histBins.map((b) => ({ ...b, pct: (b.count / histTotal) * 100 }));
+    const within1SigmaPct = zScoreVals.length
+      ? (zScoreVals.filter((z) => Math.abs(z) <= 1).length / zScoreVals.length) * 100
+      : 0;
+    const within2SigmaPct = zScoreVals.length
+      ? (zScoreVals.filter((z) => Math.abs(z) <= 2).length / zScoreVals.length) * 100
+      : 0;
+    const within3SigmaPct = zScoreVals.length
+      ? (zScoreVals.filter((z) => Math.abs(z) <= 3).length / zScoreVals.length) * 100
+      : 0;
+    const tailPct = zScoreVals.length
+      ? (zScoreVals.filter((z) => Math.abs(z) >= 2).length / zScoreVals.length) * 100
+      : 0;
+    const currentZ = Number.isFinite(data?.tradingSignals?.zScore) ? data.tradingSignals.zScore : null;
+    const currentBin = Number.isFinite(currentZ)
+      ? histBins.find((b) => currentZ >= b.low && currentZ < b.high) || null
+      : null;
+    const currentBinLabel = currentBin?.label || null;
+    const currentZone = Number.isFinite(currentZ)
+      ? Math.abs(currentZ) >= 3
+        ? 'Extreme Deviation'
+        : Math.abs(currentZ) >= 2
+        ? 'Stretch Zone'
+        : Math.abs(currentZ) >= 1
+        ? 'Watch Zone'
+        : 'Normal Zone'
+      : 'N/A';
+    const deviationFromMA50Series = history
+      .map((r, idx) => {
+        const ma = ma50[idx];
+        const deviationPct = Number.isFinite(r.close) && Number.isFinite(ma) && ma > 0
+          ? ((r.close - ma) / ma) * 100
+          : null;
+        return { date: r.date, deviationPct };
+      })
+      .filter((r) => Number.isFinite(r.deviationPct));
+    const deviationBins = [
+      { label: '<-15', low: -Infinity, high: -15, count: 0 },
+      { label: '-15:-12.5', low: -15, high: -12.5, count: 0 },
+      { label: '-12.5:-10', low: -12.5, high: -10, count: 0 },
+      { label: '-10:-7.5', low: -10, high: -7.5, count: 0 },
+      { label: '-7.5:-5', low: -7.5, high: -5, count: 0 },
+      { label: '-5:-2.5', low: -5, high: -2.5, count: 0 },
+      { label: '-2.5:0', low: -2.5, high: 0, count: 0 },
+      { label: '0:+2.5', low: 0, high: 2.5, count: 0 },
+      { label: '+2.5:+5', low: 2.5, high: 5, count: 0 },
+      { label: '+5:+7.5', low: 5, high: 7.5, count: 0 },
+      { label: '+7.5:+10', low: 7.5, high: 10, count: 0 },
+      { label: '+10:+12.5', low: 10, high: 12.5, count: 0 },
+      { label: '+12.5:+15', low: 12.5, high: 15, count: 0 },
+      { label: '>+15', low: 15, high: Infinity, count: 0 },
+    ];
+    for (const row of deviationFromMA50Series) {
+      const idx = deviationBins.findIndex((b) => row.deviationPct >= b.low && row.deviationPct < b.high);
+      if (idx >= 0) deviationBins[idx].count += 1;
+    }
+    const deviationTotal = deviationFromMA50Series.length || 1;
+    const deviationHistogram = deviationBins.map((b) => ({ ...b, pct: (b.count / deviationTotal) * 100 }));
+    const latestDeviationPct = deviationFromMA50Series.length > 0
+      ? deviationFromMA50Series[deviationFromMA50Series.length - 1].deviationPct
+      : null;
+    const currentDeviationBin = Number.isFinite(latestDeviationPct)
+      ? deviationBins.find((b) => latestDeviationPct >= b.low && latestDeviationPct < b.high) || null
+      : null;
+    const deviationZone = Number.isFinite(latestDeviationPct)
+      ? Math.abs(latestDeviationPct) >= 10
+        ? 'Extreme'
+        : Math.abs(latestDeviationPct) >= 5
+        ? 'Stretched'
+        : 'Normal'
+      : 'N/A';
+    const deviationVals = deviationFromMA50Series.map((r) => r.deviationPct);
+    const nDev = deviationVals.length || 1;
+    const oneSidedDownProb = Number.isFinite(latestDeviationPct)
+      ? (deviationVals.filter((v) => v <= latestDeviationPct).length / nDev) * 100
+      : 0;
+    const oneSidedUpProb = Number.isFinite(latestDeviationPct)
+      ? (deviationVals.filter((v) => v >= latestDeviationPct).length / nDev) * 100
+      : 0;
+    const twoSidedAbsProb = Number.isFinite(latestDeviationPct)
+      ? (deviationVals.filter((v) => Math.abs(v) >= Math.abs(latestDeviationPct)).length / nDev) * 100
+      : 0;
+    const deviationPercentile = Number.isFinite(latestDeviationPct)
+      ? (deviationVals.filter((v) => v <= latestDeviationPct).length / nDev) * 100
+      : 0;
 
     return {
       chartRows,
+      zScoreRows,
+      zScoreHistogram,
+      within1SigmaPct,
+      within2SigmaPct,
+      within3SigmaPct,
+      tailPct,
+      currentBinLabel,
+      currentZone,
+      deviationHistogram,
+      latestDeviationPct,
+      currentDeviationBinLabel: currentDeviationBin?.label || null,
+      deviationZone,
+      oneSidedDownProb,
+      oneSidedUpProb,
+      twoSidedAbsProb,
+      deviationPercentile,
+      deviationSampleSize: deviationVals.length,
       latest,
       yearlyHigh,
       yearlyLow,
@@ -1626,9 +1799,115 @@ function TradingTab({ data, theme }) {
 
   const inValue = analysis.latest.close <= analysis.vah && analysis.latest.close >= analysis.val;
   const aboveYearlyVWAP = analysis.latest.close > analysis.yearlyVWAP;
+  const signal = data?.tradingSignals || null;
+  const actionTone = signal?.action === 'ACCUMULATE' || signal?.action === 'SCALE IN'
+    ? theme.positive
+    : signal?.action === 'REDUCE EXPOSURE' || signal?.action === 'TAKE PROFIT'
+    ? theme.warning
+    : theme.textSecondary;
+  const formatPx = (v) => (Number.isFinite(v) ? `$${v.toFixed(2)}` : 'N/A');
+  const zScoreForLadder = Number.isFinite(signal?.zScore) ? signal.zScore : null;
+  const ladderPositionPct = zScoreForLadder === null
+    ? 50
+    : Math.max(0, Math.min(100, ((zScoreForLadder + 3) / 6) * 100));
+  const deviationSummary = Number.isFinite(analysis.latestDeviationPct)
+    ? analysis.latestDeviationPct < 0
+      ? `Price is ${Math.abs(analysis.latestDeviationPct).toFixed(2)}% below 50DMA.`
+      : `Price is ${analysis.latestDeviationPct.toFixed(2)}% above 50DMA.`
+    : 'Current 50DMA deviation is unavailable.';
+  const raritySummary = Number.isFinite(analysis.twoSidedAbsProb)
+    ? analysis.twoSidedAbsProb <= 5
+      ? 'This is statistically rare versus history.'
+      : analysis.twoSidedAbsProb <= 15
+      ? 'This is uncommon versus history.'
+      : analysis.twoSidedAbsProb <= 30
+      ? 'This is moderately common versus history.'
+      : 'This is common versus history.'
+    : 'Rarity estimate unavailable.';
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-trading" aria-labelledby="tab-trading">
+      {signal && (
+        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
+            <div>
+              <div className="text-[10px] tracking-widest uppercase mb-1" style={{ color: theme.textTertiary }}>Optimal Entry Engine</div>
+              <div className="text-lg font-bold" style={{ color: actionTone }}>{signal.action || 'WAIT'}</div>
+              <div className="text-xs mt-1" style={{ color: theme.textSecondary }}>
+                {signal.regime || 'UNKNOWN'} regime • {signal.meanType || 'Mean not available'}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full lg:w-auto">
+              <MetricCard
+                theme={theme}
+                label="Z-Score"
+                value={Number.isFinite(signal.zScore) ? `${signal.zScore.toFixed(2)}σ` : 'N/A'}
+                helpText="Number of standard deviations current price is from the rolling mean."
+              />
+              <MetricCard
+                theme={theme}
+                label="Confidence"
+                value={Number.isFinite(signal.confidence) ? `${signal.confidence}%` : 'N/A'}
+                helpText="Composite confidence score from signal strength, regime fit, and trend quality."
+              />
+              <MetricCard
+                theme={theme}
+                label="Std Dev"
+                value={Number.isFinite(signal.stdDev) ? `${signal.stdDev.toFixed(2)}` : 'N/A'}
+                helpText="Standard deviation of recent prices used to normalize distance from the mean."
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <MetricCard
+              theme={theme}
+              label={signal.entryZone?.side === 'SELL' ? 'Action Zone (Reduce)' : 'Action Zone (Scale)'}
+              value={signal.entryZone ? `${formatPx(signal.entryZone.low)} - ${formatPx(signal.entryZone.high)}` : 'No active zone'}
+            />
+            <MetricCard theme={theme} label="Target 1" value={formatPx(signal.targets?.tp1)} />
+            <MetricCard theme={theme} label="Target 2 (Mean)" value={formatPx(signal.targets?.tp2)} />
+          </div>
+          <div className="mt-4">
+            <div className="text-[10px] tracking-widest uppercase mb-2" style={{ color: theme.textTertiary }}>Standard Deviation Ladder</div>
+            <div className="relative h-10 rounded-lg border overflow-hidden" style={{ borderColor: theme.border }}>
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `linear-gradient(90deg, ${theme.negativeBg} 0%, ${theme.warningBg} 33%, ${theme.neutralPillBg} 50%, ${theme.warningBg} 67%, ${theme.positiveBg} 100%)`,
+                }}
+              />
+              {[0, 16.67, 33.33, 50, 66.67, 83.33, 100].map((pct, i) => (
+                <div
+                  key={`tick-${i}`}
+                  className="absolute top-0 bottom-0 border-l"
+                  style={{ left: `${pct}%`, borderColor: theme.border }}
+                />
+              ))}
+              <div
+                className="absolute top-0 bottom-0 w-0.5"
+                style={{ left: `${ladderPositionPct}%`, background: actionTone }}
+              />
+              <div
+                className="absolute -top-1 text-[10px] px-1.5 py-0.5 rounded border"
+                style={{ left: `calc(${ladderPositionPct}% - 20px)`, color: theme.text, borderColor: theme.border, background: theme.bgElevated }}
+              >
+                {zScoreForLadder === null ? 'N/A' : `${zScoreForLadder.toFixed(2)}σ`}
+              </div>
+            </div>
+            <div className="mt-1 flex justify-between text-[10px]" style={{ color: theme.textTertiary }}>
+              <span>-3σ</span><span>-2σ</span><span>-1σ</span><span>0σ</span><span>+1σ</span><span>+2σ</span><span>+3σ</span>
+            </div>
+          </div>
+          {Array.isArray(signal.rationale) && signal.rationale.length > 0 && (
+            <div className="mt-4 text-xs space-y-1" style={{ color: theme.textSecondary }}>
+              {signal.rationale.map((line, idx) => (
+                <div key={`${line}-${idx}`}>• {line}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
           <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Trading Regime (Ticker-Driven)</h3>
@@ -1652,6 +1931,9 @@ function TradingTab({ data, theme }) {
             </div>
           </div>
         </div>
+        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+          How to read this chart: <b>X-axis</b> is date. <b>Y-axis</b> is price. Colored lines are trend/mean references (VWAP, moving averages). Dashed horizontal lines mark sigma rails and liquidity levels.
+        </div>
         <ResponsiveContainer width="100%" height={420}>
           <LineChart data={analysis.chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
@@ -1667,6 +1949,21 @@ function TradingTab({ data, theme }) {
             <Line type="monotone" dataKey="ma50" stroke="#f97316" dot={false} name="50 DMA" />
             <Line type="monotone" dataKey="ma200" stroke="#ef4444" dot={false} name="200 DMA" />
             <Line type="monotone" dataKey="ema20w" stroke="#94a3b8" dot={false} strokeDasharray="4 3" name="20 EMA (weekly proxy)" />
+            {Number.isFinite(signal?.levels?.mean) && (
+              <ReferenceLine y={signal.levels.mean} stroke={theme.accent} strokeDasharray="5 3" label={{ value: '0σ Mean', position: 'right', fill: theme.accent, fontSize: 10 }} />
+            )}
+            {Number.isFinite(signal?.levels?.sigma1) && (
+              <ReferenceLine y={signal.levels.sigma1} stroke={theme.warning} strokeDasharray="3 4" label={{ value: '+1σ', position: 'right', fill: theme.warning, fontSize: 10 }} />
+            )}
+            {Number.isFinite(signal?.levels?.sigmaNeg1) && (
+              <ReferenceLine y={signal.levels.sigmaNeg1} stroke={theme.warning} strokeDasharray="3 4" label={{ value: '-1σ', position: 'right', fill: theme.warning, fontSize: 10 }} />
+            )}
+            {Number.isFinite(signal?.levels?.sigma2) && (
+              <ReferenceLine y={signal.levels.sigma2} stroke={theme.negative} strokeDasharray="2 4" label={{ value: '+2σ', position: 'right', fill: theme.negative, fontSize: 10 }} />
+            )}
+            {Number.isFinite(signal?.levels?.sigmaNeg2) && (
+              <ReferenceLine y={signal.levels.sigmaNeg2} stroke={theme.positive} strokeDasharray="2 4" label={{ value: '-2σ', position: 'right', fill: theme.positive, fontSize: 10 }} />
+            )}
             <ReferenceLine y={analysis.yearlyHigh} stroke="#1d4ed8" strokeDasharray="4 3" label={{ value: 'YH', position: 'right', fill: '#1d4ed8', fontSize: 10 }} />
             <ReferenceLine y={analysis.yearlyLow} stroke="#1d4ed8" strokeDasharray="4 3" label={{ value: 'YL', position: 'right', fill: '#1d4ed8', fontSize: 10 }} />
             <ReferenceLine y={analysis.poc} stroke="#334155" strokeDasharray="5 4" label={{ value: 'POC', position: 'right', fill: '#64748b', fontSize: 10 }} />
@@ -1682,6 +1979,214 @@ function TradingTab({ data, theme }) {
               <ReferenceLine x={analysis.markers.invalidation.date} stroke="#ef4444" strokeDasharray="4 3" label={{ value: 'Invalid', position: 'top', fill: '#ef4444', fontSize: 10 }} />
             )}
           </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h4 className="text-[11px] font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Rolling Z-Score (60d)</h4>
+        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+          How to read: mean here = <b>60-day rolling average price</b>. Formula: <b>z = (price - 60d mean) / 60d standard deviation</b>. `0` means near average. `+2`/`-2` means stretched. `+3`/`-3` is rare and usually extreme.
+        </div>
+        <ResponsiveContainer width="100%" height={190}>
+          <LineChart data={analysis.zScoreRows} margin={{ top: 8, right: 16, left: 0, bottom: 6 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
+            <XAxis dataKey="date" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} minTickGap={28} />
+            <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} domain={[-3.5, 3.5]} />
+            <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v) => [Number.isFinite(v) ? `${v.toFixed(2)}σ` : 'N/A', 'Z-Score']} />
+            <ReferenceArea y1={-1} y2={1} fill={theme.positive} fillOpacity={0.08} />
+            <ReferenceArea y1={1} y2={2} fill={theme.warning} fillOpacity={0.12} />
+            <ReferenceArea y1={-2} y2={-1} fill={theme.warning} fillOpacity={0.12} />
+            <ReferenceArea y1={2} y2={3.5} fill={theme.negative} fillOpacity={0.1} />
+            <ReferenceArea y1={-3.5} y2={-2} fill={theme.negative} fillOpacity={0.1} />
+            <ReferenceLine y={0} stroke={theme.accent} strokeDasharray="4 3" />
+            <ReferenceLine y={2} stroke={theme.warning} strokeDasharray="3 3" />
+            <ReferenceLine y={-2} stroke={theme.warning} strokeDasharray="3 3" />
+            <ReferenceLine y={3} stroke={theme.negative} strokeDasharray="2 3" />
+            <ReferenceLine y={-3} stroke={theme.positive} strokeDasharray="2 3" />
+            <Line type="monotone" dataKey="zScore" stroke={theme.accentAlt} dot={false} strokeWidth={1.8} name="Z-Score" />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Z-Score Distribution (Advanced)</h4>
+          {Number.isFinite(signal?.zScore) && (
+            <div className="text-[10px] font-semibold px-2 py-1 rounded border" style={{ color: actionTone, borderColor: `${actionTone}55`, background: `${actionTone}14` }}>
+              Current: {signal.zScore.toFixed(2)}σ
+            </div>
+          )}
+        </div>
+        <div className="mb-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <MetricCard
+            theme={theme}
+            label="Within ±1σ"
+            value={`${analysis.within1SigmaPct.toFixed(1)}%`}
+            helpText="Share of historical days where z-score stayed between -1 and +1."
+          />
+          <MetricCard
+            theme={theme}
+            label="Within ±2σ"
+            value={`${analysis.within2SigmaPct.toFixed(1)}%`}
+            helpText="Share of historical days where z-score stayed between -2 and +2."
+          />
+          <MetricCard
+            theme={theme}
+            label="Within ±3σ"
+            value={`${analysis.within3SigmaPct.toFixed(1)}%`}
+            helpText="Share of historical days where z-score stayed between -3 and +3."
+          />
+        </div>
+        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+          Empirical rule benchmark (normal distribution): about <b>68.3%</b> within ±1σ, <b>95.4%</b> within ±2σ, <b>99.7%</b> within ±3σ.
+          Your observed tail beyond ±2σ is <b>{analysis.tailPct.toFixed(1)}%</b>.
+        </div>
+        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+          Zone: <span style={{ color: actionTone, fontWeight: 700 }}>{analysis.currentZone}</span>
+          {Number.isFinite(signal?.zScore) ? ` | Current position: ${signal.zScore.toFixed(2)}σ from mean` : ' | Current position: N/A'}
+        </div>
+        <div className="mb-2 text-xs" style={{ color: theme.textSecondary }}>
+          What this means: each bar shows how often price stayed in that sigma bucket in the selected timeframe. <b>Y-axis</b> = bucket range (`σ`). <b>X-axis</b> = frequency (% of days). Real markets are often fat-tailed, so extremes happen more than textbook normal models.
+        </div>
+        <ResponsiveContainer width="100%" height={380}>
+          <BarChart
+            layout="vertical"
+            data={analysis.zScoreHistogram}
+            margin={{ top: 10, right: 24, left: 6, bottom: 10 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
+            <XAxis
+              type="number"
+              tick={{ fontSize: 10, fill: theme.textTertiary }}
+              axisLine={{ stroke: theme.chartGrid }}
+              tickLine={false}
+              tickFormatter={(v) => `${Number(v).toFixed(1)}%`}
+            />
+            <YAxis
+              type="category"
+              dataKey="label"
+              width={78}
+              tick={{ fontSize: 10, fill: theme.textTertiary }}
+              axisLine={{ stroke: theme.chartGrid }}
+              tickLine={false}
+            />
+            <Tooltip
+              contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+              formatter={(v, k, p) => [`${Number(v).toFixed(1)}%`, `Frequency (${p.payload.count} bars)`]}
+            />
+            {analysis.currentBinLabel && (
+              <ReferenceLine
+                y={analysis.currentBinLabel}
+                stroke={actionTone}
+                strokeWidth={2}
+                label={{ value: 'You are here', position: 'right', fill: actionTone, fontSize: 10 }}
+              />
+            )}
+            <Bar dataKey="pct" name="% of bars" radius={[0, 4, 4, 0]} minPointSize={3}>
+              {analysis.zScoreHistogram.map((b, i) => {
+                const extreme = b.low <= -2 || b.high >= 2;
+                const isCurrentBin = analysis.currentBinLabel === b.label;
+                const fill = isCurrentBin ? actionTone : extreme ? theme.warning : theme.accentAlt;
+                return <Cell key={`zbin-${i}`} fill={fill} fillOpacity={isCurrentBin ? 1 : 0.85} />;
+              })}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Price vs 50DMA Deviation</h4>
+          <div className="text-[10px] font-semibold px-2 py-1 rounded border" style={{ color: actionTone, borderColor: `${actionTone}55`, background: `${actionTone}14` }}>
+            {Number.isFinite(analysis.latestDeviationPct) ? `${analysis.latestDeviationPct.toFixed(2)}%` : 'N/A'}
+          </div>
+        </div>
+        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+          How to read: `0%` means price is near 50DMA. Above `+5%` is stretched up, below `-5%` is stretched down.
+          Current zone: <span style={{ color: actionTone, fontWeight: 700 }}> {analysis.deviationZone}</span>. Probabilities below are based on full available history in this data feed ({analysis.deviationSampleSize} days).
+        </div>
+        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+          <div><b>Interpretation:</b> {deviationSummary} {raritySummary}</div>
+          <div className="mt-1"><b>Histogram axes:</b> Y-axis = deviation buckets from 50DMA (in %). X-axis = frequency (% of historical days).</div>
+          <div className="mt-1"><b>Percentile Rank:</b> fraction of historical days with deviation less than or equal to today. Lower percentile means deeper downside stretch.</div>
+          <div className="mt-1"><b>One-Sided (Down):</b> probability of seeing a deviation at or below today (useful for downside oversold context).</div>
+          <div className="mt-1"><b>One-Sided (Up):</b> probability of seeing a deviation at or above today (useful for upside overextension context).</div>
+          <div className="mt-1"><b>Two-Sided Rarity:</b> probability of seeing an absolute deviation as large as today, in either direction.</div>
+          <div className="mt-1"><b>Rule of thumb:</b> below 5% = rare, 5-15% = uncommon, 15-30% = moderate, above 30% = common.</div>
+        </div>
+        <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+          <MetricCard
+            theme={theme}
+            label="Percentile Rank"
+            value={`${analysis.deviationPercentile.toFixed(1)}th`}
+            subtext="Lower = more oversold vs 50DMA"
+            helpText="Percent of historical observations less than or equal to current deviation."
+          />
+          <MetricCard
+            theme={theme}
+            label="One-Sided (Down)"
+            value={`${analysis.oneSidedDownProb.toFixed(1)}%`}
+            subtext="P(dev <= current)"
+            helpText="Probability of seeing deviation at or below the current level (downside tail)."
+          />
+          <MetricCard
+            theme={theme}
+            label="One-Sided (Up)"
+            value={`${analysis.oneSidedUpProb.toFixed(1)}%`}
+            subtext="P(dev >= current)"
+            helpText="Probability of seeing deviation at or above the current level (upside tail)."
+          />
+          <MetricCard
+            theme={theme}
+            label="Two-Sided Rarity"
+            value={`${analysis.twoSidedAbsProb.toFixed(1)}%`}
+            subtext="P(|dev| >= |current|)"
+            helpText="Probability of seeing an absolute move at least as large as current, either up or down."
+          />
+        </div>
+        <ResponsiveContainer width="100%" height={380}>
+          <BarChart
+            layout="vertical"
+            data={analysis.deviationHistogram}
+            margin={{ top: 10, right: 24, left: 6, bottom: 10 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
+            <XAxis
+              type="number"
+              tick={{ fontSize: 10, fill: theme.textTertiary }}
+              axisLine={{ stroke: theme.chartGrid }}
+              tickLine={false}
+              tickFormatter={(v) => `${Number(v).toFixed(1)}%`}
+            />
+            <YAxis
+              type="category"
+              dataKey="label"
+              width={86}
+              tick={{ fontSize: 10, fill: theme.textTertiary }}
+              axisLine={{ stroke: theme.chartGrid }}
+              tickLine={false}
+            />
+            <Tooltip
+              contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+              formatter={(v, k, p) => [`${Number(v).toFixed(1)}%`, `Frequency (${p.payload.count} bars)`]}
+            />
+            {analysis.currentDeviationBinLabel && (
+              <ReferenceLine
+                y={analysis.currentDeviationBinLabel}
+                stroke={actionTone}
+                strokeWidth={2}
+                label={{ value: 'You are here', position: 'right', fill: actionTone, fontSize: 10 }}
+              />
+            )}
+            <Bar dataKey="pct" name="% of days" radius={[0, 4, 4, 0]} minPointSize={3}>
+              {analysis.deviationHistogram.map((b, i) => {
+                const extreme = b.low <= -10 || b.high >= 10;
+                const isCurrentBin = analysis.currentDeviationBinLabel === b.label;
+                const fill = isCurrentBin ? actionTone : extreme ? theme.warning : theme.accentAlt;
+                return <Cell key={`devbin-${i}`} fill={fill} fillOpacity={isCurrentBin ? 1 : 0.85} />;
+              })}
+            </Bar>
+          </BarChart>
         </ResponsiveContainer>
       </div>
 
@@ -1761,11 +2266,27 @@ export default function StockValuationCalculator() {
 
     try {
       setTicker(symbol);
-      const response = await fetch(`/api/stock?ticker=${encodeURIComponent(symbol)}`);
-      const result = await response.json();
+      const response = await fetch(`/api/stock?ticker=${encodeURIComponent(symbol)}`, {
+        headers: { Accept: 'application/json' },
+      });
+      const contentType = response.headers.get('content-type') || '';
+      const rawBody = await response.text();
+      const isJson = contentType.includes('application/json');
+      const result = isJson
+        ? JSON.parse(rawBody)
+        : null;
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to fetch data');
+        const apiError = result?.error || result?.detail;
+        if (apiError) throw new Error(apiError);
+        if (!isJson) {
+          throw new Error(`Server returned ${response.status} ${response.statusText}. Try redeploying latest API build.`);
+        }
+        throw new Error('Failed to fetch data');
+      }
+
+      if (!result || typeof result !== 'object') {
+        throw new Error('Unexpected API response format. Expected JSON.');
       }
 
       setData(result);
