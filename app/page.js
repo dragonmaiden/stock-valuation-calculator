@@ -372,6 +372,60 @@ function OverviewTab({ data, theme }) {
     return `To justify today’s price, earnings must grow approximately ${(impliedEpsMin * 100).toFixed(1)}% to ${(impliedEpsMax * 100).toFixed(1)}% per year over multi-year horizons under a reasonable return requirement.`;
   })();
 
+  const calcQuarterlyTtmGrowth = (rows, valueKey) => {
+    const clean = (rows || []).filter((r) => Number.isFinite(r?.[valueKey]));
+    if (clean.length < 8) return null;
+    const latest4 = clean.slice(-4).reduce((sum, r) => sum + r[valueKey], 0);
+    const prev4 = clean.slice(-8, -4).reduce((sum, r) => sum + r[valueKey], 0);
+    if (!Number.isFinite(prev4) || prev4 === 0) return null;
+    return (latest4 - prev4) / Math.abs(prev4);
+  };
+
+  const annualEpsYoY = (() => {
+    const epsSeries = (data?.valuationRatios?.historical || [])
+      .map((h) => h?.eps)
+      .filter((v) => Number.isFinite(v) && v > 0);
+    if (epsSeries.length < 2) return null;
+    const latest = epsSeries[epsSeries.length - 1];
+    const prev = epsSeries[epsSeries.length - 2];
+    if (!Number.isFinite(prev) || prev === 0) return null;
+    return (latest - prev) / Math.abs(prev);
+  })();
+
+  const ttmEpsGrowth = Number.isFinite(data?.favorites?.epsGrowth)
+    ? data.favorites.epsGrowth
+    : annualEpsYoY;
+  const eps5yCagr = calcCagr((data?.valuationRatios?.historical || []).map((h) => h?.eps));
+
+  const ttmFcfGrowth = calcQuarterlyTtmGrowth(data?.cashflowQ, 'freeCashFlow') ?? (() => {
+    const annualFcf = (data?.cashflow || [])
+      .map((r) => r?.freeCashFlow)
+      .filter((v) => Number.isFinite(v));
+    if (annualFcf.length < 2) return null;
+    const latest = annualFcf[annualFcf.length - 1];
+    const prev = annualFcf[annualFcf.length - 2];
+    if (!Number.isFinite(prev) || prev === 0) return null;
+    return (latest - prev) / Math.abs(prev);
+  })();
+  const fcf5yCagr = recentFcfCagr;
+
+  const baselineComparisonText = (() => {
+    const impliedMid = Number.isFinite(impliedEpsMin) && Number.isFinite(impliedEpsMax)
+      ? (impliedEpsMin + impliedEpsMax) / 2
+      : null;
+    if (!Number.isFinite(impliedMid) || !Number.isFinite(ttmEpsGrowth)) {
+      return 'Current and implied growth are not fully comparable with available inputs.';
+    }
+    const diff = ttmEpsGrowth - impliedMid;
+    if (diff > 0.06) {
+      return 'Current earnings growth is meaningfully above what is implied by long-term valuation assumptions, suggesting deceleration is already assumed.';
+    }
+    if (diff < -0.06) {
+      return 'Current earnings growth is below implied long-term levels, indicating the market is pricing acceleration.';
+    }
+    return 'Current earnings growth is broadly in line with what is implied by long-term valuation assumptions.';
+  })();
+
   const realitySupportCount = [
     Number.isFinite(netMargin) && netMargin >= 0.12,
     Number.isFinite(roic) && roic >= 0.12,
@@ -524,6 +578,29 @@ function OverviewTab({ data, theme }) {
               ))}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-5 p-4 rounded-xl border" style={{ background: theme.bg, borderColor: theme.border }}>
+          <div className="text-[10px] tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Where We Are Today (Baseline)</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-3 rounded-lg border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+              <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: subtleText }}>Current Earnings Growth</div>
+              <div className="text-xs leading-6" style={{ color: theme.text }}>
+                • Trailing Twelve Month Earnings Per Share Growth (Year-over-Year): {Number.isFinite(ttmEpsGrowth) ? `${ttmEpsGrowth >= 0 ? '+' : ''}${(ttmEpsGrowth * 100).toFixed(1)}%` : 'N/A'}<br />
+                • Five-Year Earnings Per Share Compound Annual Growth Rate: {Number.isFinite(eps5yCagr) ? `${eps5yCagr >= 0 ? '+' : ''}${(eps5yCagr * 100).toFixed(1)}%` : 'N/A'}
+              </div>
+            </div>
+            <div className="p-3 rounded-lg border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+              <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: subtleText }}>Current Free Cash Flow Growth</div>
+              <div className="text-xs leading-6" style={{ color: theme.text }}>
+                • Trailing Twelve Month Free Cash Flow Growth (Year-over-Year): {Number.isFinite(ttmFcfGrowth) ? `${ttmFcfGrowth >= 0 ? '+' : ''}${(ttmFcfGrowth * 100).toFixed(1)}%` : 'N/A'}<br />
+                • Five-Year Free Cash Flow Compound Annual Growth Rate: {Number.isFinite(fcf5yCagr) ? `${fcf5yCagr >= 0 ? '+' : ''}${(fcf5yCagr * 100).toFixed(1)}%` : 'N/A'}
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 text-xs" style={{ color: subtleText }}>
+            {baselineComparisonText}
+          </div>
         </div>
 
         <div className="mt-4 p-4 rounded-xl border text-xs" style={{ background: theme.bg, borderColor: theme.border, color: subtleText }}>
