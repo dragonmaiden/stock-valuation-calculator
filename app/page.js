@@ -503,28 +503,147 @@ function OverviewTab({ data, verdict, theme, formatNumber, formatPercent, format
   );
 }
 
-function ValuationTab({ data, theme, formatNumber, formatRatio }) {
-  const safeRatio = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : 'N/A');
+function ValuationTab({ data, theme }) {
+  const [showLegacy, setShowLegacy] = useState(false);
   const safeMoney = (value, digits = 2) => (Number.isFinite(value) ? `$${value.toFixed(digits)}` : 'N/A');
-  const safePercent = (value, digits = 2) => (Number.isFinite(value) ? `${value.toFixed(digits)}%` : 'N/A');
+  const safePercent = (value, digits = 1) => (Number.isFinite(value) ? `${value.toFixed(digits)}%` : 'N/A');
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+  const sectorText = `${data?.profile?.sector || ''} ${data?.profile?.industry || ''}`.toLowerCase();
+  const showPB = /(bank|insurance|reit|real estate|asset|utility|industrial|energy|materials|financial)/.test(sectorText);
+  const currentPrice = data?.quote?.price || data?.dcf?.currentPrice || null;
+  const sharesOutstanding = data?.dcf?.assumptions?.sharesOutstanding || data?.favorites?.sharesOutstanding || null;
+  const [assumptionReturn, setAssumptionReturn] = useState(10);
+  const [assumptionHorizon, setAssumptionHorizon] = useState(10);
+
+  const historicalValuationRatios = data?.valuationRatios?.historical || [];
+  const latestIncome = (data?.income || [])[data?.income?.length - 1] || {};
+  const latestCashflow = (data?.cashflow || [])[data?.cashflow?.length - 1] || {};
+  const latestEPS = Number.isFinite(historicalValuationRatios[historicalValuationRatios.length - 1]?.eps)
+    ? historicalValuationRatios[historicalValuationRatios.length - 1].eps
+    : (sharesOutstanding && latestIncome?.netIncome ? latestIncome.netIncome / sharesOutstanding : null);
+  const latestFCFPerShare = sharesOutstanding && Number.isFinite(latestCashflow?.freeCashFlow)
+    ? latestCashflow.freeCashFlow / sharesOutstanding
+    : null;
+
+  const calcMedian = (arr) => {
+    const values = arr.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+    if (!values.length) return null;
+    const mid = Math.floor(values.length / 2);
+    return values.length % 2 ? values[mid] : (values[mid - 1] + values[mid]) / 2;
+  };
+
+  const recentNetIncome = (data?.income || []).slice(-5).map((r) => r.netIncome).filter((v) => Number.isFinite(v));
+  const normalizedNetIncome = calcMedian(recentNetIncome);
+  const epvReturn = 0.1;
+  const epvFloor = (Number.isFinite(normalizedNetIncome) && normalizedNetIncome > 0 && sharesOutstanding)
+    ? (normalizedNetIncome / epvReturn) / sharesOutstanding
+    : null;
+
+  const blendedGrowth = (() => {
+    const growthSignals = [
+      Number.isFinite(data?.dcf?.assumptions?.revenueGrowth) ? data.dcf.assumptions.revenueGrowth / 100 : null,
+      Number.isFinite(data?.dcf?.assumptions?.netIncomeGrowth) ? data.dcf.assumptions.netIncomeGrowth / 100 : null,
+      Number.isFinite(data?.favorites?.epsGrowth) ? data.favorites.epsGrowth : null,
+    ].filter((v) => Number.isFinite(v));
+    if (!growthSignals.length) return 0.08;
+    return clamp(growthSignals.reduce((sum, v) => sum + v, 0) / growthSignals.length, 0.0, 0.22);
+  })();
+
+  const currentPE = data?.valuationRatios?.current?.peRatio || data?.quote?.pe || null;
+  const defaultTerminalPE = Number.isFinite(currentPE) ? clamp(currentPE * 0.85, 10, 24) : 16;
+  const [assumptionTerminalPE, setAssumptionTerminalPE] = useState(defaultTerminalPE);
+
+  useEffect(() => {
+    setAssumptionTerminalPE(defaultTerminalPE);
+  }, [defaultTerminalPE, data?.profile?.symbol]);
+
+  const baseRequiredReturn = assumptionReturn / 100;
+  const terminalPEBase = assumptionTerminalPE;
+  const discountRates = Array.from(new Set([0.08, baseRequiredReturn, 0.12])).sort((a, b) => a - b);
+  const fadeHorizons = Array.from(new Set([5, assumptionHorizon])).sort((a, b) => a - b);
+
+  const scenarioByName = {
+    stress: { growth: clamp(blendedGrowth - 0.05, -0.02, 0.12), requiredReturn: clamp(baseRequiredReturn + 0.02, 0.08, 0.16), terminalPE: clamp(terminalPEBase - 3, 8, 20) },
+    base: { growth: clamp(blendedGrowth, 0.01, 0.18), requiredReturn: baseRequiredReturn, terminalPE: terminalPEBase },
+    expansion: { growth: clamp(blendedGrowth + 0.05, 0.04, 0.26), requiredReturn: clamp(baseRequiredReturn - 0.02, 0.06, 0.12), terminalPE: clamp(terminalPEBase + 3, 12, 30) },
+  };
+
+  const calcTwoStageEarningsValue = ({ growth, requiredReturn, terminalPE, years = 7 }) => {
+    if (!Number.isFinite(latestEPS) || latestEPS <= 0) return null;
+    let pv = 0;
+    for (let t = 1; t <= years; t++) {
+      const epsT = latestEPS * Math.pow(1 + growth, t);
+      pv += epsT / Math.pow(1 + requiredReturn, t);
+    }
+    const terminalEps = latestEPS * Math.pow(1 + growth, years);
+    const terminalValue = terminalEps * terminalPE;
+    pv += terminalValue / Math.pow(1 + requiredReturn, years);
+    return Number.isFinite(pv) && pv > 0 ? pv : null;
+  };
+
+  const scenarioValues = {
+    stress: calcTwoStageEarningsValue({ ...scenarioByName.stress, years: assumptionHorizon }),
+    base: calcTwoStageEarningsValue({ ...scenarioByName.base, years: assumptionHorizon }),
+    expansion: calcTwoStageEarningsValue({ ...scenarioByName.expansion, years: assumptionHorizon }),
+  };
+
+  const calcImpliedGrowth = ({ basePerShare, requiredReturn, years, terminalPE }) => {
+    if (!Number.isFinite(currentPrice) || currentPrice <= 0) return null;
+    if (!Number.isFinite(basePerShare) || basePerShare <= 0) return null;
+    if (!Number.isFinite(requiredReturn) || !Number.isFinite(terminalPE) || terminalPE <= 0) return null;
+    const rhs = (currentPrice * Math.pow(1 + requiredReturn, years)) / (basePerShare * terminalPE);
+    if (!Number.isFinite(rhs) || rhs <= 0) return null;
+    const g = Math.pow(rhs, 1 / years) - 1;
+    return Number.isFinite(g) ? g : null;
+  };
+
+  const impliedRows = discountRates.map((r) => {
+    const horizonValues = fadeHorizons.map((years) => {
+      const growth = calcImpliedGrowth({ basePerShare: latestEPS, requiredReturn: r, years, terminalPE: terminalPEBase });
+      return { years, growth };
+    });
+    return { requiredReturn: r, horizonValues };
+  });
+
+  const impliedSummary = (() => {
+    const baseCase = calcImpliedGrowth({
+      basePerShare: latestEPS,
+      requiredReturn: scenarioByName.base.requiredReturn,
+      years: assumptionHorizon,
+      terminalPE: scenarioByName.base.terminalPE,
+    });
+    if (!Number.isFinite(baseCase)) return 'Implied growth unavailable with current EPS inputs.';
+    return `At today’s price, market implies about ${(baseCase * 100).toFixed(1)}% EPS CAGR for ${assumptionHorizon} years at a ${assumptionReturn.toFixed(1)}% required return.`;
+  })();
+
+  const fcfYield = Number.isFinite(latestFCFPerShare) && Number.isFinite(currentPrice) && currentPrice > 0
+    ? latestFCFPerShare / currentPrice
+    : null;
+  const growthNeededForReturn10 = Number.isFinite(fcfYield) ? Math.max(0, 0.1 - fcfYield) : null;
+  const growthNeededForReturn12 = Number.isFinite(fcfYield) ? Math.max(0, 0.12 - fcfYield) : null;
+
+  const meanPeAnchor = data?.valuationRatios?.other?.meanPEValue ?? null;
+  const meanPsAnchor = data?.valuationRatios?.other?.meanPSValue ?? null;
+  const meanPbAnchor = data?.valuationRatios?.other?.meanPBValue ?? null;
+  const analystTarget = (data?.dcf?.compositeMethods || []).find((m) => m.key === 'analystTargetValue')?.rawValue || null;
+
   const shortMethodNameByKey = {
-    dcf20Year: 'Discounted Cash Flow (20-Year, Cash Flow)',
-    dfcf20Year: 'Discounted Free Cash Flow (20-Year)',
-    dni20Year: 'Discounted Net Income (20-Year)',
-    dfcfTerminal: 'Discounted Free Cash Flow (Terminal Value)',
-    meanPSValue: 'Historical Mean Price-to-Sales Value',
-    meanPEValue: 'Historical Mean Price-to-Earnings Value (Excluding Non-Recurring Items)',
-    meanPBValue: 'Historical Mean Price-to-Book Value',
-    psgValue: 'Price-to-Sales-to-Growth Value',
-    pegValue: 'Price-to-Earnings-to-Growth Value (Excluding Non-Recurring Items)',
-    analystTargetValue: 'Analyst Target',
-    dcfOperatingCashFlow: 'Discounted Cash Flow (Unlevered Free Cash Flow)',
-    dcfTerminal: 'Discounted Cash Flow Terminal Value (15x Free Cash Flow)',
-    fairValuePS: 'Fair Value (Price-to-Sales)',
-    fairValuePE: 'Fair Value (Price-to-Earnings)',
-    fairValuePB: 'Fair Value (Price-to-Book)',
+    dcf20Year: 'DCF 20Y (Cash Flow)',
+    dfcf20Year: 'DFCF 20Y (Free Cash Flow)',
+    dni20Year: 'DNI 20Y (Net Income)',
+    dfcfTerminal: 'DFCF Terminal',
+    meanPSValue: 'Mean PS Value',
+    meanPEValue: 'Mean PE Value (ex-NRI)',
+    meanPBValue: 'Mean PB Value',
+    dcfOperatingCashFlow: 'DCF (Unlevered FCF)',
+    dcfTerminal: 'DCF Terminal (15x FCF)',
+    fairValuePS: 'Fair Value PS',
+    fairValuePE: 'Fair Value PE',
+    fairValuePB: 'Fair Value PB',
     earningsPowerValue: 'Earnings Power Value',
     grahamNumber: 'Graham Number',
+    analystTargetValue: 'Analyst Target',
   };
 
   const methodTypeByKey = {
@@ -540,10 +659,8 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
     meanPSValue: 'relative',
     meanPEValue: 'relative',
     meanPBValue: 'relative',
-    psgValue: 'relative',
-    pegValue: 'relative',
     analystTargetValue: 'analyst',
-    earningsPowerValue: 'relative',
+    earningsPowerValue: 'conservative',
     grahamNumber: 'conservative',
   };
 
@@ -551,243 +668,300 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
     dcf: '#f59e0b',
     relative: '#f97316',
     analyst: '#22c55e',
-    conservative: '#6b7280',
+    conservative: '#64748b',
   };
 
-  const valuationMethods = (data?.dcf?.compositeMethods || [])
+  const valuationMethodsForChart = (data?.dcf?.compositeMethods || [])
     .map((entry) => ({
+      key: entry.key,
       name: shortMethodNameByKey[entry.key] || entry.label,
       fullLabel: entry.label,
-      value: entry.value,
       plotValue: entry.boundedValue ?? entry.value,
       rawValue: entry.rawValue,
+      value: entry.value,
       weight: entry.weight,
       dynamicWeight: entry.dynamicWeight,
-      calibrationFactor: entry.calibrationFactor,
-      key: entry.key,
       type: methodTypeByKey[entry.key] || 'relative',
+      calibrationFactor: entry.calibrationFactor,
     }))
-    .filter((entry) => entry.plotValue && entry.plotValue > 0 && isFinite(entry.plotValue));
-  const valuationMethodsForChart = valuationMethods.length > 0
-    ? valuationMethods
-    : [
-      { name: 'Discounted Cash Flow (Unlevered Free Cash Flow)', value: data?.dcf?.dcfOperatingCashFlow, key: 'dcfOperatingCashFlow' },
-      { name: 'Discounted Cash Flow Terminal Value (15x Free Cash Flow)', value: data?.dcf?.dcfTerminal, key: 'dcfTerminal' },
-      { name: 'Fair Value (Price-to-Sales)', value: data?.dcf?.fairValuePS, key: 'fairValuePS' },
-      { name: 'Fair Value (Price-to-Earnings)', value: data?.dcf?.fairValuePE, key: 'fairValuePE' },
-      { name: 'Fair Value (Price-to-Book)', value: data?.dcf?.fairValuePB, key: 'fairValuePB' },
-      { name: 'Earnings Power Value', value: data?.dcf?.earningsPowerValue, key: 'earningsPowerValue' },
-      { name: 'Graham Number', value: data?.dcf?.grahamNumber, key: 'grahamNumber' },
-    ]
-      .map((entry) => ({ ...entry, type: methodTypeByKey[entry.key] || 'relative' }))
-      .filter((entry) => entry.value && entry.value > 0 && isFinite(entry.value));
+    .filter((entry) =>
+      Number.isFinite(entry.plotValue) &&
+      entry.plotValue > 0 &&
+      entry.key !== 'pegValue' &&
+      entry.key !== 'psgValue'
+    );
+
+  const scenarioRangeLow = Number.isFinite(scenarioValues.stress) ? scenarioValues.stress : epvFloor;
+  const scenarioRangeHigh = Number.isFinite(scenarioValues.expansion) ? scenarioValues.expansion : scenarioValues.base;
+  const scenarioRangeUpside = Number.isFinite(currentPrice) && Number.isFinite(scenarioValues.base)
+    ? ((scenarioValues.base - currentPrice) / currentPrice) * 100
+    : null;
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-valuation" aria-labelledby="tab-valuation">
-      {/* Valuation Chart */}
-      {data?.dcf && data.dcf.compositeValue && (
-        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div className="flex flex-col gap-2">
-              <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Valuation Models</h3>
-              {data.dcf?.confidence && (
-                <div className="text-[10px] px-3 py-1 rounded-full border w-fit" style={{
-                  background: (data.dcf.compositeSource || '').startsWith('oracle_')
-                    ? theme.positiveBg
-                    : data.dcf.confidence.valid ? theme.positiveBg : theme.warningBg,
-                  color: (data.dcf.compositeSource || '').startsWith('oracle_')
-                    ? theme.positive
-                    : data.dcf.confidence.valid ? theme.positive : theme.warning,
-                  borderColor: (data.dcf.compositeSource || '').startsWith('oracle_')
-                    ? theme.positiveBorder
-                    : data.dcf.confidence.valid ? theme.positiveBorder : theme.warningBorder,
-                }}>
-                  {(data.dcf.compositeSource || '').startsWith('oracle_')
-                    ? 'ORACLE APPROX MODEL'
-                    : data.dcf.confidence.valid
-                    ? 'DCF VALID'
-                    : `DCF PARTIAL: missing ${data.dcf.confidence.missing.join(', ')}`}
-                </div>
-              )}
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: theme.textSecondary }}>Valuation Assumptions</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <label className="text-xs" style={{ color: theme.textTertiary }}>
+            Required Return
+            <div className="mt-2 flex items-center gap-3">
+              <input
+                type="range"
+                min="6"
+                max="16"
+                step="0.5"
+                value={assumptionReturn}
+                onChange={(e) => setAssumptionReturn(Number(e.target.value))}
+                className="w-full"
+              />
+              <span className="min-w-[52px] text-right font-semibold" style={{ color: theme.text }}>{assumptionReturn.toFixed(1)}%</span>
             </div>
-            <div className="text-left sm:text-right">
-              <div className="text-[10px] tracking-wider uppercase" style={{ color: theme.textTertiary }}>Fair Value Estimate</div>
-              <div className="text-2xl font-bold" style={{ color: data.dcf.upside > 0 ? theme.positive : theme.negative }}>
-                {safeMoney(data.dcf.compositeValue)}
-              </div>
-              <div className="text-xs font-medium" style={{ color: data.dcf.upside > 0 ? theme.positive : theme.negative, opacity: 0.7 }}>
-                {Number.isFinite(data.dcf.upside)
-                  ? `${data.dcf.upside > 0 ? '+' : ''}${data.dcf.upside.toFixed(1)}% vs Current`
-                  : 'N/A vs Current'}
-              </div>
+          </label>
+          <label className="text-xs" style={{ color: theme.textTertiary }}>
+            Horizon
+            <div className="mt-2 flex items-center gap-3">
+              <input
+                type="range"
+                min="3"
+                max="12"
+                step="1"
+                value={assumptionHorizon}
+                onChange={(e) => setAssumptionHorizon(Number(e.target.value))}
+                className="w-full"
+              />
+              <span className="min-w-[52px] text-right font-semibold" style={{ color: theme.text }}>{assumptionHorizon}Y</span>
             </div>
-          </div>
+          </label>
+          <label className="text-xs" style={{ color: theme.textTertiary }}>
+            Terminal P/E Multiple
+            <div className="mt-2 flex items-center gap-3">
+              <input
+                type="range"
+                min="8"
+                max="35"
+                step="0.5"
+                value={assumptionTerminalPE}
+                onChange={(e) => setAssumptionTerminalPE(Number(e.target.value))}
+                className="w-full"
+              />
+              <span className="min-w-[52px] text-right font-semibold" style={{ color: theme.text }}>{assumptionTerminalPE.toFixed(1)}x</span>
+            </div>
+          </label>
+        </div>
+      </div>
 
-          <ResponsiveContainer width="100%" height={460}>
-            <BarChart
-              layout="vertical"
-              data={valuationMethodsForChart}
-              margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
-              <XAxis
-                type="number"
-                domain={[0, 'auto']}
-                tick={{ fontSize: 10, fill: theme.textTertiary }}
-                tickFormatter={(v) => `$${v.toFixed(0)}`}
-                axisLine={{ stroke: theme.chartGrid }}
-                tickLine={false}
-              />
-              <YAxis
-                dataKey="name"
-                type="category"
-                tick={{ fontSize: 12, fill: theme.textSecondary }}
-                width={350}
-                axisLine={{ stroke: theme.chartGrid }}
-                tickLine={false}
-              />
-              <Tooltip
-                formatter={(value) => [`$${value?.toFixed(2)}`, 'Fair Value']}
-                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
-                cursor={{ fill: theme.cursorFill }}
-              />
-              <ReferenceLine
-                x={data.dcf.currentPrice}
-                stroke="#ef4444"
-                strokeWidth={2}
-                strokeDasharray="5 5"
-                label={{ value: `Current: $${data.dcf.currentPrice?.toFixed(2)}`, position: 'top', fontSize: 10, fill: '#ef4444' }}
-              />
-              <ReferenceLine
-                x={data.dcf.compositeValue}
-                stroke="#10b981"
-                strokeWidth={2}
-                label={{ value: `Fair: $${data.dcf.compositeValue?.toFixed(2)}`, position: 'top', fontSize: 10, fill: '#10b981' }}
-              />
-              <Bar dataKey="plotValue" radius={[0, 4, 4, 0]}>
-                {valuationMethodsForChart.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={methodColorByType[entry.type] || methodColorByType.relative} />
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>What&apos;s Priced In</h3>
+        <div className="text-xs mb-4" style={{ color: theme.textTertiary }}>{impliedSummary}</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ background: theme.tableBg }}>
+                <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Required Return</th>
+                {fadeHorizons.map((h) => (
+                  <th key={`head-${h}`} className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>
+                    Implied EPS CAGR ({h}Y)
+                  </th>
                 ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-
-          <div className="mt-5 flex flex-wrap gap-5 text-[10px]" style={{ color: theme.textTertiary }}>
-            <div className="flex items-center gap-2"><div className="w-3 h-2.5 rounded-sm" style={{ background: '#f59e0b' }}></div><span>DCF Models</span></div>
-            <div className="flex items-center gap-2"><div className="w-3 h-2.5 rounded-sm" style={{ background: '#f97316' }}></div><span>Relative Valuation</span></div>
-            <div className="flex items-center gap-2"><div className="w-3 h-2.5 rounded-sm" style={{ background: '#22c55e' }}></div><span>Analyst Target</span></div>
-            <div className="flex items-center gap-2"><div className="w-3 h-2.5 rounded-sm" style={{ background: '#6b7280' }}></div><span>Conservative</span></div>
-            <div className="flex items-center gap-2"><div className="w-3 h-0.5" style={{ background: '#ef4444' }}></div><span>Current Price</span></div>
-            <div className="flex items-center gap-2"><div className="w-3 h-0.5" style={{ background: '#10b981' }}></div><span>Fair Value</span></div>
-          </div>
-
-          <div className="mt-5 p-4 rounded-xl text-[10px] border" style={{ background: theme.bg, borderColor: theme.border, color: theme.textTertiary }}>
-            <span style={{ color: theme.textSecondary }}>Assumptions:</span> Discount Rate: {safePercent(data.dcf.discountRate, 1)} (WACC) | Terminal Growth: {safePercent(data.dcf.terminalGrowth, 1)} | Projection: 10 years | Composite Source: {data.dcf.compositeSource || 'core'}
-          </div>
-
-          <div className="mt-4 p-4 rounded-xl text-[10px] border" style={{ background: theme.bg, borderColor: theme.border, color: theme.textTertiary }}>
-            <div className="font-semibold mb-2" style={{ color: theme.textSecondary }}>Methodology Footnote (Transparency)</div>
-            <div className="mb-2">
-              Oracle Model Assumptions:
-              {' '}Discount Rate {data?.dcf?.oracleAssumptions?.oracleDiscountRate?.toFixed(2) ?? 'N/A'}%
-              {' '}| Terminal Growth {data?.dcf?.oracleAssumptions?.oracleTerminalGrowth?.toFixed(2) ?? 'N/A'}%
-              {' '}| Blended Growth Signal {data?.dcf?.oracleAssumptions?.blendedGrowthSignal?.toFixed(2) ?? 'N/A'}%
-              {' '}| High Growth Years {data?.dcf?.oracleAssumptions?.highGrowthYears ?? 'N/A'}
-              {' '}| Median {data?.dcf?.oracleAssumptions?.oracleMedian?.toFixed?.(2) ?? 'N/A'}
-              {' '}| Guardrail [{data?.dcf?.oracleAssumptions?.oracleOutlierFloor?.toFixed?.(2) ?? 'N/A'} - {data?.dcf?.oracleAssumptions?.oracleOutlierCeiling?.toFixed?.(2) ?? 'N/A'}]
-              {' '}| Bucket Blend DCF/Relative: {Number.isFinite(data?.dcf?.oracleAssumptions?.dcfBlendWeight) ? `${(data.dcf.oracleAssumptions.dcfBlendWeight * 100).toFixed(1)}%` : 'N/A'} / {Number.isFinite(data?.dcf?.oracleAssumptions?.relativeBlendWeight) ? `${(data.dcf.oracleAssumptions.relativeBlendWeight * 100).toFixed(1)}%` : 'N/A'}
-              {' '}| Analyst Blend: {Number.isFinite(data?.dcf?.oracleAssumptions?.analystBlendWeight) ? `${(data.dcf.oracleAssumptions.analystBlendWeight * 100).toFixed(1)}%` : 'N/A'}
-              {' '}| Median Anchor Weight: {Number.isFinite(data?.dcf?.oracleAssumptions?.medianAnchorWeight) ? `${(data.dcf.oracleAssumptions.medianAnchorWeight * 100).toFixed(2)}%` : 'N/A'}
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[10px]">
-                <thead>
-                  <tr style={{ background: theme.tableBg }}>
-                    <th className="px-2 py-2 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Method</th>
-                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Raw</th>
-                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Factor</th>
-                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Bounded</th>
-                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Plotted</th>
-                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Adjusted</th>
-                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Weight</th>
-                    <th className="px-2 py-2 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Dyn Weight</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {valuationMethodsForChart.map((method, idx) => (
-                    <tr key={`${method.key}-${idx}`} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                      <td className="px-2 py-2" style={{ color: theme.text }}>{method.fullLabel || method.name}</td>
-                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
-                        {method.rawValue !== null && method.rawValue !== undefined && isFinite(method.rawValue) ? `$${method.rawValue.toFixed(2)}` : '-'}
-                      </td>
-                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
-                        {method.calibrationFactor !== null && method.calibrationFactor !== undefined && isFinite(method.calibrationFactor) ? method.calibrationFactor.toFixed(3) : '-'}
-                      </td>
-                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
-                        {method.boundedValue !== null && method.boundedValue !== undefined && isFinite(method.boundedValue) ? `$${method.boundedValue.toFixed(2)}` : '-'}
-                      </td>
-                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
-                        {method.plotValue !== null && method.plotValue !== undefined && isFinite(method.plotValue) ? `$${method.plotValue.toFixed(2)}` : '-'}
-                      </td>
-                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
-                        {method.value !== null && method.value !== undefined && isFinite(method.value) ? `$${method.value.toFixed(2)}` : '-'}
-                      </td>
-                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
-                        {method.weight !== null && method.weight !== undefined && isFinite(method.weight) ? `${(method.weight * 100).toFixed(1)}%` : '-'}
-                      </td>
-                      <td className="px-2 py-2 text-right" style={{ color: theme.textSecondary }}>
-                        {method.dynamicWeight !== null && method.dynamicWeight !== undefined && isFinite(method.dynamicWeight) ? `${method.dynamicWeight.toFixed(3)}` : '-'}
-                      </td>
-                    </tr>
+              </tr>
+            </thead>
+            <tbody>
+              {impliedRows.map((row) => (
+                <tr key={row.requiredReturn} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                  <td className="px-3 py-3" style={{ color: theme.text }}>{(row.requiredReturn * 100).toFixed(0)}%</td>
+                  {row.horizonValues.map((h) => (
+                    <td key={`${row.requiredReturn}-${h.years}`} className="px-3 py-3 text-right" style={{ color: Number.isFinite(h.growth) && h.growth <= 0.12 ? theme.positive : theme.warning }}>
+                      {Number.isFinite(h.growth) ? `${(h.growth * 100).toFixed(1)}%` : '-'}
+                    </td>
                   ))}
-                </tbody>
-              </table>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-3 text-[10px]" style={{ color: theme.textMuted }}>
+          Model assumptions: terminal P/E {terminalPEBase.toFixed(1)}, EPS base {safeMoney(latestEPS)}.
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <div className="text-[10px] tracking-widest uppercase mb-2" style={{ color: theme.textTertiary }}>EPV Floor (No Growth)</div>
+          <div className="text-2xl font-bold mb-1" style={{ color: theme.text }}>{safeMoney(epvFloor)}</div>
+          <div className="text-xs" style={{ color: theme.textTertiary }}>
+            Normalized earnings (5Y median) capitalized at 10%.
+          </div>
+        </div>
+        <div className="p-5 rounded-2xl border lg:col-span-2" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[10px] tracking-widest uppercase mb-1" style={{ color: theme.textTertiary }}>Conservative Intrinsic Range (2-Stage)</div>
+              <div className="text-xl font-bold" style={{ color: theme.text }}>
+                {safeMoney(scenarioRangeLow)} - {safeMoney(scenarioRangeHigh)}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-widest" style={{ color: theme.textTertiary }}>Base Scenario</div>
+              <div className="text-xl font-bold" style={{ color: Number.isFinite(scenarioRangeUpside) && scenarioRangeUpside >= 0 ? theme.positive : theme.negative }}>
+                {safeMoney(scenarioValues.base)}
+              </div>
+              <div className="text-xs" style={{ color: Number.isFinite(scenarioRangeUpside) && scenarioRangeUpside >= 0 ? theme.positive : theme.negative }}>
+                {Number.isFinite(scenarioRangeUpside) ? `${scenarioRangeUpside >= 0 ? '+' : ''}${scenarioRangeUpside.toFixed(1)}% vs current` : 'N/A vs current'}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Calculation Trace */}
-      {data?.dcf?.assumptions && (
-        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-5">
-            <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Calculation Trace</h3>
-            <div className="text-[10px]" style={{ color: theme.textMuted }}>Key inputs driving fair value</div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            <MetricCard theme={theme} label="Shares Out" value={formatNumber(data.dcf.assumptions.sharesOutstanding, 0)} />
-            <MetricCard theme={theme} label="Beta" value={formatRatio(data.dcf.assumptions.beta)} />
-            <MetricCard theme={theme} label="Cost of Equity" value={`${data.dcf.assumptions.costOfEquity.toFixed(2)}%`} />
-            <MetricCard theme={theme} label="Cost of Debt" value={`${data.dcf.assumptions.costOfDebt.toFixed(2)}%`} />
-            <MetricCard theme={theme} label="Equity Weight" value={`${data.dcf.assumptions.equityWeight.toFixed(1)}%`} />
-            <MetricCard theme={theme} label="Debt Weight" value={`${data.dcf.assumptions.debtWeight.toFixed(1)}%`} />
-            <MetricCard theme={theme} label="Tax Rate" value={`${data.dcf.assumptions.taxRate.toFixed(1)}%`} />
-            <MetricCard theme={theme} label="Rev Growth" value={`${data.dcf.assumptions.revenueGrowth.toFixed(1)}%`} />
-            <MetricCard theme={theme} label="NI Growth" value={`${data.dcf.assumptions.netIncomeGrowth.toFixed(1)}%`} />
-            <MetricCard theme={theme} label="FCF Growth" value={`${data.dcf.assumptions.fcfGrowth.toFixed(1)}%`} />
-            <MetricCard theme={theme} label="Op Margin" value={data.dcf.assumptions.operatingMargin !== null ? `${data.dcf.assumptions.operatingMargin.toFixed(1)}%` : 'N/A'} />
-            <MetricCard theme={theme} label="CapEx %" value={data.dcf.assumptions.capexRatio !== null ? `${data.dcf.assumptions.capexRatio.toFixed(1)}%` : 'N/A'} />
-            <MetricCard theme={theme} label="D&A %" value={data.dcf.assumptions.daRatio !== null ? `${data.dcf.assumptions.daRatio.toFixed(1)}%` : 'N/A'} />
-            <MetricCard theme={theme} label="NWC %" value={data.dcf.assumptions.nwcRatio !== null ? `${data.dcf.assumptions.nwcRatio.toFixed(1)}%` : 'N/A'} />
-            <MetricCard theme={theme} label="Latest Revenue" value={formatNumber(data.dcf.assumptions.latestRevenue)} />
-            <MetricCard theme={theme} label="Latest NI" value={formatNumber(data.dcf.assumptions.latestNetIncome)} />
-            <MetricCard theme={theme} label="Latest FCF" value={formatNumber(data.dcf.assumptions.latestFCF)} />
-            <MetricCard theme={theme} label="Latest OCF" value={formatNumber(data.dcf.assumptions.latestOCF)} />
-            <MetricCard theme={theme} label="Latest Equity" value={formatNumber(data.dcf.assumptions.latestEquity)} />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+            {[
+              { label: 'Stress', key: 'stress' },
+              { label: 'Base', key: 'base' },
+              { label: 'Expansion', key: 'expansion' },
+            ].map((s) => (
+              <div key={s.key} className="p-3 rounded-xl border" style={{ background: theme.bg, borderColor: theme.border }}>
+                <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: theme.textTertiary }}>{s.label}</div>
+                <div className="text-base font-semibold mb-1" style={{ color: theme.text }}>{safeMoney(scenarioValues[s.key])}</div>
+                <div className="text-[10px]" style={{ color: theme.textMuted }}>
+                  g={safePercent(scenarioByName[s.key].growth * 100)} | r={safePercent(scenarioByName[s.key].requiredReturn * 100)} | P/E<sub>t</sub>={scenarioByName[s.key].terminalPE.toFixed(1)}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Valuation Ratios Table */}
-      {data?.valuationRatios?.historical?.length > 0 && (
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase" style={{ color: theme.textSecondary }}>FCF Yield Sanity Map</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <MetricCard theme={theme} label="FCF Yield (Current)" value={Number.isFinite(fcfYield) ? `${(fcfYield * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="Growth Needed (10% Return)" value={Number.isFinite(growthNeededForReturn10) ? `${(growthNeededForReturn10 * 100).toFixed(1)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="Growth Needed (12% Return)" value={Number.isFinite(growthNeededForReturn12) ? `${(growthNeededForReturn12 * 100).toFixed(1)}%` : 'N/A'} />
+        </div>
+        <div className="mt-3 text-[10px]" style={{ color: theme.textMuted }}>
+          Interpretation: lower FCF yield requires higher durable growth to justify the same required return.
+        </div>
+      </div>
+
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Market Anchors (History, Secondary)</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <MetricCard theme={theme} label="Historical Mean P/E Value" value={safeMoney(meanPeAnchor)} />
+          <MetricCard theme={theme} label="Historical Mean P/S Value" value={safeMoney(meanPsAnchor)} />
+          {showPB ? (
+            <MetricCard theme={theme} label="Historical Mean P/B Value" value={safeMoney(meanPbAnchor)} />
+          ) : (
+            <MetricCard theme={theme} label="P/B Usage" value="Hidden (non-asset-heavy sector)" />
+          )}
+        </div>
+        <div className="mt-3 text-[10px]" style={{ color: theme.textMuted }}>
+          Historical multiples are market anchors, not intrinsic value.
+        </div>
+      </div>
+
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Sentiment Overlay</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <MetricCard theme={theme} label="Analyst Mean Target" value={safeMoney(analystTarget)} />
+          <MetricCard theme={theme} label="Current Price" value={safeMoney(currentPrice)} />
+        </div>
+        <div className="mt-3 text-[10px]" style={{ color: theme.textMuted }}>
+          Analyst target is shown as sentiment context only. Use Institutional Ownership and Insider Activity tabs for positioning context.
+        </div>
+      </div>
+
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Legacy / Advanced</h3>
+            <div className="text-[10px] mt-1" style={{ color: theme.textMuted }}>
+              Composite (Legacy) blends DCF + historical anchors + analyst target. Assumption-sensitive.
+            </div>
+          </div>
+          <button
+            onClick={() => setShowLegacy((v) => !v)}
+            className="px-3 py-2 rounded-lg text-[10px] font-semibold tracking-wider border"
+            style={{ color: theme.text, borderColor: theme.border, background: theme.bg }}
+          >
+            {showLegacy ? 'HIDE LEGACY' : 'SHOW LEGACY'}
+          </button>
+        </div>
+
+        {showLegacy && (
+          <div className="mt-5 space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <div className="text-[10px] tracking-wider uppercase" style={{ color: theme.textTertiary }}>Composite Output (Assumption-sensitive)</div>
+                <div className="text-2xl font-bold" style={{ color: data?.dcf?.upside >= 0 ? theme.positive : theme.negative }}>
+                  {safeMoney(data?.dcf?.compositeValue)}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] tracking-wider uppercase" style={{ color: theme.textTertiary }}>Current</div>
+                <div className="text-xl font-semibold" style={{ color: theme.text }}>{safeMoney(data?.dcf?.currentPrice)}</div>
+              </div>
+            </div>
+
+            {valuationMethodsForChart.length > 0 && (
+              <ResponsiveContainer width="100%" height={420}>
+                <BarChart layout="vertical" data={valuationMethodsForChart} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
+                  <XAxis
+                    type="number"
+                    domain={[0, (dataMax) => (Number.isFinite(dataMax) ? Math.ceil(dataMax * 1.15) : 100)]}
+                    tick={{ fontSize: 10, fill: theme.textTertiary }}
+                    tickFormatter={(v) => `$${v.toFixed(0)}`}
+                    axisLine={{ stroke: theme.chartGrid }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    tick={{ fontSize: 12, fill: theme.textSecondary }}
+                    width={210}
+                    axisLine={{ stroke: theme.chartGrid }}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    formatter={(value) => [`$${value?.toFixed(2)}`, 'Model Value']}
+                    contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                    cursor={{ fill: theme.cursorFill }}
+                  />
+                  <ReferenceLine
+                    x={data?.dcf?.currentPrice}
+                    stroke="#ef4444"
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    label={{ value: `Current: $${data?.dcf?.currentPrice?.toFixed(2) || '-'}`, position: 'top', fontSize: 10, fill: '#ef4444' }}
+                  />
+                  <ReferenceLine
+                    x={data?.dcf?.compositeValue}
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    label={{ value: `Composite: $${data?.dcf?.compositeValue?.toFixed(2) || '-'}`, position: 'top', fontSize: 10, fill: '#10b981' }}
+                  />
+                  <Bar dataKey="plotValue" radius={[0, 4, 4, 0]}>
+                    {valuationMethodsForChart.map((entry, index) => (
+                      <Cell key={`legacy-cell-${index}`} fill={methodColorByType[entry.type] || methodColorByType.relative} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+
+            <div className="p-4 rounded-xl text-[10px] border" style={{ background: theme.bg, borderColor: theme.border, color: theme.textTertiary }}>
+              <span style={{ color: theme.textSecondary }}>Assumptions:</span> Discount Rate: {safePercent(data?.dcf?.discountRate)} | Terminal Growth: {safePercent(data?.dcf?.terminalGrowth)} | Composite Source: {data?.dcf?.compositeSource || 'core'}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {historicalValuationRatios.length > 0 && (
         <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Valuation Ratios</h3>
+          <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Valuation Ratio History (Core Only)</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr style={{ background: theme.tableBg }}>
                   <th className="px-3 py-3 text-left font-semibold sticky left-0" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}`, background: theme.tableBg }}>Metric</th>
-                  {data.valuationRatios.historical.map((h) => (
+                  {historicalValuationRatios.map((h) => (
                     <th key={h.year} className="px-3 py-3 text-right font-medium min-w-[60px]" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>{h.year}</th>
                   ))}
                   <th className="px-3 py-3 text-right font-semibold min-w-[70px]" style={{ color: theme.accent, borderBottom: `1px solid ${theme.border}`, background: theme.accent + '0d' }}>Current</th>
@@ -798,104 +972,30 @@ function ValuationTab({ data, theme, formatNumber, formatRatio }) {
                 {[
                   { label: 'Price to Earnings (P/E) Ratio', key: 'peRatio' },
                   { label: 'Price to Sales (P/S) Ratio', key: 'psRatio' },
-                  { label: 'Price to Book (P/B) Ratio', key: 'pbRatio' },
-                  { label: 'Price to Earnings Growth (PEG) Ratio', key: 'pegRatio' },
-                  { label: 'Price to Sales Growth (PSG) Ratio', key: 'psgRatio' },
+                  ...(showPB ? [{ label: 'Price to Book (P/B) Ratio', key: 'pbRatio' }] : []),
                 ].map(({ label, key }) => (
-                  <tr key={key} style={{ borderBottom: `1px solid ${theme.border}` }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = theme.tableRowHover}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
+                  <tr key={key} style={{ borderBottom: `1px solid ${theme.border}` }}>
                     <td className="px-3 py-3 font-medium sticky left-0" style={{ color: theme.text, background: theme.stickyBg }}>{label}</td>
-                    {data.valuationRatios.historical.map((h) => (
-                      <td key={h.year} className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{Number.isFinite(h[key]) ? h[key].toFixed(2) : '-'}</td>
+                    {historicalValuationRatios.map((h) => (
+                      <td key={`${h.year}-${key}`} className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{Number.isFinite(h[key]) ? h[key].toFixed(2) : '-'}</td>
                     ))}
-                    <td className="px-3 py-3 text-right font-semibold" style={{ color: theme.accent, background: theme.accent + '0d' }}>{Number.isFinite(data.valuationRatios.current?.[key]) ? data.valuationRatios.current[key].toFixed(2) : '-'}</td>
-                    <td className="px-3 py-3 text-right font-semibold" style={{ color: theme.accentAlt, background: theme.accentAlt + '0d' }}>{Number.isFinite(data.valuationRatios.tenYearAvg?.[key]) ? data.valuationRatios.tenYearAvg[key].toFixed(2) : '-'}</td>
-                  </tr>
-                ))}
-                {[
-                  { label: 'Earnings Per Share (EPS) Growth', key: 'epsGrowth' },
-                  { label: 'Revenue Growth', key: 'revenueGrowth' },
-                ].map(({ label, key }) => (
-                  <tr key={key} style={{ borderBottom: `1px solid ${theme.border}` }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = theme.tableRowHover}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <td className="px-3 py-3 font-medium sticky left-0" style={{ color: theme.textSecondary, background: theme.stickyBg }}>{label}</td>
-                    {data.valuationRatios.historical.map((h) => (
-                      <td key={h.year} className="px-3 py-3 text-right" style={{ color: h[key] >= 0 ? theme.positive : theme.negative }}>
-                        {h[key] !== null && h[key] !== undefined ? `${h[key].toFixed(1)}%` : '-'}
-                      </td>
-                    ))}
-                    <td className="px-3 py-3 text-right" style={{ color: theme.textMuted, background: theme.accent + '0d' }}>-</td>
-                    <td className="px-3 py-3 text-right" style={{ color: theme.textMuted, background: theme.accentAlt + '0d' }}>-</td>
+                    <td className="px-3 py-3 text-right font-semibold" style={{ color: theme.accent, background: theme.accent + '0d' }}>{Number.isFinite(data?.valuationRatios?.current?.[key]) ? data.valuationRatios.current[key].toFixed(2) : '-'}</td>
+                    <td className="px-3 py-3 text-right font-semibold" style={{ color: theme.accentAlt, background: theme.accentAlt + '0d' }}>{Number.isFinite(data?.valuationRatios?.tenYearAvg?.[key]) ? data.valuationRatios.tenYearAvg[key].toFixed(2) : '-'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="mt-4 text-[10px]" style={{ color: theme.textMuted }}>
-            Note: Historical ratios are calculated using each period&apos;s historical price and that period&apos;s earnings/sales/book value.
-          </div>
         </div>
       )}
 
-      {/* Other Valuation Ratios */}
-      {data?.valuationRatios?.other && (
-        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Other Valuation Ratios</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-semibold uppercase tracking-widest pb-2" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Per Share & Yield</h4>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EBITDA per Share</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.ebitdaPerShare)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Earnings Yield</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safePercent(data.valuationRatios.other.earningsYield)}</span></div>
-            </div>
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-semibold uppercase tracking-widest pb-2" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Enterprise Value</h4>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Enterprise Value</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{formatNumber(data.valuationRatios.other.enterpriseValue)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EV / FCF</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.evToFCF)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EV / EBIT</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.evToEBIT)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EV / EBITDA</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.evToEBITDA)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>EV / Revenue</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.evToRevenue)}</span></div>
-            </div>
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-semibold uppercase tracking-widest pb-2" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Forward Metrics</h4>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Forward P/E</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.forwardPE)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Rule of 40</span><span className="text-xs font-semibold" style={{ color: data.valuationRatios.other.ruleOf40 >= 40 ? theme.positive : theme.warning }}>{safePercent(data.valuationRatios.other.ruleOf40)}</span></div>
-            </div>
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-semibold uppercase tracking-widest pb-2" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Mean Valuations</h4>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean Price to Earnings Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.meanPE)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean Price to Earnings Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>{safeMoney(data.valuationRatios.other.meanPEValue)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean Price to Sales Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.meanPS)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean Price to Sales Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>{safeMoney(data.valuationRatios.other.meanPSValue)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean Price to Book Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.meanPB)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Mean Price to Book Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>{safeMoney(data.valuationRatios.other.meanPBValue)}</span></div>
-            </div>
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-semibold uppercase tracking-widest pb-2" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>Median Valuations</h4>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median Price to Earnings Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.medianPE)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median Price to Earnings Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>{safeMoney(data.valuationRatios.other.medianPEValue)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median Price to Sales Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.medianPS)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median Price to Sales Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>{safeMoney(data.valuationRatios.other.medianPSValue)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median Price to Book Ratio</span><span className="text-xs font-semibold" style={{ color: theme.text }}>{safeRatio(data.valuationRatios.other.medianPB)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Median Price to Book Value</span><span className="text-xs font-semibold" style={{ color: theme.positive }}>{safeMoney(data.valuationRatios.other.medianPBValue)}</span></div>
-            </div>
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-semibold uppercase tracking-widest pb-2" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>DCF Valuations (20Y)</h4>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Discounted Cash Flow (20-Year) Value</span><span className="text-xs font-semibold" style={{ color: theme.accent }}>{safeMoney(data.valuationRatios.other.dcf20Year)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Discounted Free Cash Flow (20-Year) Value</span><span className="text-xs font-semibold" style={{ color: theme.accent }}>{safeMoney(data.valuationRatios.other.dfcf20Year)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Discounted Net Income (20-Year) Value</span><span className="text-xs font-semibold" style={{ color: theme.accent }}>{safeMoney(data.valuationRatios.other.dni20Year)}</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: theme.textTertiary }}>Discounted Free Cash Flow (Terminal) Value</span><span className="text-xs font-semibold" style={{ color: theme.accent }}>{safeMoney(data.valuationRatios.other.dfcfTerminal)}</span></div>
-            </div>
-          </div>
-        </div>
-      )}
+      <div className="p-5 rounded-2xl border text-[10px] leading-relaxed" style={{ background: theme.warningBg, borderColor: theme.warningBorder, color: theme.warningText }}>
+        <span className="font-semibold" style={{ color: theme.warningStrong }}>Transparency:</span> Core valuation now prioritizes reverse valuation, EPV floor, and 2-stage fundamentals scenarios.
+        Legacy composite methods remain available under the Legacy section and are intentionally labeled assumption-sensitive.
+      </div>
     </div>
   );
 }
-
 function FinancialsTab({ data, theme, formatPercent, formatRatio }) {
   if (!data?.ratios?.length) {
     return (
@@ -1026,18 +1126,87 @@ function OperatingMetricsTab({ data, theme }) {
   const debtLiquidityRows = [
     rowFromSeries('Cash Ratio', getMetricSeries(({ bal }) => (bal?.currentLiabilities > 0 ? ratio(((bal.cashAndCashEquivalents || 0) + (bal.shortTermInvestments || 0)) / bal.currentLiabilities) : null)), 'ratio'),
     rowFromSeries('Current Ratio', getMetricSeries(({ rat }) => ratio(rat?.currentRatio)), 'ratio'),
-    rowFromSeries('Debt Servicing Ratio', getMetricSeries(() => null)),
-    rowFromSeries('Interest Coverage', getMetricSeries(() => null), 'ratio'),
-    rowFromSeries('Total Debt / EBITDA', getMetricSeries(() => null), 'ratio'),
+    rowFromSeries(
+      'Debt Servicing Ratio',
+      getMetricSeries(({ cf, bal }) => (bal?.totalDebt > 0 && Number.isFinite(cf?.operatingCashFlow) ? pct(cf.operatingCashFlow / bal.totalDebt) : null))
+    ),
+    rowFromSeries(
+      'Interest Coverage',
+      getMetricSeries(({ inc }) => (Math.abs(inc?.interestExpense || 0) > 0 && Number.isFinite(inc?.operatingIncome) ? ratio(inc.operatingIncome / Math.abs(inc.interestExpense)) : null)),
+      'ratio'
+    ),
+    rowFromSeries(
+      'Total Debt / EBITDA',
+      getMetricSeries(({ inc, bal }) => {
+        const ebitda = (inc?.operatingIncome || 0) + (inc?.depreciation || 0);
+        return ebitda > 0 && Number.isFinite(bal?.totalDebt) ? ratio((bal.totalDebt || 0) / ebitda) : null;
+      }),
+      'ratio'
+    ),
   ];
 
   const efficiencyRows = [
-    rowFromSeries('Fixed Asset Turnover', getMetricSeries(() => null), 'ratio'),
-    rowFromSeries('Days of Payables Outstanding', getMetricSeries(() => null), 'ratio'),
-    rowFromSeries('Inventory Turnover', getMetricSeries(() => null), 'ratio'),
-    rowFromSeries('Receivables Turnover', getMetricSeries(() => null), 'ratio'),
+    rowFromSeries(
+      'Fixed Asset Turnover',
+      getMetricSeries(({ inc, bal }) => {
+        const ppe = Number.isFinite(bal?.netPPE) && bal.netPPE > 0
+          ? bal.netPPE
+          : Number.isFinite(bal?.totalAssets) && Number.isFinite(bal?.currentAssets) && (bal.totalAssets - bal.currentAssets) > 0
+          ? (bal.totalAssets - bal.currentAssets)
+          : null;
+        return ppe && Number.isFinite(inc?.revenue) && inc.revenue > 0 ? ratio(inc.revenue / ppe) : null;
+      }),
+      'ratio'
+    ),
+    rowFromSeries(
+      'Days of Payables Outstanding',
+      getMetricSeries(({ inc, bal, rat }) => {
+        const cogs = Number.isFinite(inc?.costOfRevenue) && inc.costOfRevenue > 0
+          ? inc.costOfRevenue
+          : Number.isFinite(inc?.revenue) && Number.isFinite(rat?.grossProfitMargin)
+          ? inc.revenue * (1 - rat.grossProfitMargin)
+          : null;
+        return bal?.accountsPayable > 0 && Number.isFinite(cogs) && cogs > 0 ? ratio((bal.accountsPayable / cogs) * 365) : null;
+      }),
+      'ratio'
+    ),
+    rowFromSeries(
+      'Inventory Turnover',
+      getMetricSeries(({ inc, bal, rat }) => {
+        const cogs = Number.isFinite(inc?.costOfRevenue) && inc.costOfRevenue > 0
+          ? inc.costOfRevenue
+          : Number.isFinite(inc?.revenue) && Number.isFinite(rat?.grossProfitMargin)
+          ? inc.revenue * (1 - rat.grossProfitMargin)
+          : null;
+        return bal?.inventory > 0 && Number.isFinite(cogs) && cogs > 0 ? ratio(cogs / bal.inventory) : null;
+      }),
+      'ratio'
+    ),
+    rowFromSeries(
+      'Receivables Turnover',
+      getMetricSeries(({ inc, bal }) => (bal?.accountsReceivable > 0 && Number.isFinite(inc?.revenue) && inc.revenue > 0 ? ratio(inc.revenue / bal.accountsReceivable) : null)),
+      'ratio'
+    ),
     rowFromSeries('Asset Turnover Ratio', getMetricSeries(({ inc, bal }) => (bal?.totalAssets ? ratio(inc?.revenue / bal.totalAssets) : null)), 'ratio'),
-    rowFromSeries('Cash Conversion Cycle', getMetricSeries(() => null), 'ratio'),
+    rowFromSeries(
+      'Cash Conversion Cycle',
+      getMetricSeries(({ inc, bal, rat }) => {
+        const cogs = Number.isFinite(inc?.costOfRevenue) && inc.costOfRevenue > 0
+          ? inc.costOfRevenue
+          : Number.isFinite(inc?.revenue) && Number.isFinite(rat?.grossProfitMargin)
+          ? inc.revenue * (1 - rat.grossProfitMargin)
+          : null;
+        if (!Number.isFinite(cogs) || cogs <= 0) return null;
+        const dpo = bal?.accountsPayable > 0 ? (bal.accountsPayable / cogs) * 365 : null;
+        const dio = bal?.inventory > 0 ? (bal.inventory / cogs) * 365 : null;
+        const dso = bal?.accountsReceivable > 0 && Number.isFinite(inc?.revenue) && inc.revenue > 0
+          ? (bal.accountsReceivable / inc.revenue) * 365
+          : null;
+        if (![dpo, dio, dso].every((v) => Number.isFinite(v))) return null;
+        return ratio(dio + dso - dpo);
+      }),
+      'ratio'
+    ),
     rowFromSeries('CapEx to Operating Cash Flow', getMetricSeries(({ cf }) => (cf?.operatingCashFlow ? ratio(Math.abs(cf.capitalExpenditure || 0) / cf.operatingCashFlow) : null)), 'ratio'),
     rowFromSeries('CapEx to Operating Income', getMetricSeries(({ inc, cf }) => (inc?.operatingIncome ? ratio(Math.abs(cf?.capitalExpenditure || 0) / inc.operatingIncome) : null)), 'ratio'),
     rowFromSeries('CapEx to Revenue', getMetricSeries(({ inc, cf }) => (inc?.revenue ? ratio(Math.abs(cf?.capitalExpenditure || 0) / inc.revenue) : null)), 'ratio'),
@@ -2187,6 +2356,19 @@ function TradingTab({ data, theme }) {
   const inValue = analysis.latest.close <= analysis.vah && analysis.latest.close >= analysis.val;
   const aboveYearlyVWAP = analysis.latest.close > analysis.yearlyVWAP;
   const signal = data?.tradingSignals || null;
+  const tradePalette = {
+    price: '#38bdf8',
+    vwapPrimary: '#10b981',
+    vwapSecondary: '#22c55e',
+    vwapTertiary: '#eab308',
+    vwapRegime: '#06b6d4',
+    ma50: '#84cc16',
+    ma200: '#ef4444',
+    ema20w: '#94a3b8',
+    zLine: '#22d3ee',
+    histNeutral: '#0ea5e9',
+    histStretch: '#f59e0b',
+  };
   const actionTone = signal?.action === 'ACCUMULATE' || signal?.action === 'SCALE IN'
     ? theme.positive
     : signal?.action === 'REDUCE EXPOSURE' || signal?.action === 'TAKE PROFIT'
@@ -2195,6 +2377,24 @@ function TradingTab({ data, theme }) {
   const formatPx = (v) => (Number.isFinite(v) ? `$${v.toFixed(2)}` : 'N/A');
   const formatPctSigned = (v) => (Number.isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}%` : 'N/A');
   const zScoreForLadder = Number.isFinite(signal?.zScore) ? signal.zScore : null;
+  const zScoreMeaning = zScoreForLadder === null
+    ? 'Unavailable'
+    : Math.abs(zScoreForLadder) <= 0.5
+    ? 'Near fair value (neutral)'
+    : zScoreForLadder <= -2
+    ? 'Deep discount zone'
+    : zScoreForLadder < -0.5
+    ? 'Discount zone'
+    : zScoreForLadder >= 2
+    ? 'Overextended zone'
+    : 'Premium zone';
+  const zScoreTone = zScoreForLadder === null
+    ? 'neutral'
+    : Math.abs(zScoreForLadder) <= 0.5
+    ? 'neutral'
+    : zScoreForLadder < 0
+    ? 'positive'
+    : 'warning';
   const ladderPositionPct = zScoreForLadder === null
     ? 50
     : Math.max(0, Math.min(100, ((zScoreForLadder + 3) / 6) * 100));
@@ -2252,6 +2452,11 @@ function TradingTab({ data, theme }) {
       ? 'This is moderately common versus history.'
       : 'This is common versus history.'
     : 'Rarity estimate unavailable.';
+  const optimalBuyZone = signal?.entryZone?.side === 'BUY'
+    ? `${formatPx(signal.entryZone.low)} - ${formatPx(signal.entryZone.high)}`
+    : Number.isFinite(analysis.val) && Number.isFinite(analysis.yearlyVWAP)
+    ? `${formatPx(Math.min(analysis.val, analysis.yearlyVWAP))} - ${formatPx(Math.max(analysis.val, analysis.yearlyVWAP))}`
+    : 'Wait for Yearly VWAP reclaim + structure confirmation';
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-trading" aria-labelledby="tab-trading">
@@ -2271,6 +2476,7 @@ function TradingTab({ data, theme }) {
                 label="Z-Score"
                 value={Number.isFinite(signal.zScore) ? `${signal.zScore.toFixed(2)}σ` : 'N/A'}
                 helpText="Number of standard deviations current price is from the rolling mean."
+                tone={zScoreTone}
               />
               <MetricCard
                 theme={theme}
@@ -2286,17 +2492,22 @@ function TradingTab({ data, theme }) {
               />
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <MetricCard
               theme={theme}
-              label={signal.entryZone?.side === 'SELL' ? 'Action Zone (Reduce)' : 'Action Zone (Scale)'}
+              label={signal.entryZone?.side === 'SELL' ? 'Reduce Zone' : 'Execution Zone'}
               value={signal.entryZone ? `${formatPx(signal.entryZone.low)} - ${formatPx(signal.entryZone.high)}` : 'No active zone'}
+              helpText="Primary action range from current signal."
             />
+            <MetricCard theme={theme} label="Optimal Buy Zone" value={optimalBuyZone} tone="positive" />
             <MetricCard theme={theme} label="Target 1" value={formatPx(signal.targets?.tp1)} />
             <MetricCard theme={theme} label="Target 2 (Mean)" value={formatPx(signal.targets?.tp2)} />
           </div>
+          <div className="mt-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+            Z-score status: <b>{zScoreMeaning}</b>. Example: <b>0.05σ</b> is near average and usually neutral, not a strong buy/sell signal.
+          </div>
           <div className="mt-4">
-            <div className="text-[10px] tracking-widest uppercase mb-2" style={{ color: theme.textTertiary }}>Standard Deviation Ladder</div>
+            <div className="text-[10px] tracking-widest uppercase mb-2" style={{ color: theme.textTertiary }}>Standard Deviation Ladder (Entry Context)</div>
             <div className="relative h-10 rounded-lg border overflow-hidden" style={{ borderColor: theme.border }}>
               <div
                 className="absolute inset-0"
@@ -2324,6 +2535,9 @@ function TradingTab({ data, theme }) {
             </div>
             <div className="mt-1 flex justify-between text-[10px]" style={{ color: theme.textTertiary }}>
               <span>-3σ</span><span>-2σ</span><span>-1σ</span><span>0σ</span><span>+1σ</span><span>+2σ</span><span>+3σ</span>
+            </div>
+            <div className="mt-1 text-[10px]" style={{ color: theme.textTertiary }}>
+              Left side (negative sigma) = cheaper vs recent mean. Near 0σ = fair/neutral. Right side (positive sigma) = richer/extended.
             </div>
           </div>
           {Array.isArray(signal.rationale) && signal.rationale.length > 0 && (
@@ -2372,14 +2586,14 @@ function TradingTab({ data, theme }) {
             <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} domain={['auto', 'auto']} />
             <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} />
             <Legend wrapperStyle={{ fontSize: 10 }} />
-            <Line type="monotone" dataKey="close" stroke="#60a5fa" dot={false} strokeWidth={2} name="Close" />
-            <Line type="monotone" dataKey="yearlyVWAP" stroke="#10b981" dot={false} strokeWidth={1.8} name="Yearly VWAP" />
-            <Line type="monotone" dataKey="cycleLowVWAP" stroke="#22c55e" dot={false} strokeDasharray="6 4" name="Cycle Low VWAP" />
-            <Line type="monotone" dataKey="athVWAP" stroke="#f59e0b" dot={false} strokeDasharray="6 4" name="ATH VWAP" />
-            <Line type="monotone" dataKey="regimeVWAP" stroke="#a855f7" dot={false} strokeDasharray="3 4" name="Regime VWAP" />
-            <Line type="monotone" dataKey="ma50" stroke="#f97316" dot={false} name="50 DMA" />
-            <Line type="monotone" dataKey="ma200" stroke="#ef4444" dot={false} name="200 DMA" />
-            <Line type="monotone" dataKey="ema20w" stroke="#94a3b8" dot={false} strokeDasharray="4 3" name="20 EMA (weekly proxy)" />
+            <Line type="monotone" dataKey="close" stroke={tradePalette.price} dot={false} strokeWidth={2} name="Close" />
+            <Line type="monotone" dataKey="yearlyVWAP" stroke={tradePalette.vwapPrimary} dot={false} strokeWidth={1.8} name="Yearly VWAP" />
+            <Line type="monotone" dataKey="cycleLowVWAP" stroke={tradePalette.vwapSecondary} dot={false} strokeDasharray="6 4" name="Cycle Low VWAP" />
+            <Line type="monotone" dataKey="athVWAP" stroke={tradePalette.vwapTertiary} dot={false} strokeDasharray="6 4" name="ATH VWAP" />
+            <Line type="monotone" dataKey="regimeVWAP" stroke={tradePalette.vwapRegime} dot={false} strokeDasharray="3 4" name="Regime VWAP" />
+            <Line type="monotone" dataKey="ma50" stroke={tradePalette.ma50} dot={false} name="50 DMA" />
+            <Line type="monotone" dataKey="ma200" stroke={tradePalette.ma200} dot={false} name="200 DMA" />
+            <Line type="monotone" dataKey="ema20w" stroke={tradePalette.ema20w} dot={false} strokeDasharray="4 3" name="20 EMA (weekly proxy)" />
             <ReferenceLine y={analysis.yearlyHigh} stroke="#1d4ed8" strokeDasharray="4 3" label={{ value: 'YH', position: 'insideRight', fill: '#1d4ed8', fontSize: 10 }} />
             <ReferenceLine y={analysis.yearlyLow} stroke="#1d4ed8" strokeDasharray="4 3" label={{ value: 'YL', position: 'insideRight', fill: '#1d4ed8', fontSize: 10 }} />
             <ReferenceLine y={analysis.poc} stroke="#334155" strokeDasharray="5 4" label={{ value: 'POC', position: 'insideRight', fill: '#64748b', fontSize: 10 }} />
@@ -2419,14 +2633,14 @@ function TradingTab({ data, theme }) {
             <ReferenceLine y={-2} stroke={theme.warning} strokeDasharray="3 3" />
             <ReferenceLine y={3} stroke={theme.negative} strokeDasharray="2 3" />
             <ReferenceLine y={-3} stroke={theme.positive} strokeDasharray="2 3" />
-            <Line type="monotone" dataKey="zScore" stroke={theme.accentAlt} dot={false} strokeWidth={1.8} name="Z-Score" />
+            <Line type="monotone" dataKey="zScore" stroke={tradePalette.zLine} dot={false} strokeWidth={1.8} name="Z-Score" />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
       <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between mb-3">
-          <h4 className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Z-Score Distribution (Advanced)</h4>
+          <h4 className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Z-Score Distribution</h4>
           {Number.isFinite(signal?.zScore) && (
             <div className="text-[10px] font-semibold px-2 py-1 rounded border" style={{ color: actionTone, borderColor: `${actionTone}55`, background: `${actionTone}14` }}>
               Current: {signal.zScore.toFixed(2)}σ
@@ -2502,7 +2716,7 @@ function TradingTab({ data, theme }) {
               {analysis.zScoreHistogram.map((b, i) => {
                 const extreme = b.low <= -2 || b.high >= 2;
                 const isCurrentBin = analysis.currentBinLabel === b.label;
-                const fill = isCurrentBin ? actionTone : extreme ? theme.warning : theme.accentAlt;
+                const fill = isCurrentBin ? actionTone : extreme ? tradePalette.histStretch : tradePalette.histNeutral;
                 return <Cell key={`zbin-${i}`} fill={fill} fillOpacity={isCurrentBin ? 1 : 0.85} />;
               })}
             </Bar>
@@ -2598,7 +2812,7 @@ function TradingTab({ data, theme }) {
               {analysis.deviationHistogram.map((b, i) => {
                 const extreme = b.low <= -10 || b.high >= 10;
                 const isCurrentBin = analysis.currentDeviationBinLabel === b.label;
-                const fill = isCurrentBin ? actionTone : extreme ? theme.warning : theme.accentAlt;
+                const fill = isCurrentBin ? actionTone : extreme ? tradePalette.histStretch : tradePalette.histNeutral;
                 return <Cell key={`devbin-${i}`} fill={fill} fillOpacity={isCurrentBin ? 1 : 0.85} />;
               })}
             </Bar>

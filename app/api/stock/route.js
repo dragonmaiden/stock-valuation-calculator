@@ -400,25 +400,50 @@ export async function GET(request) {
     const revenueFields = ['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues', 'SalesRevenueNet', 'SalesRevenueGoodsNet'];
     const netIncomeFields = ['NetIncomeLoss', 'ProfitLoss', 'NetIncomeLossAvailableToCommonStockholdersBasic'];
     const grossProfitFields = ['GrossProfit'];
-    const costOfRevenueFields = ['CostOfRevenue', 'CostOfGoodsAndServicesSold', 'CostOfGoodsSold'];
+    const costOfRevenueFields = ['CostOfRevenue', 'CostOfGoodsAndServicesSold', 'CostOfGoodsSold', 'CostOfProductsSold', 'CostOfServicesSold'];
     const operatingIncomeFields = ['OperatingIncomeLoss'];
     const totalAssetsFields = ['Assets'];
     const totalEquityFields = ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'];
+    const inventoryFields = ['InventoryNet', 'InventoryFinishedGoods', 'InventoryGross', 'Inventory', 'Inventories'];
+    const receivablesFields = [
+      'AccountsReceivableNetCurrent',
+      'ReceivablesNetCurrent',
+      'AccountsAndOtherReceivablesNetCurrent',
+      'AccountsNotesAndLoansReceivableNetCurrent',
+      'AccountsReceivableNet',
+      'NotesReceivableNetCurrent',
+    ];
+    const accountsPayableFields = [
+      'AccountsPayableCurrent',
+      'AccountsPayable',
+      'AccountsPayableAndAccruedLiabilitiesCurrent',
+      'AccountsPayableAndOtherAccruedLiabilitiesCurrent',
+      'AccountsPayableAndAccruedExpensesCurrent',
+      'AccountsPayableTradeCurrent',
+    ];
+    const netPpeFields = [
+      'PropertyPlantAndEquipmentNet',
+      'PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization',
+      'PropertyPlantAndEquipmentAndSoftwareNet',
+    ];
     const cashFields = ['CashAndCashEquivalentsAtCarryingValue', 'Cash'];
     const debtFields = ['LongTermDebt', 'LongTermDebtNoncurrent'];
     const operatingCashFlowFields = ['NetCashProvidedByUsedInOperatingActivities'];
     const capexFields = [
       'PaymentsToAcquirePropertyPlantAndEquipment',
       'CapitalExpenditures',
+      'PaymentsToAcquireProductiveAssets',
+      'PaymentsToAcquirePropertyPlantAndEquipmentAndIntangibleAssets',
     ];
     const depreciationFields = [
       'DepreciationAndAmortization',
       'DepreciationDepletionAndAmortization',
       'DepreciationAmortizationAndAccretionNet',
+      'Depreciation',
     ];
     const currentAssetsFields = ['AssetsCurrent'];
     const currentLiabilitiesFields = ['LiabilitiesCurrent'];
-    const interestExpenseFields = ['InterestExpense'];
+    const interestExpenseFields = ['InterestExpense', 'InterestAndDebtExpense'];
     const pretaxIncomeFields = ['IncomeBeforeTax'];
     const incomeTaxFields = ['IncomeTaxExpenseBenefit'];
     const sharesDilutedFields = ['WeightedAverageNumberOfDilutedSharesOutstanding'];
@@ -432,6 +457,10 @@ export async function GET(request) {
     const operatingIncomeAnnual = getMetricValues(usGaap, operatingIncomeFields, 'FY', 10);
     const assetsAnnual = getMetricValues(usGaap, totalAssetsFields, 'FY', 10);
     const equityAnnual = getMetricValues(usGaap, totalEquityFields, 'FY', 10);
+    const inventoryAnnual = getMetricValues(usGaap, inventoryFields, 'FY', 10);
+    const receivablesAnnual = getMetricValues(usGaap, receivablesFields, 'FY', 10);
+    const accountsPayableAnnual = getMetricValues(usGaap, accountsPayableFields, 'FY', 10);
+    const netPpeAnnual = getMetricValues(usGaap, netPpeFields, 'FY', 10);
     const cashAnnual = getMetricValues(usGaap, cashFields, 'FY', 10);
     const debtAnnual = getMetricValues(usGaap, debtFields, 'FY', 10);
     const opCashFlowAnnual = getMetricValues(usGaap, operatingCashFlowFields, 'FY', 10);
@@ -453,6 +482,10 @@ export async function GET(request) {
     const operatingIncomeQuarterly = getMetricValues(usGaap, operatingIncomeFields, 'Q', 20);
     const assetsQuarterly = getMetricValues(usGaap, totalAssetsFields, 'Q', 20);
     const equityQuarterly = getMetricValues(usGaap, totalEquityFields, 'Q', 20);
+    const inventoryQuarterly = getMetricValues(usGaap, inventoryFields, 'Q', 20);
+    const receivablesQuarterly = getMetricValues(usGaap, receivablesFields, 'Q', 20);
+    const accountsPayableQuarterly = getMetricValues(usGaap, accountsPayableFields, 'Q', 20);
+    const netPpeQuarterly = getMetricValues(usGaap, netPpeFields, 'Q', 20);
     const cashQuarterly = getMetricValues(usGaap, cashFields, 'Q', 20);
     const debtQuarterly = getMetricValues(usGaap, debtFields, 'Q', 20);
     const opCashFlowQuarterly = getMetricValues(usGaap, operatingCashFlowFields, 'Q', 20);
@@ -464,6 +497,10 @@ export async function GET(request) {
     const operatingIncomeAnnualByEnd = mapByEndValue(operatingIncomeAnnual);
     const netIncomeAnnualByEnd = mapByEndValue(netIncomeAnnual);
     const equityAnnualByEnd = mapByEndValue(equityAnnual);
+    const inventoryAnnualByEnd = mapByEndValue(inventoryAnnual);
+    const receivablesAnnualByEnd = mapByEndValue(receivablesAnnual);
+    const accountsPayableAnnualByEnd = mapByEndValue(accountsPayableAnnual);
+    const netPpeAnnualByEnd = mapByEndValue(netPpeAnnual);
     const cashAnnualByEnd = mapByEndValue(cashAnnual);
     const debtAnnualByEnd = mapByEndValue(debtAnnual);
     const currentAssetsAnnualByEnd = mapByEndValue(currentAssetsAnnual);
@@ -474,8 +511,19 @@ export async function GET(request) {
     const operatingIncomeQuarterlyByEnd = mapByEndValue(operatingIncomeQuarterly);
     const netIncomeQuarterlyByEnd = mapByEndValue(netIncomeQuarterly);
     const equityQuarterlyByEnd = mapByEndValue(equityQuarterly);
+    const inventoryQuarterlyByEnd = mapByEndValue(inventoryQuarterly);
+    const receivablesQuarterlyByEnd = mapByEndValue(receivablesQuarterly);
+    const accountsPayableQuarterlyByEnd = mapByEndValue(accountsPayableQuarterly);
+    const netPpeQuarterlyByEnd = mapByEndValue(netPpeQuarterly);
     const cashQuarterlyByEnd = mapByEndValue(cashQuarterly);
     const debtQuarterlyByEnd = mapByEndValue(debtQuarterly);
+    const capexAnnualByEnd = mapByEndValue(capexAnnual);
+    const capexAnnualByYear = new Map(capexAnnual.map((r) => [String(r.fy), r.val]));
+    const capexQuarterlyByEnd = mapByEndValue(capexQuarterly);
+    const depreciationAnnualByEnd = mapByEndValue(depreciationAnnual);
+    const depreciationAnnualByYear = new Map(depreciationAnnual.map((r) => [String(r.fy), r.val]));
+    const interestExpenseAnnualByEnd = mapByEndValue(interestExpenseAnnual);
+    const interestExpenseAnnualByYear = new Map(interestExpenseAnnual.map((r) => [String(r.fy), r.val]));
 
     // Build income statement data (annual)
     const income = revenueAnnual.map((rev) => ({
@@ -488,8 +536,11 @@ export async function GET(request) {
       date: rev.end,
       calendarYear: String(rev.fy),
       revenue: rev.val || 0,
+      costOfRevenue: costOfRevenueAnnualByEnd.get(rev.end) ?? null,
       operatingIncome: operatingIncomeAnnualByEnd.get(rev.end) ?? null,
       netIncome: netIncomeAnnualByEnd.get(rev.end) ?? null,
+      interestExpense: interestExpenseAnnualByEnd.get(rev.end) ?? interestExpenseAnnualByYear.get(String(rev.fy)) ?? null,
+      depreciation: depreciationAnnualByEnd.get(rev.end) ?? depreciationAnnualByYear.get(String(rev.fy)) ?? null,
     })).reverse();
 
     // Build income statement data (quarterly)
@@ -504,8 +555,11 @@ export async function GET(request) {
       fiscalYear: String(rev.fy),
       period: rev.fp,
       revenue: rev.val || 0,
+      costOfRevenue: costOfRevenueQuarterlyByEnd.get(rev.end) ?? null,
       operatingIncome: operatingIncomeQuarterlyByEnd.get(rev.end) ?? null,
       netIncome: netIncomeQuarterlyByEnd.get(rev.end) ?? null,
+      interestExpense: null,
+      depreciation: null,
     })).reverse();
 
     // Build balance sheet data (annual)
@@ -514,6 +568,10 @@ export async function GET(request) {
       calendarYear: String(asset.fy),
       totalAssets: asset.val || 0,
       totalEquity: equityAnnualByEnd.get(asset.end) || 0,
+      inventory: inventoryAnnualByEnd.get(asset.end) ?? null,
+      accountsReceivable: receivablesAnnualByEnd.get(asset.end) ?? null,
+      accountsPayable: accountsPayableAnnualByEnd.get(asset.end) ?? null,
+      netPPE: netPpeAnnualByEnd.get(asset.end) ?? null,
       cashAndCashEquivalents: cashAnnualByEnd.get(asset.end) || 0,
       shortTermInvestments: 0,
       currentAssets: currentAssetsAnnualByEnd.get(asset.end) || null,
@@ -528,6 +586,10 @@ export async function GET(request) {
       period: asset.fp,
       totalAssets: asset.val || 0,
       totalEquity: equityQuarterlyByEnd.get(asset.end) || 0,
+      inventory: inventoryQuarterlyByEnd.get(asset.end) ?? null,
+      accountsReceivable: receivablesQuarterlyByEnd.get(asset.end) ?? null,
+      accountsPayable: accountsPayableQuarterlyByEnd.get(asset.end) ?? null,
+      netPPE: netPpeQuarterlyByEnd.get(asset.end) ?? null,
       cashAndCashEquivalents: cashQuarterlyByEnd.get(asset.end) || 0,
       shortTermInvestments: 0,
       currentAssets: null,
@@ -540,8 +602,8 @@ export async function GET(request) {
       date: ocf.end,
       calendarYear: String(ocf.fy),
       operatingCashFlow: ocf.val || 0,
-      capitalExpenditure: -(capexAnnual.find(c => c.fy === ocf.fy)?.val || 0),
-      freeCashFlow: (ocf.val || 0) - (capexAnnual.find(c => c.fy === ocf.fy)?.val || 0),
+      capitalExpenditure: -((capexAnnualByEnd.get(ocf.end) ?? capexAnnualByYear.get(String(ocf.fy))) || 0),
+      freeCashFlow: (ocf.val || 0) - ((capexAnnualByEnd.get(ocf.end) ?? capexAnnualByYear.get(String(ocf.fy))) || 0),
     })).reverse();
 
     // Build cash flow data (quarterly)
@@ -550,8 +612,8 @@ export async function GET(request) {
       fiscalYear: String(ocf.fy),
       period: ocf.fp,
       operatingCashFlow: ocf.val || 0,
-      capitalExpenditure: -(capexQuarterly.find(c => c.end === ocf.end)?.val || 0),
-      freeCashFlow: (ocf.val || 0) - (capexQuarterly.find(c => c.end === ocf.end)?.val || 0),
+      capitalExpenditure: -((capexQuarterlyByEnd.get(ocf.end)) || 0),
+      freeCashFlow: (ocf.val || 0) - ((capexQuarterlyByEnd.get(ocf.end)) || 0),
     })).reverse();
 
     const balanceByYear = new Map(balance.map(b => [String(b.calendarYear), b]));
@@ -1208,12 +1270,12 @@ export async function GET(request) {
       const pbRatio = Number.isFinite(historicalPrice) && bookValuePerShare > 0 ? historicalPrice / bookValuePerShare : null;
 
       // PEG ratio (P/E divided by growth rate)
-      const pegRatio = peRatio && epsGrowth !== null && epsGrowth > 0
+      const pegRatio = peRatio && epsGrowth !== null && epsGrowth !== 0
         ? peRatio / (epsGrowth * 100)
         : null;
 
       // PSG ratio (P/S divided by growth rate)
-      const psgRatio = psRatio && revenueGrowthRate !== null && revenueGrowthRate > 0
+      const psgRatio = psRatio && revenueGrowthRate !== null && revenueGrowthRate !== 0
         ? psRatio / (revenueGrowthRate * 100)
         : null;
 
@@ -1372,10 +1434,10 @@ export async function GET(request) {
         peRatio: currentPE,
         psRatio: currentPS,
         pbRatio: currentPB,
-        pegRatio: currentPE && currentEpsGrowth !== null && currentEpsGrowth > 0
+        pegRatio: currentPE && currentEpsGrowth !== null && currentEpsGrowth !== 0
           ? currentPE / (currentEpsGrowth * 100)
           : null,
-        psgRatio: currentPS && currentRevenueGrowth > 0 ? currentPS / (currentRevenueGrowth * 100) : null,
+        psgRatio: currentPS && currentRevenueGrowth !== 0 ? currentPS / (currentRevenueGrowth * 100) : null,
       },
       tenYearAvg: {
         peRatio: calcAvg(valuationRatios, 'peRatio'),
