@@ -505,6 +505,7 @@ function OverviewTab({ data, verdict, theme, formatNumber, formatPercent, format
 
 function ValuationTab({ data, theme }) {
   const [showLegacy, setShowLegacy] = useState(false);
+  const safeRatio = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : 'N/A');
   const safeMoney = (value, digits = 2) => (Number.isFinite(value) ? `$${value.toFixed(digits)}` : 'N/A');
   const safePercent = (value, digits = 1) => (Number.isFinite(value) ? `${value.toFixed(digits)}%` : 'N/A');
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -620,8 +621,89 @@ function ValuationTab({ data, theme }) {
   const fcfYield = Number.isFinite(latestFCFPerShare) && Number.isFinite(currentPrice) && currentPrice > 0
     ? latestFCFPerShare / currentPrice
     : null;
+  const pfcfTtm = Number.isFinite(fcfYield) && fcfYield > 0 ? 1 / fcfYield : null;
+  const avgFcf3y = (() => {
+    if (!sharesOutstanding) return null;
+    const vals = (data?.cashflow || [])
+      .slice(-3)
+      .map((r) => (Number.isFinite(r?.freeCashFlow) ? r.freeCashFlow : null))
+      .filter((v) => Number.isFinite(v));
+    if (!vals.length) return null;
+    return vals.reduce((s, v) => s + v, 0) / vals.length;
+  })();
+  const fcfPerShare3y = Number.isFinite(avgFcf3y) && sharesOutstanding > 0 ? avgFcf3y / sharesOutstanding : null;
+  const pfcf3y = Number.isFinite(currentPrice) && Number.isFinite(fcfPerShare3y) && fcfPerShare3y > 0 ? currentPrice / fcfPerShare3y : null;
+  const currentEarningsYield = Number.isFinite(currentPE) && currentPE > 0 ? 1 / currentPE : null;
+  const forwardPE = data?.valuationRatios?.other?.forwardPE ?? null;
+  const forwardEarningsYield = Number.isFinite(forwardPE) && forwardPE > 0 ? 1 / forwardPE : null;
+  const currentPeg = data?.valuationRatios?.current?.pegRatio ?? null;
+  const currentPsg = data?.valuationRatios?.current?.psgRatio ?? null;
   const growthNeededForReturn10 = Number.isFinite(fcfYield) ? Math.max(0, 0.1 - fcfYield) : null;
   const growthNeededForReturn12 = Number.isFinite(fcfYield) ? Math.max(0, 0.12 - fcfYield) : null;
+
+  const terminalPfcfBase = clamp(terminalPEBase * 0.85, 8, 28);
+  const impliedFcfRows = discountRates.map((r) => {
+    const horizonValues = fadeHorizons.map((years) => {
+      const growth = calcImpliedGrowth({ basePerShare: latestFCFPerShare, requiredReturn: r, years, terminalPE: terminalPfcfBase });
+      return { years, growth };
+    });
+    return { requiredReturn: r, horizonValues };
+  });
+
+  const calcTwoStageFcfValue = ({ growth, requiredReturn, terminalPfcf, years = 7 }) => {
+    if (!Number.isFinite(latestFCFPerShare) || latestFCFPerShare <= 0) return null;
+    let pv = 0;
+    for (let t = 1; t <= years; t++) {
+      const fcfT = latestFCFPerShare * Math.pow(1 + growth, t);
+      pv += fcfT / Math.pow(1 + requiredReturn, t);
+    }
+    const terminalFcf = latestFCFPerShare * Math.pow(1 + growth, years);
+    const terminalValue = terminalFcf * terminalPfcf;
+    pv += terminalValue / Math.pow(1 + requiredReturn, years);
+    return Number.isFinite(pv) && pv > 0 ? pv : null;
+  };
+
+  const dcfScenarioValues = {
+    stress: calcTwoStageFcfValue({
+      growth: clamp(scenarioByName.stress.growth - 0.01, -0.03, 0.10),
+      requiredReturn: scenarioByName.stress.requiredReturn,
+      terminalPfcf: clamp(terminalPfcfBase - 2, 6, 24),
+      years: assumptionHorizon,
+    }),
+    base: calcTwoStageFcfValue({
+      growth: clamp(scenarioByName.base.growth, 0, 0.18),
+      requiredReturn: scenarioByName.base.requiredReturn,
+      terminalPfcf: terminalPfcfBase,
+      years: assumptionHorizon,
+    }),
+    expansion: calcTwoStageFcfValue({
+      growth: clamp(scenarioByName.expansion.growth + 0.01, 0.02, 0.24),
+      requiredReturn: scenarioByName.expansion.requiredReturn,
+      terminalPfcf: clamp(terminalPfcfBase + 2, 8, 30),
+      years: assumptionHorizon,
+    }),
+  };
+
+  const justifiedPeRange = {
+    stress: Number.isFinite(scenarioValues.stress) && Number.isFinite(latestEPS) && latestEPS > 0 ? scenarioValues.stress / latestEPS : null,
+    base: Number.isFinite(scenarioValues.base) && Number.isFinite(latestEPS) && latestEPS > 0 ? scenarioValues.base / latestEPS : null,
+    expansion: Number.isFinite(scenarioValues.expansion) && Number.isFinite(latestEPS) && latestEPS > 0 ? scenarioValues.expansion / latestEPS : null,
+  };
+
+  const shareholderYield = Number.isFinite(data?.favorites?.dividendYield) ? data.favorites.dividendYield : 0;
+  const returnDecomposition = Object.entries(scenarioByName).map(([key, s]) => {
+    const multipleEffect = Number.isFinite(currentPE) && currentPE > 0
+      ? Math.pow(s.terminalPE / currentPE, 1 / assumptionHorizon) - 1
+      : 0;
+    const expectedReturn = s.growth + shareholderYield + multipleEffect;
+    return {
+      key,
+      growth: s.growth,
+      shareholderYield,
+      multipleEffect,
+      expectedReturn,
+    };
+  });
 
   const meanPeAnchor = data?.valuationRatios?.other?.meanPEValue ?? null;
   const meanPsAnchor = data?.valuationRatios?.other?.meanPSValue ?? null;
@@ -691,10 +773,10 @@ function ValuationTab({ data, theme }) {
       entry.key !== 'psgValue'
     );
 
-  const scenarioRangeLow = Number.isFinite(scenarioValues.stress) ? scenarioValues.stress : epvFloor;
-  const scenarioRangeHigh = Number.isFinite(scenarioValues.expansion) ? scenarioValues.expansion : scenarioValues.base;
-  const scenarioRangeUpside = Number.isFinite(currentPrice) && Number.isFinite(scenarioValues.base)
-    ? ((scenarioValues.base - currentPrice) / currentPrice) * 100
+  const dcfRangeLow = Number.isFinite(dcfScenarioValues.stress) ? dcfScenarioValues.stress : epvFloor;
+  const dcfRangeHigh = Number.isFinite(dcfScenarioValues.expansion) ? dcfScenarioValues.expansion : dcfScenarioValues.base;
+  const dcfRangeUpside = Number.isFinite(currentPrice) && Number.isFinite(dcfScenarioValues.base)
+    ? ((dcfScenarioValues.base - currentPrice) / currentPrice) * 100
     : null;
 
   return (
@@ -748,12 +830,16 @@ function ValuationTab({ data, theme }) {
             </div>
           </label>
         </div>
+        <div className="mt-3 text-[10px]" style={{ color: theme.textMuted }}>
+          Terminal multiple captures long-term business quality after growth fades; small changes materially affect valuation.
+        </div>
       </div>
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>What&apos;s Priced In</h3>
+        <h3 className="text-xs font-semibold tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>Section 1 - Is Today&apos;s Price Sensible?</h3>
         <div className="text-xs mb-4" style={{ color: theme.textTertiary }}>{impliedSummary}</div>
-        <div className="overflow-x-auto">
+        <div className="text-[10px] mb-2" style={{ color: theme.textTertiary }}>Reverse P/E (Implied EPS Growth)</div>
+        <div className="overflow-x-auto mb-4">
           <table className="w-full text-xs">
             <thead>
               <tr style={{ background: theme.tableBg }}>
@@ -782,6 +868,66 @@ function ValuationTab({ data, theme }) {
         <div className="mt-3 text-[10px]" style={{ color: theme.textMuted }}>
           Model assumptions: terminal P/E {terminalPEBase.toFixed(1)}, EPS base {safeMoney(latestEPS)}.
         </div>
+        <div className="mt-2 text-[10px]" style={{ color: theme.textMuted }}>
+          Implied growth reflects current earnings normalization and margin expansion; not all of this growth must come from revenue.
+        </div>
+
+        <div className="text-[10px] mt-4 mb-2" style={{ color: theme.textTertiary }}>Reverse P/FCF (Implied Cash Growth)</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ background: theme.tableBg }}>
+                <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Required Return</th>
+                {fadeHorizons.map((h) => (
+                  <th key={`fcf-head-${h}`} className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>
+                    Implied FCF CAGR ({h}Y)
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {impliedFcfRows.map((row) => (
+                <tr key={`fcf-${row.requiredReturn}`} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                  <td className="px-3 py-3" style={{ color: theme.text }}>{(row.requiredReturn * 100).toFixed(0)}%</td>
+                  {row.horizonValues.map((h) => (
+                    <td key={`fcf-${row.requiredReturn}-${h.years}`} className="px-3 py-3 text-right" style={{ color: Number.isFinite(h.growth) && h.growth <= 0.12 ? theme.positive : theme.warning }}>
+                      {Number.isFinite(h.growth) ? `${(h.growth * 100).toFixed(1)}%` : '-'}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-2 text-[10px]" style={{ color: theme.textMuted }}>
+          Cash model assumptions: terminal P/FCF {terminalPfcfBase.toFixed(1)}x, FCF/share base {safeMoney(latestFCFPerShare)}.
+        </div>
+
+        <div className="text-[10px] mt-4 mb-2" style={{ color: theme.textTertiary }}>Return Decomposition (Approx.)</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ background: theme.tableBg }}>
+                <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Scenario</th>
+                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>EPS Growth</th>
+                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Yield</th>
+                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Multiple Effect</th>
+                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Expected Return</th>
+              </tr>
+            </thead>
+            <tbody>
+              {returnDecomposition.map((row) => (
+                <tr key={`decomp-${row.key}`} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                  <td className="px-3 py-3 capitalize" style={{ color: theme.text }}>{row.key}</td>
+                  <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{safePercent(row.growth * 100)}</td>
+                  <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{safePercent(row.shareholderYield * 100)}</td>
+                  <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{safePercent(row.multipleEffect * 100)}</td>
+                  <td className="px-3 py-3 text-right font-semibold" style={{ color: row.expectedReturn >= 0 ? theme.positive : theme.negative }}>{safePercent(row.expectedReturn * 100)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -791,22 +937,25 @@ function ValuationTab({ data, theme }) {
           <div className="text-xs" style={{ color: theme.textTertiary }}>
             Normalized earnings (5Y median) capitalized at 10%.
           </div>
+          <div className="text-[10px] mt-2" style={{ color: theme.textMuted }}>
+            Represents no-growth, normalized earnings capitalized at required return; not a downside price target.
+          </div>
         </div>
         <div className="p-5 rounded-2xl border lg:col-span-2" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[10px] tracking-widest uppercase mb-1" style={{ color: theme.textTertiary }}>Conservative Intrinsic Range (2-Stage)</div>
+              <div className="text-[10px] tracking-widest uppercase mb-1" style={{ color: theme.textTertiary }}>Section 2 - Intrinsic Range (Cashflow-Based Scenarios)</div>
               <div className="text-xl font-bold" style={{ color: theme.text }}>
-                {safeMoney(scenarioRangeLow)} - {safeMoney(scenarioRangeHigh)}
+                {safeMoney(dcfRangeLow)} - {safeMoney(dcfRangeHigh)}
               </div>
             </div>
             <div className="text-right">
               <div className="text-[10px] uppercase tracking-widest" style={{ color: theme.textTertiary }}>Base Scenario</div>
-              <div className="text-xl font-bold" style={{ color: Number.isFinite(scenarioRangeUpside) && scenarioRangeUpside >= 0 ? theme.positive : theme.negative }}>
-                {safeMoney(scenarioValues.base)}
+              <div className="text-xl font-bold" style={{ color: Number.isFinite(dcfRangeUpside) && dcfRangeUpside >= 0 ? theme.positive : theme.negative }}>
+                {safeMoney(dcfScenarioValues.base)}
               </div>
-              <div className="text-xs" style={{ color: Number.isFinite(scenarioRangeUpside) && scenarioRangeUpside >= 0 ? theme.positive : theme.negative }}>
-                {Number.isFinite(scenarioRangeUpside) ? `${scenarioRangeUpside >= 0 ? '+' : ''}${scenarioRangeUpside.toFixed(1)}% vs current` : 'N/A vs current'}
+              <div className="text-xs" style={{ color: Number.isFinite(dcfRangeUpside) && dcfRangeUpside >= 0 ? theme.positive : theme.negative }}>
+                {Number.isFinite(dcfRangeUpside) ? `${dcfRangeUpside >= 0 ? '+' : ''}${dcfRangeUpside.toFixed(1)}% vs current` : 'N/A vs current'}
               </div>
             </div>
           </div>
@@ -818,9 +967,9 @@ function ValuationTab({ data, theme }) {
             ].map((s) => (
               <div key={s.key} className="p-3 rounded-xl border" style={{ background: theme.bg, borderColor: theme.border }}>
                 <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: theme.textTertiary }}>{s.label}</div>
-                <div className="text-base font-semibold mb-1" style={{ color: theme.text }}>{safeMoney(scenarioValues[s.key])}</div>
+                <div className="text-base font-semibold mb-1" style={{ color: theme.text }}>{safeMoney(dcfScenarioValues[s.key])}</div>
                 <div className="text-[10px]" style={{ color: theme.textMuted }}>
-                  g={safePercent(scenarioByName[s.key].growth * 100)} | r={safePercent(scenarioByName[s.key].requiredReturn * 100)} | P/E<sub>t</sub>={scenarioByName[s.key].terminalPE.toFixed(1)}
+                  g={safePercent(scenarioByName[s.key].growth * 100)} | r={safePercent(scenarioByName[s.key].requiredReturn * 100)} | P/FCF<sub>t</sub>={(s.key === 'stress' ? clamp(terminalPfcfBase - 2, 6, 24) : s.key === 'expansion' ? clamp(terminalPfcfBase + 2, 8, 30) : terminalPfcfBase).toFixed(1)}
                 </div>
               </div>
             ))}
@@ -828,21 +977,39 @@ function ValuationTab({ data, theme }) {
         </div>
       </div>
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase" style={{ color: theme.textSecondary }}>FCF Yield Sanity Map</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <MetricCard theme={theme} label="FCF Yield (Current)" value={Number.isFinite(fcfYield) ? `${(fcfYield * 100).toFixed(2)}%` : 'N/A'} />
-          <MetricCard theme={theme} label="Growth Needed (10% Return)" value={Number.isFinite(growthNeededForReturn10) ? `${(growthNeededForReturn10 * 100).toFixed(1)}%` : 'N/A'} />
-          <MetricCard theme={theme} label="Growth Needed (12% Return)" value={Number.isFinite(growthNeededForReturn12) ? `${(growthNeededForReturn12 * 100).toFixed(1)}%` : 'N/A'} />
-        </div>
-        <div className="mt-3 text-[10px]" style={{ color: theme.textMuted }}>
-          Interpretation: lower FCF yield requires higher durable growth to justify the same required return.
+      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="text-[10px] tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>Interpretation</div>
+        <div className="text-xs leading-relaxed" style={{ color: theme.textTertiary }}>
+          At today&apos;s price, the market is assuming several years of elevated earnings growth. Valuation is more sensitive to growth duration than short-term quarterly noise, and downside risk rises if earnings growth fades materially within 3-4 years.
         </div>
       </div>
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Market Anchors (History, Secondary)</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Section 3 - Multiples Dashboard (Context)</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <MetricCard theme={theme} label="P/E (TTM)" value={safeRatio(currentPE)} />
+          <MetricCard theme={theme} label="Earnings Yield (E/P)" value={Number.isFinite(currentEarningsYield) ? `${(currentEarningsYield * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="Forward P/E" value={safeRatio(forwardPE)} />
+          <MetricCard theme={theme} label="Forward Earnings Yield" value={Number.isFinite(forwardEarningsYield) ? `${(forwardEarningsYield * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="P/FCF (TTM)" value={safeRatio(pfcfTtm)} />
+          <MetricCard theme={theme} label="P/FCF (3Y Avg FCF)" value={safeRatio(pfcf3y)} />
+          <MetricCard theme={theme} label="FCF Yield (TTM)" value={Number.isFinite(fcfYield) ? `${(fcfYield * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="Growth Needed (10% / 12%)" value={`${Number.isFinite(growthNeededForReturn10) ? `${(growthNeededForReturn10 * 100).toFixed(1)}%` : 'N/A'} / ${Number.isFinite(growthNeededForReturn12) ? `${(growthNeededForReturn12 * 100).toFixed(1)}%` : 'N/A'}`} />
+        </div>
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <MetricCard theme={theme} label="Justified P/E (Stress)" value={safeRatio(justifiedPeRange.stress)} />
+          <MetricCard theme={theme} label="Justified P/E (Base)" value={safeRatio(justifiedPeRange.base)} />
+          <MetricCard theme={theme} label="Justified P/E (Expansion)" value={safeRatio(justifiedPeRange.expansion)} />
+        </div>
+        <div className="mt-4 p-3 rounded-lg border text-[10px]" style={{ background: theme.bg, borderColor: theme.warningBorder, color: theme.warningText }}>
+          PEG/PSG are shown as heuristics only. They are unreliable when growth exceeds ~30-40%, or when margins/earnings base are shifting.
+          Current PEG: {safeRatio(currentPeg)} | Current PSG: {safeRatio(currentPsg)}
+        </div>
+      </div>
+
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Section 4 - Market Context</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <MetricCard theme={theme} label="Historical Mean P/E Value" value={safeMoney(meanPeAnchor)} />
           <MetricCard theme={theme} label="Historical Mean P/S Value" value={safeMoney(meanPsAnchor)} />
           {showPB ? (
@@ -850,27 +1017,17 @@ function ValuationTab({ data, theme }) {
           ) : (
             <MetricCard theme={theme} label="P/B Usage" value="Hidden (non-asset-heavy sector)" />
           )}
-        </div>
-        <div className="mt-3 text-[10px]" style={{ color: theme.textMuted }}>
-          Historical multiples are market anchors, not intrinsic value.
-        </div>
-      </div>
-
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Sentiment Overlay</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <MetricCard theme={theme} label="Analyst Mean Target" value={safeMoney(analystTarget)} />
-          <MetricCard theme={theme} label="Current Price" value={safeMoney(currentPrice)} />
         </div>
         <div className="mt-3 text-[10px]" style={{ color: theme.textMuted }}>
-          Analyst target is shown as sentiment context only. Use Institutional Ownership and Insider Activity tabs for positioning context.
+          Historical multiples and analyst targets are context anchors, not intrinsic truth.
         </div>
       </div>
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Legacy / Advanced</h3>
+            <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>[!] Legacy / Advanced</h3>
             <div className="text-[10px] mt-1" style={{ color: theme.textMuted }}>
               Composite (Legacy) blends DCF + historical anchors + analyst target. Assumption-sensitive.
             </div>
