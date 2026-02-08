@@ -527,20 +527,6 @@ function ValuationTab({ data, theme }) {
     ? latestCashflow.freeCashFlow / sharesOutstanding
     : null;
 
-  const calcMedian = (arr) => {
-    const values = arr.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
-    if (!values.length) return null;
-    const mid = Math.floor(values.length / 2);
-    return values.length % 2 ? values[mid] : (values[mid - 1] + values[mid]) / 2;
-  };
-
-  const recentNetIncome = (data?.income || []).slice(-5).map((r) => r.netIncome).filter((v) => Number.isFinite(v));
-  const normalizedNetIncome = calcMedian(recentNetIncome);
-  const epvReturn = 0.1;
-  const epvFloor = (Number.isFinite(normalizedNetIncome) && normalizedNetIncome > 0 && sharesOutstanding)
-    ? (normalizedNetIncome / epvReturn) / sharesOutstanding
-    : null;
-
   const blendedGrowth = (() => {
     const growthSignals = [
       Number.isFinite(data?.dcf?.assumptions?.revenueGrowth) ? data.dcf.assumptions.revenueGrowth / 100 : null,
@@ -773,11 +759,23 @@ function ValuationTab({ data, theme }) {
       entry.key !== 'psgValue'
     );
 
-  const dcfRangeLow = Number.isFinite(dcfScenarioValues.stress) ? dcfScenarioValues.stress : epvFloor;
+  const dcfRangeLow = Number.isFinite(dcfScenarioValues.stress) ? dcfScenarioValues.stress : dcfScenarioValues.base;
   const dcfRangeHigh = Number.isFinite(dcfScenarioValues.expansion) ? dcfScenarioValues.expansion : dcfScenarioValues.base;
   const dcfRangeUpside = Number.isFinite(currentPrice) && Number.isFinite(dcfScenarioValues.base)
     ? ((dcfScenarioValues.base - currentPrice) / currentPrice) * 100
     : null;
+  const synthesisGrowth5y = calcImpliedGrowth({
+    basePerShare: latestEPS,
+    requiredReturn: baseRequiredReturn,
+    years: 5,
+    terminalPE: terminalPEBase,
+  });
+  const synthesisGrowth10y = calcImpliedGrowth({
+    basePerShare: latestEPS,
+    requiredReturn: baseRequiredReturn,
+    years: 10,
+    terminalPE: terminalPEBase,
+  });
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-valuation" aria-labelledby="tab-valuation">
@@ -930,21 +928,11 @@ function ValuationTab({ data, theme }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <div className="text-[10px] tracking-widest uppercase mb-2" style={{ color: theme.textTertiary }}>EPV Floor (No Growth)</div>
-          <div className="text-2xl font-bold mb-1" style={{ color: theme.text }}>{safeMoney(epvFloor)}</div>
-          <div className="text-xs" style={{ color: theme.textTertiary }}>
-            Normalized earnings (5Y median) capitalized at 10%.
-          </div>
-          <div className="text-[10px] mt-2" style={{ color: theme.textMuted }}>
-            Represents no-growth, normalized earnings capitalized at required return; not a downside price target.
-          </div>
-        </div>
-        <div className="p-5 rounded-2xl border lg:col-span-2" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[10px] tracking-widest uppercase mb-1" style={{ color: theme.textTertiary }}>Section 2 - Intrinsic Range (Cashflow-Based Scenarios)</div>
+              <div className="text-[10px] tracking-widest uppercase mb-1" style={{ color: theme.textTertiary }}>Section 2 - Cashflow Scenarios (Growth & Duration Sensitivity)</div>
               <div className="text-xl font-bold" style={{ color: theme.text }}>
                 {safeMoney(dcfRangeLow)} - {safeMoney(dcfRangeHigh)}
               </div>
@@ -978,9 +966,9 @@ function ValuationTab({ data, theme }) {
       </div>
 
       <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <div className="text-[10px] tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>Interpretation</div>
+        <div className="text-[10px] tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>Synthesis</div>
         <div className="text-xs leading-relaxed" style={{ color: theme.textTertiary }}>
-          At today&apos;s price, the market is assuming several years of elevated earnings growth. Valuation is more sensitive to growth duration than short-term quarterly noise, and downside risk rises if earnings growth fades materially within 3-4 years.
+          At {safeMoney(currentPrice)}, the market implies about {Number.isFinite(synthesisGrowth5y) ? `${(synthesisGrowth5y * 100).toFixed(1)}%` : 'N/A'} to {Number.isFinite(synthesisGrowth10y) ? `${(synthesisGrowth10y * 100).toFixed(1)}%` : 'N/A'} EPS CAGR (5Y to 10Y) at {assumptionReturn.toFixed(1)}% required return. Scenario outcomes stay acceptable only if elevated growth persists through the selected horizon; returns deteriorate quickly if growth fades within 3-4 years or if terminal multiples compress materially.
         </div>
       </div>
 
@@ -1001,9 +989,12 @@ function ValuationTab({ data, theme }) {
           <MetricCard theme={theme} label="Justified P/E (Base)" value={safeRatio(justifiedPeRange.base)} />
           <MetricCard theme={theme} label="Justified P/E (Expansion)" value={safeRatio(justifiedPeRange.expansion)} />
         </div>
-        <div className="mt-4 p-3 rounded-lg border text-[10px]" style={{ background: theme.bg, borderColor: theme.warningBorder, color: theme.warningText }}>
-          PEG/PSG are shown as heuristics only. They are unreliable when growth exceeds ~30-40%, or when margins/earnings base are shifting.
-          Current PEG: {safeRatio(currentPeg)} | Current PSG: {safeRatio(currentPsg)}
+        <div className="mt-4 p-3 rounded-lg border text-[10px]" style={{ background: theme.bg, borderColor: theme.border, color: theme.textMuted }}>
+          <span className="mr-2 px-2 py-0.5 rounded-full border text-[9px] tracking-wider uppercase" style={{ borderColor: theme.border, color: theme.textTertiary }}>
+            Heuristic
+          </span>
+          PEG/PSG can break when growth exceeds ~30-40% or margins/base earnings are shifting.
+          <span className="ml-2" style={{ color: theme.textTertiary }}>PEG {safeRatio(currentPeg)} | PSG {safeRatio(currentPsg)}</span>
         </div>
       </div>
 
