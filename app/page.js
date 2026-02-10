@@ -2849,7 +2849,7 @@ function TradingTab({ data, theme }) {
     ];
   })();
 
-  // 50/200 DMA crossover trend segments (green = uptrend, red = downtrend)
+  // 50/200 DMA trend segments: up (bullish), caution (price < 200DMA), down (Death Cross)
   const trendSegments = (() => {
     const rows = analysis.chartRows || [];
     if (rows.length < 2) return [];
@@ -2858,8 +2858,8 @@ function TradingTab({ data, theme }) {
     let prevTrend = null;
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
-      if (!Number.isFinite(r.ma50) || !Number.isFinite(r.ma200)) continue;
-      const trend = r.ma50 >= r.ma200 ? 'up' : 'down';
+      if (!Number.isFinite(r.ma50) || !Number.isFinite(r.ma200) || !Number.isFinite(r.close)) continue;
+      const trend = r.ma50 < r.ma200 ? 'down' : r.close < r.ma200 ? 'caution' : 'up';
       if (trend !== prevTrend) {
         if (segStart !== null && prevTrend) {
           segs.push({ x1: segStart, x2: rows[i - 1].date, trend: prevTrend });
@@ -2868,7 +2868,6 @@ function TradingTab({ data, theme }) {
         prevTrend = trend;
       }
     }
-    // Close last segment
     if (segStart !== null && prevTrend) {
       segs.push({ x1: segStart, x2: rows[rows.length - 1].date, trend: prevTrend });
     }
@@ -2993,16 +2992,16 @@ function TradingTab({ data, theme }) {
           </div>
         </div>
         <ResponsiveContainer width="100%" height={420}>
-          <LineChart data={analysis.chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
+          <LineChart data={analysis.chartRows} margin={{ top: 10, right: 62, left: 0, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
-            {/* 50/200 DMA trend shading — green uptrend, red downtrend */}
+            {/* 50/200 DMA trend shading — green uptrend, light red caution, red downtrend */}
             {trendSegments.map((seg, si) => (
               <ReferenceArea
                 key={`trend-${si}`}
                 x1={seg.x1}
                 x2={seg.x2}
                 fill={seg.trend === 'up' ? '#22c55e' : '#ef4444'}
-                fillOpacity={0.06}
+                fillOpacity={seg.trend === 'down' ? 0.08 : seg.trend === 'caution' ? 0.04 : 0.06}
                 ifOverflow="extendDomain"
               />
             ))}
@@ -3020,12 +3019,23 @@ function TradingTab({ data, theme }) {
             <Line type="monotone" dataKey="athVWAP" stroke={tradePalette.vwapTertiary} dot={false} strokeWidth={1} strokeOpacity={0.4} strokeDasharray="6 4" name="ATH VWAP" />
             <Line type="monotone" dataKey="regimeVWAP" stroke={tradePalette.vwapRegime} dot={false} strokeWidth={1} strokeOpacity={0.4} strokeDasharray="3 4" name="Regime VWAP" />
             <Line type="monotone" dataKey="ema20w" stroke={tradePalette.ema20w} dot={false} strokeWidth={1} strokeOpacity={0.4} strokeDasharray="4 3" name="20W EMA" />
-            {/* Reference levels — very faint, no labels inside chart */}
-            <ReferenceLine y={analysis.yearlyHigh} stroke="#1d4ed8" strokeDasharray="4 3" strokeOpacity={0.25} />
-            <ReferenceLine y={analysis.yearlyLow} stroke="#1d4ed8" strokeDasharray="4 3" strokeOpacity={0.25} />
-            <ReferenceLine y={analysis.poc} stroke="#64748b" strokeDasharray="5 4" strokeOpacity={0.3} />
-            <ReferenceLine y={analysis.vah} stroke="#0ea5e9" strokeDasharray="5 4" strokeOpacity={0.2} />
-            <ReferenceLine y={analysis.val} stroke="#0ea5e9" strokeDasharray="5 4" strokeOpacity={0.2} />
+            {/* Key levels — dotted lines with right-side price labels */}
+            {[
+              { y: analysis.yearlyHigh, label: '52W H', color: '#1d4ed8' },
+              { y: analysis.yearlyLow, label: '52W L', color: '#1d4ed8' },
+              { y: analysis.poc, label: 'POC', color: '#64748b' },
+              { y: analysis.vah, label: 'VAH', color: '#0ea5e9' },
+              { y: analysis.val, label: 'VAL', color: '#0ea5e9' },
+            ].filter((l) => Number.isFinite(l.y)).map((l, i) => (
+              <ReferenceLine
+                key={`lvl-${i}`}
+                y={l.y}
+                stroke={l.color}
+                strokeDasharray="3 4"
+                strokeOpacity={0.2}
+                label={{ value: `${l.label} ${formatPx(l.y)}`, position: 'right', fill: l.color, fontSize: 9, fontWeight: 500 }}
+              />
+            ))}
             {analysis?.markers?.entry?.date && (
               <ReferenceLine x={analysis.markers.entry.date} stroke="#22c55e" strokeDasharray="4 3" strokeOpacity={0.4} />
             )}
@@ -3074,44 +3084,22 @@ function TradingTab({ data, theme }) {
         </div>
         {/* Trend shading legend */}
         {trendSegments.length > 0 && (
-          <div className="mt-2 pt-2 border-t flex items-center gap-4 text-[10px]" style={{ borderColor: theme.border, color: theme.textTertiary }}>
-            <span className="font-display font-semibold tracking-wider uppercase" style={{ color: theme.textSecondary }}>50/200 DMA Trend</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#22c55e', opacity: 0.35 }} />Uptrend (Golden Cross)</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444', opacity: 0.35 }} />Downtrend (Death Cross)</span>
+          <div className="mt-2 pt-2 border-t flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px]" style={{ borderColor: theme.border, color: theme.textTertiary }}>
+            <span className="font-display font-semibold tracking-wider uppercase" style={{ color: theme.textSecondary }}>Trend</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#22c55e', opacity: 0.35 }} />Uptrend</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444', opacity: 0.2 }} />Price &lt; 200 DMA</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444', opacity: 0.45 }} />Death Cross</span>
             {currentMATrend && (
               <span className="ml-auto px-2 py-0.5 rounded-full font-semibold border" style={{
-                color: currentMATrend === 'up' ? theme.positive : theme.negative,
-                borderColor: currentMATrend === 'up' ? `${theme.positive}44` : `${theme.negative}44`,
-                background: currentMATrend === 'up' ? `${theme.positive}14` : `${theme.negative}14`,
+                color: currentMATrend === 'up' ? theme.positive : currentMATrend === 'caution' ? theme.warning : theme.negative,
+                borderColor: `${currentMATrend === 'up' ? theme.positive : currentMATrend === 'caution' ? theme.warning : theme.negative}44`,
+                background: `${currentMATrend === 'up' ? theme.positive : currentMATrend === 'caution' ? theme.warning : theme.negative}14`,
               }}>
-                Currently {currentMATrend === 'up' ? 'Uptrend' : 'Downtrend'}
+                {currentMATrend === 'up' ? 'Uptrend' : currentMATrend === 'caution' ? 'Below 200 DMA' : 'Death Cross'}
               </span>
             )}
           </div>
         )}
-        {/* Key levels row */}
-        <div className="mt-2 pt-2 border-t grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-1 text-[10px]" style={{ borderColor: theme.border }}>
-          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
-            <span>52W High</span>
-            <span className="font-semibold">{formatPx(analysis.yearlyHigh)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
-            <span>52W Low</span>
-            <span className="font-semibold">{formatPx(analysis.yearlyLow)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
-            <span>POC</span>
-            <span className="font-semibold">{formatPx(analysis.poc)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
-            <span>VAH</span>
-            <span className="font-semibold">{formatPx(analysis.vah)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
-            <span>VAL</span>
-            <span className="font-semibold">{formatPx(analysis.val)}</span>
-          </div>
-        </div>
       </div>
 
       {/* Volume Profile */}
