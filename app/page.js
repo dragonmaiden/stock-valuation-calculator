@@ -2567,20 +2567,20 @@ function TradingTab({ data, theme }) {
       })
       .filter((r) => Number.isFinite(r.deviationPct));
     const deviationBins = [
-      { label: '<-15', low: -Infinity, high: -15, count: 0 },
-      { label: '-15:-12.5', low: -15, high: -12.5, count: 0 },
-      { label: '-12.5:-10', low: -12.5, high: -10, count: 0 },
-      { label: '-10:-7.5', low: -10, high: -7.5, count: 0 },
-      { label: '-7.5:-5', low: -7.5, high: -5, count: 0 },
-      { label: '-5:-2.5', low: -5, high: -2.5, count: 0 },
-      { label: '-2.5:0', low: -2.5, high: 0, count: 0 },
-      { label: '0:+2.5', low: 0, high: 2.5, count: 0 },
-      { label: '+2.5:+5', low: 2.5, high: 5, count: 0 },
-      { label: '+5:+7.5', low: 5, high: 7.5, count: 0 },
-      { label: '+7.5:+10', low: 7.5, high: 10, count: 0 },
-      { label: '+10:+12.5', low: 10, high: 12.5, count: 0 },
-      { label: '+12.5:+15', low: 12.5, high: 15, count: 0 },
-      { label: '>+15', low: 15, high: Infinity, count: 0 },
+      { label: '< -15%', low: -Infinity, high: -15, count: 0 },
+      { label: '-14%', low: -15, high: -12.5, count: 0 },
+      { label: '-11%', low: -12.5, high: -10, count: 0 },
+      { label: '-9%', low: -10, high: -7.5, count: 0 },
+      { label: '-6%', low: -7.5, high: -5, count: 0 },
+      { label: '-4%', low: -5, high: -2.5, count: 0 },
+      { label: '-1%', low: -2.5, high: 0, count: 0 },
+      { label: '+1%', low: 0, high: 2.5, count: 0 },
+      { label: '+4%', low: 2.5, high: 5, count: 0 },
+      { label: '+6%', low: 5, high: 7.5, count: 0 },
+      { label: '+9%', low: 7.5, high: 10, count: 0 },
+      { label: '+11%', low: 10, high: 12.5, count: 0 },
+      { label: '+14%', low: 12.5, high: 15, count: 0 },
+      { label: '> +15%', low: 15, high: Infinity, count: 0 },
     ];
     for (const row of deviationFromMA50Series) {
       const idx = deviationBins.findIndex((b) => row.deviationPct >= b.low && row.deviationPct < b.high);
@@ -2787,15 +2787,6 @@ function TradingTab({ data, theme }) {
       ? `Price is ${Math.abs(analysis.latestDeviationPct).toFixed(2)}% below 50DMA.`
       : `Price is ${analysis.latestDeviationPct.toFixed(2)}% above 50DMA.`
     : 'Current 50DMA deviation is unavailable.';
-  const raritySummary = Number.isFinite(analysis.twoSidedAbsProb)
-    ? analysis.twoSidedAbsProb <= 5
-      ? 'This is statistically rare versus history.'
-      : analysis.twoSidedAbsProb <= 15
-      ? 'This is uncommon versus history.'
-      : analysis.twoSidedAbsProb <= 30
-      ? 'This is moderately common versus history.'
-      : 'This is common versus history.'
-    : 'Rarity estimate unavailable.';
   const hasBuySignal = signal?.entryZone?.side === 'BUY';
   const fallbackZone = Number.isFinite(analysis.val) && Number.isFinite(analysis.yearlyVWAP)
     ? `${formatPx(Math.min(analysis.val, analysis.yearlyVWAP))} - ${formatPx(Math.max(analysis.val, analysis.yearlyVWAP))}`
@@ -2857,6 +2848,33 @@ function TradingTab({ data, theme }) {
       { label: '+3σ', sigma: 3, price: mean + 3 * sd, color: theme.negative, meaning: 'Extreme premium' },
     ];
   })();
+
+  // 50/200 DMA crossover trend segments (green = uptrend, red = downtrend)
+  const trendSegments = (() => {
+    const rows = analysis.chartRows || [];
+    if (rows.length < 2) return [];
+    const segs = [];
+    let segStart = null;
+    let prevTrend = null;
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (!Number.isFinite(r.ma50) || !Number.isFinite(r.ma200)) continue;
+      const trend = r.ma50 >= r.ma200 ? 'up' : 'down';
+      if (trend !== prevTrend) {
+        if (segStart !== null && prevTrend) {
+          segs.push({ x1: segStart, x2: rows[i - 1].date, trend: prevTrend });
+        }
+        segStart = r.date;
+        prevTrend = trend;
+      }
+    }
+    // Close last segment
+    if (segStart !== null && prevTrend) {
+      segs.push({ x1: segStart, x2: rows[rows.length - 1].date, trend: prevTrend });
+    }
+    return segs;
+  })();
+  const currentMATrend = trendSegments.length > 0 ? trendSegments[trendSegments.length - 1].trend : null;
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-trading" aria-labelledby="tab-trading">
@@ -2953,7 +2971,7 @@ function TradingTab({ data, theme }) {
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-          <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Trading Regime (Ticker-Driven)</h3>
+          <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Price Chart & Key Levels</h3>
           <div className="flex items-center gap-2">
             {['6M', '1Y', '2Y'].map((tf) => (
               <button
@@ -2974,40 +2992,126 @@ function TradingTab({ data, theme }) {
             </div>
           </div>
         </div>
-        <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-          Price vs anchored VWAPs and moving averages. Dashed lines mark liquidity levels (VAH/VAL/POC).
-        </div>
         <ResponsiveContainer width="100%" height={420}>
           <LineChart data={analysis.chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
+            {/* 50/200 DMA trend shading — green uptrend, red downtrend */}
+            {trendSegments.map((seg, si) => (
+              <ReferenceArea
+                key={`trend-${si}`}
+                x1={seg.x1}
+                x2={seg.x2}
+                fill={seg.trend === 'up' ? '#22c55e' : '#ef4444'}
+                fillOpacity={0.06}
+                ifOverflow="extendDomain"
+              />
+            ))}
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} minTickGap={28} />
             <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} domain={['auto', 'auto']} />
             <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} />
-            <Legend wrapperStyle={{ fontSize: 10 }} />
-            <Line type="monotone" dataKey="close" stroke={tradePalette.price} dot={false} strokeWidth={2} name="Close" />
-            <Line type="monotone" dataKey="yearlyVWAP" stroke={tradePalette.vwapPrimary} dot={false} strokeWidth={1.8} name="Yearly VWAP" />
-            <Line type="monotone" dataKey="cycleLowVWAP" stroke={tradePalette.vwapSecondary} dot={false} strokeDasharray="6 4" name="Cycle Low VWAP" />
-            <Line type="monotone" dataKey="athVWAP" stroke={tradePalette.vwapTertiary} dot={false} strokeDasharray="6 4" name="ATH VWAP" />
-            <Line type="monotone" dataKey="regimeVWAP" stroke={tradePalette.vwapRegime} dot={false} strokeDasharray="3 4" name="Regime VWAP" />
-            <Line type="monotone" dataKey="ma50" stroke={tradePalette.ma50} dot={false} name="50 DMA" />
-            <Line type="monotone" dataKey="ma200" stroke={tradePalette.ma200} dot={false} name="200 DMA" />
-            <Line type="monotone" dataKey="ema20w" stroke={tradePalette.ema20w} dot={false} strokeDasharray="4 3" name="20 EMA (weekly proxy)" />
-            <ReferenceLine y={analysis.yearlyHigh} stroke="#1d4ed8" strokeDasharray="4 3" label={{ value: 'YH', position: 'insideRight', fill: '#1d4ed8', fontSize: 10 }} />
-            <ReferenceLine y={analysis.yearlyLow} stroke="#1d4ed8" strokeDasharray="4 3" label={{ value: 'YL', position: 'insideRight', fill: '#1d4ed8', fontSize: 10 }} />
-            <ReferenceLine y={analysis.poc} stroke="#334155" strokeDasharray="5 4" label={{ value: 'POC', position: 'insideRight', fill: '#64748b', fontSize: 10 }} />
-            <ReferenceLine y={analysis.vah} stroke="#0ea5e9" strokeDasharray="5 4" label={{ value: 'VAH', position: 'insideRight', fill: '#0284c7', fontSize: 10 }} />
-            <ReferenceLine y={analysis.val} stroke="#0ea5e9" strokeDasharray="5 4" label={{ value: 'VAL', position: 'insideRight', fill: '#0284c7', fontSize: 10 }} />
+            {/* Tier 1: Price — bold and dominant */}
+            <Line type="monotone" dataKey="close" stroke={tradePalette.price} dot={false} strokeWidth={2.5} name="Close" />
+            {/* Tier 2: Key moving averages — clear and visible */}
+            <Line type="monotone" dataKey="ma50" stroke={tradePalette.ma50} dot={false} strokeWidth={1.5} name="50 DMA" />
+            <Line type="monotone" dataKey="ma200" stroke={tradePalette.ma200} dot={false} strokeWidth={1.5} name="200 DMA" />
+            {/* Tier 3: VWAPs & EMA — subtle, thin, dashed */}
+            <Line type="monotone" dataKey="yearlyVWAP" stroke={tradePalette.vwapPrimary} dot={false} strokeWidth={1} strokeOpacity={0.55} name="Yearly VWAP" />
+            <Line type="monotone" dataKey="cycleLowVWAP" stroke={tradePalette.vwapSecondary} dot={false} strokeWidth={1} strokeOpacity={0.4} strokeDasharray="6 4" name="Cycle Low VWAP" />
+            <Line type="monotone" dataKey="athVWAP" stroke={tradePalette.vwapTertiary} dot={false} strokeWidth={1} strokeOpacity={0.4} strokeDasharray="6 4" name="ATH VWAP" />
+            <Line type="monotone" dataKey="regimeVWAP" stroke={tradePalette.vwapRegime} dot={false} strokeWidth={1} strokeOpacity={0.4} strokeDasharray="3 4" name="Regime VWAP" />
+            <Line type="monotone" dataKey="ema20w" stroke={tradePalette.ema20w} dot={false} strokeWidth={1} strokeOpacity={0.4} strokeDasharray="4 3" name="20W EMA" />
+            {/* Reference levels — very faint, no labels inside chart */}
+            <ReferenceLine y={analysis.yearlyHigh} stroke="#1d4ed8" strokeDasharray="4 3" strokeOpacity={0.25} />
+            <ReferenceLine y={analysis.yearlyLow} stroke="#1d4ed8" strokeDasharray="4 3" strokeOpacity={0.25} />
+            <ReferenceLine y={analysis.poc} stroke="#64748b" strokeDasharray="5 4" strokeOpacity={0.3} />
+            <ReferenceLine y={analysis.vah} stroke="#0ea5e9" strokeDasharray="5 4" strokeOpacity={0.2} />
+            <ReferenceLine y={analysis.val} stroke="#0ea5e9" strokeDasharray="5 4" strokeOpacity={0.2} />
             {analysis?.markers?.entry?.date && (
-              <ReferenceLine x={analysis.markers.entry.date} stroke="#22c55e" strokeDasharray="4 3" label={{ value: 'Entry', position: 'insideTopRight', fill: '#22c55e', fontSize: 10 }} />
+              <ReferenceLine x={analysis.markers.entry.date} stroke="#22c55e" strokeDasharray="4 3" strokeOpacity={0.4} />
             )}
             {analysis?.markers?.reclaim?.date && (
-              <ReferenceLine x={analysis.markers.reclaim.date} stroke="#10b981" strokeDasharray="4 3" label={{ value: 'Reclaim', position: 'insideTopRight', fill: '#10b981', fontSize: 10 }} />
+              <ReferenceLine x={analysis.markers.reclaim.date} stroke="#10b981" strokeDasharray="4 3" strokeOpacity={0.4} />
             )}
             {analysis?.markers?.invalidation?.date && (
-              <ReferenceLine x={analysis.markers.invalidation.date} stroke="#ef4444" strokeDasharray="4 3" label={{ value: 'Invalid', position: 'insideTopRight', fill: '#ef4444', fontSize: 10 }} />
+              <ReferenceLine x={analysis.markers.invalidation.date} stroke="#ef4444" strokeDasharray="4 3" strokeOpacity={0.4} />
             )}
           </LineChart>
         </ResponsiveContainer>
+        {/* External legend with prices */}
+        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-x-4 gap-y-1.5 text-[10px]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 rounded" style={{ background: tradePalette.price }} />Close</span>
+            <span className="font-semibold" style={{ color: theme.text }}>{formatPx(analysis.latest.close)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 rounded" style={{ background: tradePalette.ma50 }} />50 DMA</span>
+            <span className="font-semibold" style={{ color: theme.text }}>{formatPx(analysis.ma50)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 rounded" style={{ background: tradePalette.ma200 }} />200 DMA</span>
+            <span className="font-semibold" style={{ color: theme.text }}>{formatPx(analysis.ma200)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 rounded" style={{ background: tradePalette.vwapPrimary, opacity: 0.55 }} />Yearly VWAP</span>
+            <span className="font-semibold" style={{ color: theme.text }}>{formatPx(analysis.yearlyVWAP)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 rounded border-t border-dashed" style={{ borderColor: tradePalette.vwapSecondary }} />Cycle Low VWAP</span>
+            <span className="font-semibold">{formatPx(analysis.cycleLowVWAP)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 rounded border-t border-dashed" style={{ borderColor: tradePalette.vwapTertiary }} />ATH VWAP</span>
+            <span className="font-semibold">{formatPx(analysis.athVWAP)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 rounded border-t border-dashed" style={{ borderColor: tradePalette.vwapRegime }} />Regime VWAP</span>
+            <span className="font-semibold">{formatPx(analysis.regimeVWAP)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 rounded border-t border-dashed" style={{ borderColor: tradePalette.ema20w }} />20W EMA</span>
+            <span className="font-semibold">{formatPx(analysis.ema20w)}</span>
+          </div>
+        </div>
+        {/* Trend shading legend */}
+        {trendSegments.length > 0 && (
+          <div className="mt-2 pt-2 border-t flex items-center gap-4 text-[10px]" style={{ borderColor: theme.border, color: theme.textTertiary }}>
+            <span className="font-display font-semibold tracking-wider uppercase" style={{ color: theme.textSecondary }}>50/200 DMA Trend</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#22c55e', opacity: 0.35 }} />Uptrend (Golden Cross)</span>
+            <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444', opacity: 0.35 }} />Downtrend (Death Cross)</span>
+            {currentMATrend && (
+              <span className="ml-auto px-2 py-0.5 rounded-full font-semibold border" style={{
+                color: currentMATrend === 'up' ? theme.positive : theme.negative,
+                borderColor: currentMATrend === 'up' ? `${theme.positive}44` : `${theme.negative}44`,
+                background: currentMATrend === 'up' ? `${theme.positive}14` : `${theme.negative}14`,
+              }}>
+                Currently {currentMATrend === 'up' ? 'Uptrend' : 'Downtrend'}
+              </span>
+            )}
+          </div>
+        )}
+        {/* Key levels row */}
+        <div className="mt-2 pt-2 border-t grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-1 text-[10px]" style={{ borderColor: theme.border }}>
+          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
+            <span>52W High</span>
+            <span className="font-semibold">{formatPx(analysis.yearlyHigh)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
+            <span>52W Low</span>
+            <span className="font-semibold">{formatPx(analysis.yearlyLow)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
+            <span>POC</span>
+            <span className="font-semibold">{formatPx(analysis.poc)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
+            <span>VAH</span>
+            <span className="font-semibold">{formatPx(analysis.vah)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-2" style={{ color: theme.textTertiary }}>
+            <span>VAL</span>
+            <span className="font-semibold">{formatPx(analysis.val)}</span>
+          </div>
+        </div>
       </div>
 
       {/* Volume Profile */}
@@ -3196,49 +3300,48 @@ function TradingTab({ data, theme }) {
         </div>
       </div>
 
-      {/* Price vs 50-Day Trend */}
+      {/* How Far from the Trend? */}
       <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between mb-3">
-          <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Price vs 50-Day Trend</h4>
+          <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>How Far from the Trend?</h4>
           <div className="text-[10px] font-semibold px-2 py-1 rounded border" style={{ color: actionTone, borderColor: `${actionTone}55`, background: `${actionTone}14` }}>
-            {Number.isFinite(analysis.latestDeviationPct) ? `${analysis.latestDeviationPct >= 0 ? '+' : ''}${analysis.latestDeviationPct.toFixed(2)}%` : 'N/A'}
+            {Number.isFinite(analysis.latestDeviationPct) ? `${analysis.latestDeviationPct >= 0 ? '+' : ''}${analysis.latestDeviationPct.toFixed(1)}% from 50DMA` : 'N/A'}
           </div>
         </div>
         <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-          How far the current price is from its 50-day moving average, compared to history. Center (0%) = right at the trend. {deviationSummary} {raritySummary}
+          Each bar shows how often the price has been that far from its 50-day moving average. Center = at trend. The "You" marker shows where the price is today. {deviationSummary}
         </div>
         <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
           <MetricCard
             theme={theme}
             label="How Rare Is This?"
             value={analysis.twoSidedAbsProb <= 5 ? 'Very Rare' : analysis.twoSidedAbsProb <= 15 ? 'Uncommon' : analysis.twoSidedAbsProb <= 30 ? 'Moderate' : 'Common'}
-            subtext={`This deviation only happens ${analysis.twoSidedAbsProb.toFixed(1)}% of the time`}
+            subtext={`Price is this far from trend only ${analysis.twoSidedAbsProb.toFixed(1)}% of the time`}
             helpText="How often the price has been this far (or further) from the 50-day trend in either direction."
             tone={analysis.twoSidedAbsProb <= 10 ? 'warning' : 'neutral'}
           />
           <MetricCard
             theme={theme}
-            label="Trend Position"
-            value={`${analysis.deviationPercentile.toFixed(0)}th percentile`}
-            subtext={analysis.deviationPercentile <= 20 ? 'Near historical lows vs trend' : analysis.deviationPercentile >= 80 ? 'Near historical highs vs trend' : 'Within normal range vs trend'}
-            helpText="Where this deviation ranks in the full history. Lower = more oversold, higher = more overbought relative to the 50-day trend."
+            label="Where in History?"
+            value={analysis.deviationPercentile <= 15 ? 'Near cheapest vs trend' : analysis.deviationPercentile >= 85 ? 'Near priciest vs trend' : `${analysis.deviationPercentile.toFixed(0)}th percentile`}
+            subtext={analysis.deviationPercentile <= 20 ? 'Historically low relative to trend' : analysis.deviationPercentile >= 80 ? 'Historically high relative to trend' : 'Within normal range'}
+            helpText="Where today's distance from the trend ranks vs all of history. Lower = more below average, higher = more above."
             tone={analysis.deviationPercentile <= 20 || analysis.deviationPercentile >= 80 ? 'warning' : 'positive'}
           />
         </div>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={analysis.deviationHistogram} margin={{ top: 10, right: 16, left: -4, bottom: 20 }}>
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={analysis.deviationHistogram} margin={{ top: 10, right: 16, left: -4, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} vertical={false} />
-            <XAxis dataKey="label" tick={{ fontSize: 9, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} interval={1} angle={-35} textAnchor="end" height={45} />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: theme.text, fontWeight: 500 }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} interval={0} />
             <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Number(v).toFixed(0)}%`} />
             <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v, k, p) => [`${Number(v).toFixed(1)}% of trading days (${p.payload.count} days)`, '']} />
             {analysis.currentDeviationBinLabel && (
-              <ReferenceLine x={analysis.currentDeviationBinLabel} stroke={actionTone} strokeWidth={2} strokeDasharray="4 3" label={{ value: 'You', position: 'top', fill: actionTone, fontSize: 10 }} />
+              <ReferenceLine x={analysis.currentDeviationBinLabel} stroke={actionTone} strokeWidth={2} strokeDasharray="4 3" label={{ value: 'You', position: 'top', fill: actionTone, fontSize: 10, fontWeight: 700 }} />
             )}
             <Bar dataKey="pct" name="% of days" radius={[4, 4, 0, 0]} minPointSize={2}>
               {analysis.deviationHistogram.map((b, i) => {
                 const isCurrentBin = analysis.currentDeviationBinLabel === b.label;
                 const midVal = (b.low + b.high) / 2;
-                // Green near center (normal), yellow when stretched, red at extremes
                 const fill = isCurrentBin ? actionTone
                   : Math.abs(midVal) <= 3 ? theme.positive
                   : Math.abs(midVal) <= 7 ? theme.warning
@@ -3249,9 +3352,9 @@ function TradingTab({ data, theme }) {
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-        <div className="mt-1 flex items-center justify-between text-[9px] px-1" style={{ color: theme.textTertiary }}>
+        <div className="mt-1 flex items-center justify-between text-[9px] font-semibold px-1">
           <span style={{ color: theme.positive }}>Below trend (cheaper)</span>
-          <span>At trend</span>
+          <span style={{ color: theme.textTertiary }}>At trend</span>
           <span style={{ color: theme.negative }}>Above trend (pricier)</span>
         </div>
       </div>
