@@ -2660,6 +2660,11 @@ function TradingTab({ data, theme }) {
       poc,
       vah,
       val,
+      volumeProfile: profile,
+      pocBinIndex: pocIdx,
+      vaLowIndex: vaLow,
+      vaHighIndex: vaHigh,
+      totalProfileVol,
       hhhl,
       lhll,
       rangeHigh: Math.max(...recent60.map((r) => r.high)),
@@ -2798,6 +2803,39 @@ function TradingTab({ data, theme }) {
     : fallbackZone || 'No active zone';
   const buyZoneTone = hasBuySignal ? 'positive' : 'neutral';
   const buyZoneLabel = hasBuySignal ? 'Buy Zone (Active)' : 'Buy Zone (Watch)';
+
+  // Volume profile histogram data
+  const volumeProfileData = (analysis.volumeProfile || []).map((bin, i) => {
+    const midPrice = (bin.low + bin.high) / 2;
+    const pctOfTotal = analysis.totalProfileVol > 0 ? (bin.vol / analysis.totalProfileVol) * 100 : 0;
+    const isValueArea = i >= analysis.vaLowIndex && i <= analysis.vaHighIndex;
+    const isPoc = i === analysis.pocBinIndex;
+    return { label: `$${bin.low.toFixed(0)}-${bin.high.toFixed(0)}`, midPrice, vol: bin.vol, pct: pctOfTotal, isValueArea, isPoc };
+  });
+  const vpBinStep = analysis.volumeProfile?.length > 0 ? (analysis.volumeProfile[0].high - analysis.volumeProfile[0].low) : 1;
+  const currentPriceBinLabel = volumeProfileData.find((b) => analysis.latest.close >= (b.midPrice - vpBinStep / 2) && analysis.latest.close < (b.midPrice + vpBinStep / 2))?.label || null;
+
+  // Action zone classification
+  const currentPrice = analysis.latest.close;
+  const actionZone = !Number.isFinite(currentPrice) || !Number.isFinite(analysis.val) || !Number.isFinite(analysis.vah)
+    ? { zone: 'unknown', label: 'Insufficient Data', color: theme.textTertiary, guidance: '', actionLabel: 'Unknown' }
+    : currentPrice < analysis.val
+    ? { zone: 'opportunity', label: 'Below Value Area', color: theme.positive, actionLabel: 'Potential Opportunity', guidance: 'Price is below where most trading occurred over the past year. This can signal a buying opportunity if fundamentals support it. Confirm the decline isn\'t driven by deteriorating business quality.' }
+    : currentPrice < analysis.poc
+    ? { zone: 'approaching', label: 'Lower Value Area', color: theme.accent, actionLabel: 'Approaching Fair Value', guidance: 'Price is inside the value area but below the most-traded price (POC). This is a reasonable accumulation zone for long-term positions. Risk/reward is moderate.' }
+    : currentPrice <= analysis.vah
+    ? { zone: 'fairValue', label: 'Upper Value Area', color: theme.warning, actionLabel: 'Fair Value Range', guidance: 'Price is near the center of historical volume. Consider holding existing positions. New entries carry less margin of safety.' }
+    : { zone: 'overextended', label: 'Above Value Area', color: theme.negative, actionLabel: 'Overextended', guidance: 'Price is above where most volume traded. This can indicate overextension. Consider trimming, tightening stops, or waiting for a pullback before adding.' };
+
+  // Gauge position percentages (bottom = low, top = high)
+  const gaugeLow = Math.min(analysis.yearlyLow, analysis.val) * 0.98;
+  const gaugeHigh = Math.max(analysis.yearlyHigh, analysis.vah) * 1.02;
+  const gaugeRange = gaugeHigh - gaugeLow || 1;
+  const toGaugePct = (v) => Math.max(0, Math.min(100, ((v - gaugeLow) / gaugeRange) * 100));
+  const pricePct = toGaugePct(currentPrice);
+  const valPctGauge = toGaugePct(analysis.val);
+  const pocPctGauge = toGaugePct(analysis.poc);
+  const vahPctGauge = toGaugePct(analysis.vah);
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-trading" aria-labelledby="tab-trading">
@@ -2949,6 +2987,107 @@ function TradingTab({ data, theme }) {
             )}
           </LineChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* Volume Profile Histogram */}
+      {volumeProfileData.length > 0 && (
+        <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Volume Profile (1Y)</h4>
+            <div className="flex items-center gap-3 text-[10px]" style={{ color: theme.textTertiary }}>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: theme.accentAlt || '#8b5cf6' }} />POC</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: theme.accent }} />Value Area</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: theme.textTertiary, opacity: 0.4 }} />Outside</span>
+            </div>
+          </div>
+          <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+            Horizontal bars show how much volume traded at each price level. Taller bars = heavier trading interest. POC ({formatPx(analysis.poc)}) is the single most-traded level. Value Area ({formatPx(analysis.val)} – {formatPx(analysis.vah)}) covers 70% of all volume.
+          </div>
+          <ResponsiveContainer width="100%" height={Math.max(380, volumeProfileData.length * 20)}>
+            <BarChart layout="vertical" data={volumeProfileData} margin={{ top: 10, right: 24, left: 10, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} tickFormatter={(v) => `${Number(v).toFixed(1)}%`} />
+              <YAxis type="category" dataKey="label" width={90} tick={{ fontSize: 9, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
+              <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v, k, p) => [`${Number(v).toFixed(1)}% of total volume (${(p.payload.vol / 1e6).toFixed(1)}M shares)`, '']} />
+              {currentPriceBinLabel && (
+                <ReferenceLine y={currentPriceBinLabel} stroke={tradePalette.price} strokeWidth={2} label={{ value: 'Current Price', position: 'right', fill: tradePalette.price, fontSize: 10 }} />
+              )}
+              <Bar dataKey="pct" name="% of volume" radius={[0, 4, 4, 0]} minPointSize={3}>
+                {volumeProfileData.map((b, i) => {
+                  const fill = b.isPoc ? (theme.accentAlt || '#8b5cf6') : b.isValueArea ? theme.accent : theme.textTertiary;
+                  const opacity = b.isPoc ? 1 : b.isValueArea ? 0.85 : 0.3;
+                  return <Cell key={`vp-${i}`} fill={fill} fillOpacity={opacity} />;
+                })}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Price Action Zones */}
+      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h4 className="text-[11px] font-semibold tracking-widest uppercase mb-3 font-display" style={{ color: theme.textSecondary }}>Price Action Zones</h4>
+        <div className="mb-4 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+          Where the current price sits relative to key volume-based levels. Based on 1 year of trading data.
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* Vertical gauge */}
+          <div className="lg:col-span-1 flex flex-col items-center">
+            <div className="relative w-full rounded-lg border overflow-hidden" style={{ borderColor: theme.border, height: 300 }}>
+              {/* Above VAH zone - red */}
+              <div className="absolute left-0 right-0" style={{ top: 0, height: `${100 - vahPctGauge}%`, background: `${theme.negative}15` }} />
+              {/* POC to VAH zone - amber */}
+              <div className="absolute left-0 right-0" style={{ bottom: `${pocPctGauge}%`, height: `${vahPctGauge - pocPctGauge}%`, background: `${theme.warning}15` }} />
+              {/* VAL to POC zone - blue */}
+              <div className="absolute left-0 right-0" style={{ bottom: `${valPctGauge}%`, height: `${pocPctGauge - valPctGauge}%`, background: `${theme.accent}18` }} />
+              {/* Below VAL zone - green */}
+              <div className="absolute left-0 right-0" style={{ bottom: 0, height: `${valPctGauge}%`, background: `${theme.positive}15` }} />
+
+              {/* Zone boundary lines */}
+              <div className="absolute left-0 right-0 border-t border-dashed" style={{ bottom: `${vahPctGauge}%`, borderColor: `${theme.warning}66` }}>
+                <span className="absolute right-2 text-[8px] font-semibold" style={{ color: theme.warning, transform: 'translateY(-100%)' }}>VAH {formatPx(analysis.vah)}</span>
+              </div>
+              <div className="absolute left-0 right-0 border-t border-dashed" style={{ bottom: `${pocPctGauge}%`, borderColor: `${theme.accent}88` }}>
+                <span className="absolute right-2 text-[8px] font-bold" style={{ color: theme.accent, transform: 'translateY(-100%)' }}>POC {formatPx(analysis.poc)}</span>
+              </div>
+              <div className="absolute left-0 right-0 border-t border-dashed" style={{ bottom: `${valPctGauge}%`, borderColor: `${theme.positive}66` }}>
+                <span className="absolute right-2 text-[8px] font-semibold" style={{ color: theme.positive, transform: 'translateY(-100%)' }}>VAL {formatPx(analysis.val)}</span>
+              </div>
+
+              {/* Current price marker */}
+              <div className="absolute left-0 right-0 flex items-center" style={{ bottom: `${pricePct}%`, transform: 'translateY(50%)' }}>
+                <div className="h-0.5 flex-1" style={{ background: actionZone.color }} />
+                <div className="px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap" style={{ color: theme.text, background: theme.bgElevated, borderColor: actionZone.color }}>
+                  {formatPx(currentPrice)}
+                </div>
+              </div>
+            </div>
+            {/* Zone legend below gauge */}
+            <div className="mt-2 grid grid-cols-4 gap-1 text-center w-full">
+              <div className="text-[8px] font-semibold" style={{ color: theme.positive }}>Opportunity</div>
+              <div className="text-[8px] font-semibold" style={{ color: theme.accent }}>Accumulate</div>
+              <div className="text-[8px] font-semibold" style={{ color: theme.warning }}>Fair Value</div>
+              <div className="text-[8px] font-semibold" style={{ color: theme.negative }}>Overextended</div>
+            </div>
+          </div>
+
+          {/* Action guidance + metrics */}
+          <div className="lg:col-span-2 space-y-3">
+            {/* Main action card */}
+            <div className="p-4 rounded-xl border" style={{ background: `${actionZone.color}10`, borderColor: `${actionZone.color}33` }}>
+              <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: theme.textTertiary }}>Current Zone</div>
+              <div className="text-lg font-bold mb-2 font-display" style={{ color: actionZone.color }}>{actionZone.actionLabel}</div>
+              <div className="text-xs leading-relaxed" style={{ color: theme.textSecondary }}>{actionZone.guidance}</div>
+            </div>
+            {/* Key levels summary */}
+            <div className="grid grid-cols-2 gap-2">
+              <MetricCard theme={theme} label="Dist to POC" value={formatPctSigned(analysis.distToPocPct)} helpText="How far the current price is from the most-traded price level (POC)." tone={pocTone} />
+              <MetricCard theme={theme} label="Value Area" value={`${formatPx(analysis.val)} – ${formatPx(analysis.vah)}`} helpText="The price range where 70% of all volume was traded over the past year." tone={inValue ? 'positive' : 'warning'} />
+              <MetricCard theme={theme} label="52W Position" value={Number.isFinite(analysis.yearlyPercentile) ? `${analysis.yearlyPercentile.toFixed(1)}%` : 'N/A'} subtext="0% = yearly low, 100% = yearly high" helpText="Where the current price sits within its 52-week range." tone={yearlyPctTone} />
+              <MetricCard theme={theme} label="Volume Regime" value={Number.isFinite(analysis.rvol20) ? `${analysis.rvol20.toFixed(2)}x` : 'N/A'} subtext={analysis.rvolRegime} helpText="Today's volume relative to the 20-day average. Above 1.5x = high activity." tone={rvolTone} />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
