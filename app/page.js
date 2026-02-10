@@ -6,6 +6,8 @@ import {
   Bar,
   LineChart,
   Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -2805,15 +2807,18 @@ function TradingTab({ data, theme }) {
   const buyZoneLabel = hasBuySignal ? 'Buy Zone (Active)' : 'Buy Zone (Watch)';
 
   // Volume profile histogram data
+  const vpMaxVol = Math.max(...(analysis.volumeProfile || []).map((b) => b.vol), 1);
   const volumeProfileData = (analysis.volumeProfile || []).map((bin, i) => {
     const midPrice = (bin.low + bin.high) / 2;
     const pctOfTotal = analysis.totalProfileVol > 0 ? (bin.vol / analysis.totalProfileVol) * 100 : 0;
     const isValueArea = i >= analysis.vaLowIndex && i <= analysis.vaHighIndex;
     const isPoc = i === analysis.pocBinIndex;
-    return { label: `$${bin.low.toFixed(0)}-${bin.high.toFixed(0)}`, midPrice, vol: bin.vol, pct: pctOfTotal, isValueArea, isPoc };
+    const heat = bin.vol / vpMaxVol; // 0-1 intensity for coloring
+    return { label: `$${midPrice.toFixed(0)}`, fullLabel: `$${bin.low.toFixed(0)}-${bin.high.toFixed(0)}`, midPrice, vol: bin.vol, pct: pctOfTotal, isValueArea, isPoc, heat };
   });
   const vpBinStep = analysis.volumeProfile?.length > 0 ? (analysis.volumeProfile[0].high - analysis.volumeProfile[0].low) : 1;
-  const currentPriceBinLabel = volumeProfileData.find((b) => analysis.latest.close >= (b.midPrice - vpBinStep / 2) && analysis.latest.close < (b.midPrice + vpBinStep / 2))?.label || null;
+  const currentPriceBinIdx = volumeProfileData.findIndex((b) => analysis.latest.close >= (b.midPrice - vpBinStep / 2) && analysis.latest.close < (b.midPrice + vpBinStep / 2));
+  const currentPriceBinLabel = currentPriceBinIdx >= 0 ? volumeProfileData[currentPriceBinIdx].label : null;
 
   // Action zone classification
   const currentPrice = analysis.latest.close;
@@ -2836,6 +2841,22 @@ function TradingTab({ data, theme }) {
   const valPctGauge = toGaugePct(analysis.val);
   const pocPctGauge = toGaugePct(analysis.poc);
   const vahPctGauge = toGaugePct(analysis.vah);
+
+  // Sigma price ladder (translate z-scores to actual dollar prices)
+  const sigmaLevels = (() => {
+    const mean = signal?.levels?.mean ?? signal?.mean;
+    const sd = signal?.stdDev;
+    if (!Number.isFinite(mean) || !Number.isFinite(sd) || sd <= 0) return null;
+    return [
+      { label: '-3σ', sigma: -3, price: mean - 3 * sd, color: theme.positive, meaning: 'Extreme discount' },
+      { label: '-2σ', sigma: -2, price: mean - 2 * sd, color: theme.positive, meaning: 'Deep value' },
+      { label: '-1σ', sigma: -1, price: mean - sd, color: '#22d3ee', meaning: 'Below average' },
+      { label: 'Mean', sigma: 0, price: mean, color: theme.textSecondary, meaning: 'Fair value' },
+      { label: '+1σ', sigma: 1, price: mean + sd, color: theme.warning, meaning: 'Above average' },
+      { label: '+2σ', sigma: 2, price: mean + 2 * sd, color: '#f97316', meaning: 'Overextended' },
+      { label: '+3σ', sigma: 3, price: mean + 3 * sd, color: theme.negative, meaning: 'Extreme premium' },
+    ];
+  })();
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-trading" aria-labelledby="tab-trading">
@@ -2989,33 +3010,34 @@ function TradingTab({ data, theme }) {
         </ResponsiveContainer>
       </div>
 
-      {/* Volume Profile Histogram */}
+      {/* Volume Profile */}
       {volumeProfileData.length > 0 && (
         <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Volume Profile (1Y)</h4>
             <div className="flex items-center gap-3 text-[10px]" style={{ color: theme.textTertiary }}>
-              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: theme.accentAlt || '#8b5cf6' }} />POC</span>
-              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: theme.accent }} />Value Area</span>
-              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: theme.textTertiary, opacity: 0.4 }} />Outside</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-8 h-2.5 rounded-sm" style={{ background: 'linear-gradient(90deg, #0ea5e922, #10b981cc)' }} />Low → High volume</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: theme.accent }} />POC</span>
             </div>
           </div>
           <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-            Horizontal bars show how much volume traded at each price level. Taller bars = heavier trading interest. POC ({formatPx(analysis.poc)}) is the single most-traded level. Value Area ({formatPx(analysis.val)} – {formatPx(analysis.vah)}) covers 70% of all volume.
+            Taller bars = more volume traded at that price. POC ({formatPx(analysis.poc)}) is the most-traded level. Shaded area ({formatPx(analysis.val)} – {formatPx(analysis.vah)}) is the value area covering 70% of volume.
           </div>
-          <ResponsiveContainer width="100%" height={Math.max(380, volumeProfileData.length * 20)}>
-            <BarChart layout="vertical" data={volumeProfileData} margin={{ top: 10, right: 24, left: 10, bottom: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
-              <XAxis type="number" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} tickFormatter={(v) => `${Number(v).toFixed(1)}%`} />
-              <YAxis type="category" dataKey="label" width={90} tick={{ fontSize: 9, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
-              <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v, k, p) => [`${Number(v).toFixed(1)}% of total volume (${(p.payload.vol / 1e6).toFixed(1)}M shares)`, '']} />
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={volumeProfileData} margin={{ top: 10, right: 16, left: -4, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 9, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} interval={1} angle={-35} textAnchor="end" height={45} />
+              <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Number(v).toFixed(1)}%`} />
+              <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v, k, p) => [`${Number(v).toFixed(1)}% of volume (${(p.payload.vol / 1e6).toFixed(1)}M shares)`, p.payload.fullLabel]} />
               {currentPriceBinLabel && (
-                <ReferenceLine y={currentPriceBinLabel} stroke={tradePalette.price} strokeWidth={2} label={{ value: 'Current Price', position: 'right', fill: tradePalette.price, fontSize: 10 }} />
+                <ReferenceLine x={currentPriceBinLabel} stroke={tradePalette.price} strokeWidth={2} strokeDasharray="4 3" label={{ value: 'Price', position: 'top', fill: tradePalette.price, fontSize: 10 }} />
               )}
-              <Bar dataKey="pct" name="% of volume" radius={[0, 4, 4, 0]} minPointSize={3}>
+              <Bar dataKey="pct" name="% of volume" radius={[4, 4, 0, 0]} minPointSize={2}>
                 {volumeProfileData.map((b, i) => {
-                  const fill = b.isPoc ? (theme.accentAlt || '#8b5cf6') : b.isValueArea ? theme.accent : theme.textTertiary;
-                  const opacity = b.isPoc ? 1 : b.isValueArea ? 0.85 : 0.3;
+                  if (b.isPoc) return <Cell key={`vp-${i}`} fill={theme.accent} fillOpacity={1} />;
+                  // Heat: interpolate from dim to bright based on volume intensity
+                  const opacity = 0.25 + b.heat * 0.7;
+                  const fill = b.isValueArea ? theme.positive : theme.textTertiary;
                   return <Cell key={`vp-${i}`} fill={fill} fillOpacity={opacity} />;
                 })}
               </Bar>
@@ -3090,110 +3112,102 @@ function TradingTab({ data, theme }) {
         </div>
       </div>
 
-      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h4 className="text-[11px] font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Rolling Z-Score (60d)</h4>
-        <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-          z = (price - 60d mean) / 60d std dev. 0 = average, +/-2 = stretched, +/-3 = extreme.
+      {/* Z-Score Heat Map + Sigma Price Ladder */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* Z-Score area chart with colored bands */}
+        <div className="xl:col-span-2 p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Price Deviation Heat Map</h4>
+            {Number.isFinite(signal?.zScore) && (
+              <div className="text-[10px] font-semibold px-2 py-1 rounded border" style={{ color: actionTone, borderColor: `${actionTone}55`, background: `${actionTone}14` }}>
+                Current: {signal.zScore.toFixed(2)}σ
+              </div>
+            )}
+          </div>
+          <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+            How far price strays from its 60-day average over time. Green = near or below average (cheaper). Red = far above average (expensive). The line shows the z-score history.
+          </div>
+          <ResponsiveContainer width="100%" height={280}>
+            <AreaChart data={analysis.zScoreRows} margin={{ top: 10, right: 16, left: 0, bottom: 6 }}>
+              <defs>
+                <linearGradient id="zScoreGradientPos" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={theme.negative} stopOpacity={0.6} />
+                  <stop offset="35%" stopColor={theme.warning} stopOpacity={0.3} />
+                  <stop offset="100%" stopColor={theme.positive} stopOpacity={0.05} />
+                </linearGradient>
+                <linearGradient id="zScoreGradientNeg" x1="0" y1="1" x2="0" y2="0">
+                  <stop offset="0%" stopColor={theme.positive} stopOpacity={0.6} />
+                  <stop offset="35%" stopColor="#22d3ee" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor={theme.positive} stopOpacity={0.05} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} minTickGap={28} />
+              <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} domain={[-3.5, 3.5]} />
+              <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v) => [Number.isFinite(v) ? `${v.toFixed(2)}σ` : 'N/A', 'Price Deviation']} />
+              <ReferenceArea y1={-1} y2={1} fill={theme.positive} fillOpacity={0.06} />
+              <ReferenceArea y1={1} y2={2} fill={theme.warning} fillOpacity={0.08} />
+              <ReferenceArea y1={-2} y2={-1} fill="#22d3ee" fillOpacity={0.06} />
+              <ReferenceArea y1={2} y2={3.5} fill={theme.negative} fillOpacity={0.08} />
+              <ReferenceArea y1={-3.5} y2={-2} fill={theme.positive} fillOpacity={0.08} />
+              <ReferenceLine y={0} stroke={theme.textTertiary} strokeDasharray="4 3" label={{ value: 'Mean', position: 'insideTopLeft', fill: theme.textTertiary, fontSize: 9 }} />
+              <ReferenceLine y={2} stroke={theme.warning} strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: '+2σ Expensive', position: 'insideTopLeft', fill: theme.warning, fontSize: 9 }} />
+              <ReferenceLine y={-2} stroke="#22d3ee" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: '-2σ Cheap', position: 'insideBottomLeft', fill: '#22d3ee', fontSize: 9 }} />
+              <Area type="monotone" dataKey="zScore" stroke={tradePalette.zLine} strokeWidth={1.8} fill="url(#zScoreGradientPos)" fillOpacity={1} baseValue={0} name="Above Mean" dot={false} />
+              <Area type="monotone" dataKey="zScore" stroke="transparent" fill="url(#zScoreGradientNeg)" fillOpacity={1} baseValue={0} name="Below Mean" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+          <div className="mt-2 flex items-center justify-center gap-4 text-[9px]" style={{ color: theme.textTertiary }}>
+            <span className="flex items-center gap-1"><span className="inline-block w-6 h-2.5 rounded-sm" style={{ background: `linear-gradient(90deg, ${theme.positive}88, ${theme.positive}22)` }} />Cheap (below avg)</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-6 h-2.5 rounded-sm" style={{ background: `${theme.positive}18` }} />Fair value</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-6 h-2.5 rounded-sm" style={{ background: `linear-gradient(90deg, ${theme.warning}22, ${theme.negative}88)` }} />Expensive (above avg)</span>
+          </div>
         </div>
-        <ResponsiveContainer width="100%" height={190}>
-          <LineChart data={analysis.zScoreRows} margin={{ top: 8, right: 16, left: 0, bottom: 6 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} minTickGap={28} />
-            <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} domain={[-3.5, 3.5]} />
-            <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v) => [Number.isFinite(v) ? `${v.toFixed(2)}σ` : 'N/A', 'Z-Score']} />
-            <ReferenceArea y1={-1} y2={1} fill={theme.positive} fillOpacity={0.08} />
-            <ReferenceArea y1={1} y2={2} fill={theme.warning} fillOpacity={0.12} />
-            <ReferenceArea y1={-2} y2={-1} fill={theme.warning} fillOpacity={0.12} />
-            <ReferenceArea y1={2} y2={3.5} fill={theme.negative} fillOpacity={0.1} />
-            <ReferenceArea y1={-3.5} y2={-2} fill={theme.negative} fillOpacity={0.1} />
-            <ReferenceLine y={0} stroke={theme.accent} strokeDasharray="4 3" />
-            <ReferenceLine y={2} stroke={theme.warning} strokeDasharray="3 3" />
-            <ReferenceLine y={-2} stroke={theme.warning} strokeDasharray="3 3" />
-            <ReferenceLine y={3} stroke={theme.negative} strokeDasharray="2 3" />
-            <ReferenceLine y={-3} stroke={theme.positive} strokeDasharray="2 3" />
-            <Line type="monotone" dataKey="zScore" stroke={tradePalette.zLine} dot={false} strokeWidth={1.8} name="Z-Score" />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
 
-      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Z-Score Distribution</h4>
-          {Number.isFinite(signal?.zScore) && (
-            <div className="text-[10px] font-semibold px-2 py-1 rounded border" style={{ color: actionTone, borderColor: `${actionTone}55`, background: `${actionTone}14` }}>
-              Current: {signal.zScore.toFixed(2)}σ
+        {/* Sigma Price Ladder */}
+        <div className="xl:col-span-1 p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h4 className="text-[11px] font-semibold tracking-widest uppercase mb-3 font-display" style={{ color: theme.textSecondary }}>Price Targets by Deviation</h4>
+          <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+            What price each deviation level translates to. Green = buying opportunities. Red = consider selling.
+          </div>
+          {sigmaLevels ? (
+            <div className="space-y-0">
+              {[...sigmaLevels].reverse().map((level) => {
+                const isCurrentZone = Number.isFinite(signal?.zScore) && (
+                  (level.sigma === 0 && Math.abs(signal.zScore) < 0.5) ||
+                  (level.sigma !== 0 && Math.abs(signal.zScore - level.sigma) < 0.5)
+                );
+                return (
+                  <div
+                    key={level.label}
+                    className="flex items-center justify-between py-2.5 px-3 border-b last:border-b-0"
+                    style={{
+                      borderColor: theme.border,
+                      background: isCurrentZone ? `${level.color}12` : 'transparent',
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: level.color }} />
+                      <span className="text-[11px] font-semibold font-display" style={{ color: level.color }}>{level.label}</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold" style={{ color: isCurrentZone ? level.color : theme.text }}>{formatPx(level.price)}</div>
+                      <div className="text-[9px]" style={{ color: theme.textTertiary }}>{level.meaning}</div>
+                    </div>
+                  </div>
+                );
+              })}
+              {Number.isFinite(signal?.zScore) && (
+                <div className="mt-3 p-2.5 rounded-lg border text-center" style={{ borderColor: `${actionTone}44`, background: `${actionTone}0a` }}>
+                  <div className="text-[9px] uppercase tracking-wider mb-0.5 font-display" style={{ color: theme.textTertiary }}>Current Position</div>
+                  <div className="text-base font-bold" style={{ color: actionTone }}>{signal.zScore.toFixed(2)}σ = {formatPx(currentPrice)}</div>
+                </div>
+              )}
             </div>
+          ) : (
+            <div className="text-xs py-8 text-center" style={{ color: theme.textTertiary }}>Sigma levels unavailable (insufficient signal data).</div>
           )}
         </div>
-        <div className="mb-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <MetricCard
-            theme={theme}
-            label="Within ±1σ"
-            value={`${analysis.within1SigmaPct.toFixed(1)}%`}
-            helpText="Share of historical days where z-score stayed between -1 and +1."
-          />
-          <MetricCard
-            theme={theme}
-            label="Within ±2σ"
-            value={`${analysis.within2SigmaPct.toFixed(1)}%`}
-            helpText="Share of historical days where z-score stayed between -2 and +2."
-          />
-          <MetricCard
-            theme={theme}
-            label="Within ±3σ"
-            value={`${analysis.within3SigmaPct.toFixed(1)}%`}
-            helpText="Share of historical days where z-score stayed between -3 and +3."
-          />
-        </div>
-        <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-          Normal benchmark: 68.3% within ±1σ, 95.4% within ±2σ. Observed tail beyond ±2σ: <b>{analysis.tailPct.toFixed(1)}%</b>.
-          Zone: <span style={{ color: actionTone, fontWeight: 700 }}>{analysis.currentZone}</span>
-          {Number.isFinite(signal?.zScore) ? ` | ${signal.zScore.toFixed(2)}σ from mean` : ''}
-        </div>
-        <ResponsiveContainer width="100%" height={380}>
-          <BarChart
-            layout="vertical"
-            data={analysis.zScoreHistogram}
-            margin={{ top: 10, right: 24, left: 6, bottom: 10 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
-            <XAxis
-              type="number"
-              tick={{ fontSize: 10, fill: theme.textTertiary }}
-              axisLine={{ stroke: theme.chartGrid }}
-              tickLine={false}
-              tickFormatter={(v) => `${Number(v).toFixed(1)}%`}
-            />
-            <YAxis
-              type="category"
-              dataKey="label"
-              width={78}
-              tick={{ fontSize: 10, fill: theme.textTertiary }}
-              axisLine={{ stroke: theme.chartGrid }}
-              tickLine={false}
-            />
-            <Tooltip
-              contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
-              formatter={(v, k, p) => [`${Number(v).toFixed(1)}%`, `Frequency (${p.payload.count} bars)`]}
-            />
-            {analysis.currentBinLabel && (
-              <ReferenceLine
-                y={analysis.currentBinLabel}
-                stroke={actionTone}
-                strokeWidth={2}
-                label={{ value: 'You are here', position: 'right', fill: actionTone, fontSize: 10 }}
-              />
-            )}
-            <Bar dataKey="pct" name="% of bars" radius={[0, 4, 4, 0]} minPointSize={3}>
-              {analysis.zScoreHistogram.map((b, i) => {
-                const extreme = b.low <= -2 || b.high >= 2;
-                const isCurrentBin = analysis.currentBinLabel === b.label;
-                const fill = isCurrentBin ? actionTone : extreme ? tradePalette.histStretch : tradePalette.histNeutral;
-                return <Cell key={`zbin-${i}`} fill={fill} fillOpacity={isCurrentBin ? 1 : 0.85} />;
-              })}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
       </div>
 
       <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
