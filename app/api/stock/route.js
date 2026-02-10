@@ -329,6 +329,12 @@ export async function GET(request) {
             'institutionOwnership',
             'fundOwnership',
             'majorHoldersBreakdown',
+            'incomeStatementHistory',
+            'incomeStatementHistoryQuarterly',
+            'balanceSheetHistory',
+            'balanceSheetHistoryQuarterly',
+            'cashflowStatementHistory',
+            'cashflowStatementHistoryQuarterly',
           ],
         }),
         EXTERNAL_FETCH_TIMEOUT_MS,
@@ -474,22 +480,22 @@ export async function GET(request) {
     const sharesDilutedAnnual = getMetricValues(usGaap, sharesDilutedFields, 'FY', 10);
     const sharesBasicAnnual = getMetricValues(usGaap, sharesBasicFields, 'FY', 10);
 
-    // Get quarterly data (20 quarters = 5 years)
-    const revenueQuarterly = getMetricValues(usGaap, revenueFields, 'Q', 20);
-    const netIncomeQuarterly = getMetricValues(usGaap, netIncomeFields, 'Q', 20);
-    const grossProfitQuarterly = getMetricValues(usGaap, grossProfitFields, 'Q', 20);
-    const costOfRevenueQuarterly = getMetricValues(usGaap, costOfRevenueFields, 'Q', 20);
-    const operatingIncomeQuarterly = getMetricValues(usGaap, operatingIncomeFields, 'Q', 20);
-    const assetsQuarterly = getMetricValues(usGaap, totalAssetsFields, 'Q', 20);
-    const equityQuarterly = getMetricValues(usGaap, totalEquityFields, 'Q', 20);
-    const inventoryQuarterly = getMetricValues(usGaap, inventoryFields, 'Q', 20);
-    const receivablesQuarterly = getMetricValues(usGaap, receivablesFields, 'Q', 20);
-    const accountsPayableQuarterly = getMetricValues(usGaap, accountsPayableFields, 'Q', 20);
-    const netPpeQuarterly = getMetricValues(usGaap, netPpeFields, 'Q', 20);
-    const cashQuarterly = getMetricValues(usGaap, cashFields, 'Q', 20);
-    const debtQuarterly = getMetricValues(usGaap, debtFields, 'Q', 20);
-    const opCashFlowQuarterly = getMetricValues(usGaap, operatingCashFlowFields, 'Q', 20);
-    const capexQuarterly = getMetricValues(usGaap, capexFields, 'Q', 20);
+    // Get quarterly data (40 quarters = 10 years)
+    const revenueQuarterly = getMetricValues(usGaap, revenueFields, 'Q', 40);
+    const netIncomeQuarterly = getMetricValues(usGaap, netIncomeFields, 'Q', 40);
+    const grossProfitQuarterly = getMetricValues(usGaap, grossProfitFields, 'Q', 40);
+    const costOfRevenueQuarterly = getMetricValues(usGaap, costOfRevenueFields, 'Q', 40);
+    const operatingIncomeQuarterly = getMetricValues(usGaap, operatingIncomeFields, 'Q', 40);
+    const assetsQuarterly = getMetricValues(usGaap, totalAssetsFields, 'Q', 40);
+    const equityQuarterly = getMetricValues(usGaap, totalEquityFields, 'Q', 40);
+    const inventoryQuarterly = getMetricValues(usGaap, inventoryFields, 'Q', 40);
+    const receivablesQuarterly = getMetricValues(usGaap, receivablesFields, 'Q', 40);
+    const accountsPayableQuarterly = getMetricValues(usGaap, accountsPayableFields, 'Q', 40);
+    const netPpeQuarterly = getMetricValues(usGaap, netPpeFields, 'Q', 40);
+    const cashQuarterly = getMetricValues(usGaap, cashFields, 'Q', 40);
+    const debtQuarterly = getMetricValues(usGaap, debtFields, 'Q', 40);
+    const opCashFlowQuarterly = getMetricValues(usGaap, operatingCashFlowFields, 'Q', 40);
+    const capexQuarterly = getMetricValues(usGaap, capexFields, 'Q', 40);
 
     const mapByEndValue = (rows) => new Map(rows.map((r) => [r.end, r.val]));
     const grossProfitAnnualByEnd = mapByEndValue(grossProfitAnnual);
@@ -543,8 +549,8 @@ export async function GET(request) {
       depreciation: depreciationAnnualByEnd.get(rev.end) ?? depreciationAnnualByYear.get(String(rev.fy)) ?? null,
     })).reverse();
 
-    // Build income statement data (quarterly)
-    const incomeQ = revenueQuarterly.map((rev) => ({
+    // Build income statement data (quarterly) from SEC
+    const incomeQSec = revenueQuarterly.map((rev) => ({
       grossProfit: (() => {
         const directGross = grossProfitQuarterlyByEnd.get(rev.end);
         if (directGross !== null && directGross !== undefined) return directGross;
@@ -579,8 +585,8 @@ export async function GET(request) {
       totalDebt: debtAnnualByEnd.get(asset.end) || 0,
     })).reverse();
 
-    // Build balance sheet data (quarterly)
-    const balanceQ = assetsQuarterly.map((asset) => ({
+    // Build balance sheet data (quarterly) from SEC
+    const balanceQSec = assetsQuarterly.map((asset) => ({
       date: asset.end,
       fiscalYear: String(asset.fy),
       period: asset.fp,
@@ -606,8 +612,8 @@ export async function GET(request) {
       freeCashFlow: (ocf.val || 0) - ((capexAnnualByEnd.get(ocf.end) ?? capexAnnualByYear.get(String(ocf.fy))) || 0),
     })).reverse();
 
-    // Build cash flow data (quarterly)
-    const cashflowQ = opCashFlowQuarterly.map((ocf) => ({
+    // Build cash flow data (quarterly) from SEC
+    const cashflowQSec = opCashFlowQuarterly.map((ocf) => ({
       date: ocf.end,
       fiscalYear: String(ocf.fy),
       period: ocf.fp,
@@ -615,6 +621,110 @@ export async function GET(request) {
       capitalExpenditure: -((capexQuarterlyByEnd.get(ocf.end)) || 0),
       freeCashFlow: (ocf.val || 0) - ((capexQuarterlyByEnd.get(ocf.end)) || 0),
     })).reverse();
+
+    // --- Merge Yahoo Finance quarterly data for freshness ---
+    // Yahoo provides the most recent ~5 quarters faster than SEC filings.
+    // We use SEC as the deep historical base and overlay Yahoo for any newer quarters.
+    const yahooIncomeQ = yahooStats?.incomeStatementHistoryQuarterly?.incomeStatementHistory || [];
+    const yahooBalanceQ = yahooStats?.balanceSheetHistoryQuarterly?.balanceSheetStatements || [];
+    const yahooCashflowQ = yahooStats?.cashflowStatementHistoryQuarterly?.cashflowStatements || [];
+
+    function yahooDateToISO(d) {
+      if (!d) return null;
+      if (d instanceof Date) return d.toISOString().slice(0, 10);
+      if (typeof d === 'number') return new Date(d * 1000).toISOString().slice(0, 10);
+      if (typeof d === 'string') return d.slice(0, 10);
+      return null;
+    }
+
+    function guessQuarterPeriod(dateStr) {
+      if (!dateStr) return 'Q1';
+      const month = new Date(dateStr).getMonth() + 1;
+      if (month <= 3) return 'Q1';
+      if (month <= 6) return 'Q2';
+      if (month <= 9) return 'Q3';
+      return 'Q4';
+    }
+
+    // Merge Yahoo income quarterly data into SEC data
+    const secIncomeDates = new Set(incomeQSec.map(r => r.date));
+    const yahooIncomeExtras = yahooIncomeQ
+      .map(row => {
+        const date = yahooDateToISO(row.endDate);
+        if (!date || secIncomeDates.has(date)) return null;
+        const year = date.slice(0, 4);
+        const revenue = row.totalRevenue ?? 0;
+        const costOfRevenue = row.costOfRevenue ?? null;
+        const grossProfit = row.grossProfit ?? (costOfRevenue != null ? revenue - costOfRevenue : null);
+        return {
+          date,
+          fiscalYear: year,
+          period: guessQuarterPeriod(date),
+          revenue,
+          costOfRevenue,
+          grossProfit,
+          operatingIncome: row.operatingIncome ?? null,
+          netIncome: row.netIncome ?? null,
+          interestExpense: row.interestExpense ? -Math.abs(row.interestExpense) : null,
+          depreciation: null,
+        };
+      })
+      .filter(Boolean);
+
+    const incomeQ = [...incomeQSec, ...yahooIncomeExtras]
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Merge Yahoo balance sheet quarterly data
+    const secBalanceDates = new Set(balanceQSec.map(r => r.date));
+    const yahooBalanceExtras = yahooBalanceQ
+      .map(row => {
+        const date = yahooDateToISO(row.endDate);
+        if (!date || secBalanceDates.has(date)) return null;
+        const year = date.slice(0, 4);
+        return {
+          date,
+          fiscalYear: year,
+          period: guessQuarterPeriod(date),
+          totalAssets: row.totalAssets ?? 0,
+          totalEquity: row.totalStockholderEquity ?? 0,
+          inventory: row.inventory ?? null,
+          accountsReceivable: row.netReceivables ?? null,
+          accountsPayable: row.accountsPayable ?? null,
+          netPPE: row.propertyPlantEquipment ?? null,
+          cashAndCashEquivalents: row.cash ?? 0,
+          shortTermInvestments: row.shortTermInvestments ?? 0,
+          currentAssets: row.totalCurrentAssets ?? null,
+          currentLiabilities: row.totalCurrentLiabilities ?? null,
+          totalDebt: row.longTermDebt ?? 0,
+        };
+      })
+      .filter(Boolean);
+
+    const balanceQ = [...balanceQSec, ...yahooBalanceExtras]
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Merge Yahoo cash flow quarterly data
+    const secCashflowDates = new Set(cashflowQSec.map(r => r.date));
+    const yahooCashflowExtras = yahooCashflowQ
+      .map(row => {
+        const date = yahooDateToISO(row.endDate);
+        if (!date || secCashflowDates.has(date)) return null;
+        const year = date.slice(0, 4);
+        const opCF = row.totalCashFromOperatingActivities ?? 0;
+        const capex = row.capitalExpenditures ?? 0;
+        return {
+          date,
+          fiscalYear: year,
+          period: guessQuarterPeriod(date),
+          operatingCashFlow: opCF,
+          capitalExpenditure: capex,
+          freeCashFlow: opCF + capex, // capex is already negative from Yahoo
+        };
+      })
+      .filter(Boolean);
+
+    const cashflowQ = [...cashflowQSec, ...yahooCashflowExtras]
+      .sort((a, b) => a.date.localeCompare(b.date));
 
     const balanceByYear = new Map(balance.map(b => [String(b.calendarYear), b]));
     const cashflowByYear = new Map(cashflow.map(c => [String(c.calendarYear), c]));

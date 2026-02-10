@@ -20,87 +20,93 @@ import {
 // Theme definitions
 const themes = {
   dark: {
-    bg: '#0a0a0f',
-    bgCard: '#16161f',
-    bgElevated: '#1e1e2a',
-    bgInput: '#0a0a0f',
+    bg: '#08090d',
+    bgCard: '#111318',
+    bgElevated: '#191c24',
+    bgInput: '#0d0e13',
     border: 'rgba(255, 255, 255, 0.06)',
-    borderHover: 'rgba(255, 255, 255, 0.1)',
-    borderStrong: 'rgba(255, 255, 255, 0.15)',
-    text: '#f0f0f5',
-    textSecondary: '#a0a0b0',
-    textTertiary: '#6b6b80',
-    textMuted: '#45455a',
-    chartGrid: 'rgba(255,255,255,0.06)',
-    chartTooltipBg: '#1e1e2a',
+    borderHover: 'rgba(255, 255, 255, 0.12)',
+    borderStrong: 'rgba(255, 255, 255, 0.16)',
+    text: '#eceef4',
+    textSecondary: '#9498a8',
+    textTertiary: '#5d6170',
+    textMuted: '#3a3e4c',
+    chartGrid: 'rgba(255,255,255,0.05)',
+    chartTooltipBg: '#191c24',
     chartTooltipBorder: 'rgba(255,255,255,0.1)',
-    tableBg: '#0a0a0f',
-    tableRowHover: 'rgba(255,255,255,0.02)',
-    stickyBg: '#16161f',
+    tableBg: '#0d0e13',
+    tableRowHover: 'rgba(255,255,255,0.025)',
+    tableRowAlt: 'rgba(255,255,255,0.015)',
+    stickyBg: '#111318',
     cursorFill: 'rgba(255,255,255,0.03)',
-    neutralPillBg: 'rgba(255,255,255,0.03)',
+    neutralPillBg: 'rgba(255,255,255,0.04)',
     positive: '#34d399',
     negative: '#f87171',
-    fairValue: '#a0a0b0',
-    positiveBg: 'rgba(16,185,129,0.1)',
-    negativeBg: 'rgba(239,68,68,0.1)',
-    positiveBorder: 'rgba(16,185,129,0.2)',
-    negativeBorder: 'rgba(239,68,68,0.2)',
+    fairValue: '#9498a8',
+    positiveBg: 'rgba(16,185,129,0.08)',
+    negativeBg: 'rgba(239,68,68,0.08)',
+    positiveBorder: 'rgba(16,185,129,0.18)',
+    negativeBorder: 'rgba(239,68,68,0.18)',
     accent: '#60a5fa',
     accentAlt: '#a78bfa',
     warning: '#fbbf24',
     warningText: 'rgba(253,230,138,0.7)',
-    warningBg: 'rgba(245,158,11,0.05)',
-    warningBorder: 'rgba(245,158,11,0.2)',
+    warningBg: 'rgba(245,158,11,0.06)',
+    warningBorder: 'rgba(245,158,11,0.18)',
     warningStrong: '#fbbf24',
+    headerBg: 'rgba(8,9,13,0.88)',
+    heroGradient: 'linear-gradient(135deg, #0c1929 0%, #1a2744 40%, #2a1f4e 100%)',
   },
   light: {
-    bg: '#f8f9fc',
+    bg: '#f5f6fa',
     bgCard: '#ffffff',
-    bgElevated: '#f1f3f9',
+    bgElevated: '#eef0f7',
     bgInput: '#ffffff',
-    border: 'rgba(0, 0, 0, 0.08)',
-    borderHover: 'rgba(0, 0, 0, 0.15)',
+    border: 'rgba(0, 0, 0, 0.07)',
+    borderHover: 'rgba(0, 0, 0, 0.14)',
     borderStrong: 'rgba(0, 0, 0, 0.2)',
-    text: '#111827',
+    text: '#0f1729',
     textSecondary: '#4b5563',
-    textTertiary: '#9ca3af',
-    textMuted: '#d1d5db',
-    chartGrid: 'rgba(0,0,0,0.08)',
+    textTertiary: '#94a3b8',
+    textMuted: '#cbd5e1',
+    chartGrid: 'rgba(0,0,0,0.06)',
     chartTooltipBg: '#ffffff',
-    chartTooltipBorder: 'rgba(0,0,0,0.1)',
-    tableBg: '#f8f9fc',
+    chartTooltipBorder: 'rgba(0,0,0,0.08)',
+    tableBg: '#f5f6fa',
     tableRowHover: 'rgba(0,0,0,0.02)',
+    tableRowAlt: 'rgba(0,0,0,0.015)',
     stickyBg: '#ffffff',
     cursorFill: 'rgba(0,0,0,0.03)',
     neutralPillBg: 'rgba(0,0,0,0.03)',
     positive: '#059669',
     negative: '#dc2626',
     fairValue: '#4b5563',
-    positiveBg: 'rgba(5,150,105,0.08)',
-    negativeBg: 'rgba(220,38,38,0.08)',
-    positiveBorder: 'rgba(5,150,105,0.2)',
-    negativeBorder: 'rgba(220,38,38,0.2)',
+    positiveBg: 'rgba(5,150,105,0.06)',
+    negativeBg: 'rgba(220,38,38,0.06)',
+    positiveBorder: 'rgba(5,150,105,0.18)',
+    negativeBorder: 'rgba(220,38,38,0.18)',
     accent: '#2563eb',
     accentAlt: '#7c3aed',
     warning: '#d97706',
     warningText: '#92400e',
-    warningBg: 'rgba(217,119,6,0.06)',
-    warningBorder: 'rgba(217,119,6,0.2)',
+    warningBg: 'rgba(217,119,6,0.05)',
+    warningBorder: 'rgba(217,119,6,0.18)',
     warningStrong: '#b45309',
+    headerBg: 'rgba(245,246,250,0.88)',
+    heroGradient: 'linear-gradient(135deg, #dbeafe 0%, #e0e7ff 40%, #ede9fe 100%)',
   },
 };
 
 const NAV_TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'valuation', label: 'Valuation' },
-  { id: 'financials', label: 'Financials' },
-  { id: 'operating-metrics', label: 'Operating Metrics' },
-  { id: 'charts', label: 'Charts' },
-  { id: 'trading', label: 'Trading' },
-  { id: 'institutional', label: 'Institutional Ownership' },
-  { id: 'insider', label: 'Insider Activity' },
-  { id: 'profile', label: 'Profile' },
+  { id: 'overview', label: 'Overview', icon: '\u25C8' },
+  { id: 'valuation', label: 'Valuation', icon: '\u25B2' },
+  { id: 'financials', label: 'Financials', icon: '\u25A0' },
+  { id: 'operating-metrics', label: 'Metrics', icon: '\u25C6' },
+  { id: 'charts', label: 'Charts', icon: '\u25CF' },
+  { id: 'trading', label: 'Trading', icon: '\u2261' },
+  { id: 'institutional', label: 'Institutions', icon: '\u25CB' },
+  { id: 'insider', label: 'Insiders', icon: '\u25D0' },
+  { id: 'profile', label: 'Profile', icon: '\u25CE' },
 ];
 
 const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/;
@@ -182,54 +188,59 @@ function ChartSection({ title, chartData, dataKeys, colors, unit = '', dataKeyX 
 
   return (
     <div
-      className="p-5 rounded-2xl border transition-colors"
+      className="p-5 rounded-2xl border transition-colors card-hover"
       style={{ background: theme.bgCard, borderColor: theme.border }}
     >
-      <h3
-        className="text-[10px] font-semibold mb-4 tracking-widest uppercase"
-        style={{ color: theme.textSecondary }}
-      >
-        {title}
-      </h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3
+          className="text-[10px] font-semibold tracking-widest uppercase font-display"
+          style={{ color: theme.textSecondary }}
+        >
+          {title}
+        </h3>
+        <div className="flex gap-1.5">
+          {dataKeys.map((key, i) => (
+            <div key={key} className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-sm" style={{ background: colors[i] }} />
+              <span className="text-[9px]" style={{ color: theme.textTertiary }}>{key}</span>
+            </div>
+          ))}
+        </div>
+      </div>
       <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
-          <XAxis dataKey={dataKeyX} tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
+        <BarChart data={chartData} margin={{ top: 10, right: 16, left: -4, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} vertical={false} />
+          <XAxis dataKey={dataKeyX} tick={{ fontFamily: 'var(--font-mono)', fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
           <YAxis
             domain={yDomain}
             tickFormatter={formatAxisTick}
-            tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: theme.textTertiary }}
-            axisLine={{ stroke: theme.chartGrid }}
+            tick={{ fontFamily: 'var(--font-mono)', fontSize: 10, fill: theme.textTertiary }}
+            axisLine={false}
             tickLine={false}
           />
           <Tooltip
-            contentStyle={{ fontFamily: 'JetBrains Mono', fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+            contentStyle={{ fontFamily: 'var(--font-mono)', fontSize: 11, borderRadius: '10px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text, boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}
             formatter={(value) => [formatTooltipValue(value), '']}
             cursor={{ fill: theme.cursorFill }}
           />
-          <Legend wrapperStyle={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: theme.textSecondary }} />
+          <Legend wrapperStyle={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: theme.textSecondary, paddingTop: '8px' }} />
           {dataKeys.map((key, i) => (
-            <Bar key={key} dataKey={key} fill={colors[i]} radius={[4, 4, 0, 0]} />
+            <Bar key={key} dataKey={key} fill={colors[i]} radius={[3, 3, 0, 0]} />
           ))}
         </BarChart>
       </ResponsiveContainer>
-      <div className="mt-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-        <div><b>X-axis:</b> {chartGuide.xLabel}</div>
-        <div><b>Y-axis:</b> {chartGuide.yLabel}</div>
-        <div><b>Bars:</b> {chartGuide.seriesText}</div>
-      </div>
     </div>
   );
 }
 
 function MetricCard({ label, value, subtext, helpText, tone = 'neutral', theme }) {
   const toneStyles = tone === 'positive'
-    ? { background: theme.positiveBg, borderColor: theme.positiveBorder, valueColor: theme.positive }
+    ? { background: theme.positiveBg, borderColor: theme.positiveBorder, valueColor: theme.positive, dot: theme.positive }
     : tone === 'negative'
-    ? { background: theme.negativeBg, borderColor: theme.negativeBorder, valueColor: theme.negative }
+    ? { background: theme.negativeBg, borderColor: theme.negativeBorder, valueColor: theme.negative, dot: theme.negative }
     : tone === 'warning'
-    ? { background: theme.warningBg, borderColor: theme.warningBorder, valueColor: theme.warningStrong || theme.warning }
-    : { background: theme.bgCard, borderColor: theme.border, valueColor: theme.text };
+    ? { background: theme.warningBg, borderColor: theme.warningBorder, valueColor: theme.warningStrong || theme.warning, dot: theme.warning }
+    : { background: theme.bgCard, borderColor: theme.border, valueColor: theme.text, dot: null };
 
   return (
     <div
@@ -238,21 +249,22 @@ function MetricCard({ label, value, subtext, helpText, tone = 'neutral', theme }
       onMouseEnter={(e) => e.currentTarget.style.borderColor = theme.borderHover}
       onMouseLeave={(e) => e.currentTarget.style.borderColor = toneStyles.borderColor}
     >
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <div className="text-[10px] tracking-wider uppercase" style={{ color: theme.textTertiary }}>{label}</div>
+      <div className="flex items-center gap-1.5 mb-2">
+        {toneStyles.dot && <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: toneStyles.dot }} />}
+        <div className="text-[10px] tracking-wider uppercase leading-tight font-display" style={{ color: theme.textTertiary }}>{label}</div>
         {helpText && (
           <span
-            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border text-[9px] font-bold cursor-help"
+            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border text-[8px] font-bold cursor-help flex-shrink-0"
             style={{ color: theme.textTertiary, borderColor: theme.borderStrong, background: theme.bgElevated }}
             title={helpText}
             aria-label={helpText}
           >
-            i
+            ?
           </span>
         )}
       </div>
-      <div className="text-base font-semibold" style={{ color: toneStyles.valueColor }}>{value}</div>
-      {subtext && <div className="text-[10px] mt-1" style={{ color: theme.textMuted }}>{subtext}</div>}
+      <div className="text-base font-semibold tracking-tight" style={{ color: toneStyles.valueColor }}>{value}</div>
+      {subtext && <div className="text-[10px] mt-1.5 leading-snug" style={{ color: theme.textMuted }}>{subtext}</div>}
     </div>
   );
 }
@@ -511,17 +523,17 @@ function OverviewTab({ data, theme }) {
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview">
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Section 1 - Market Price and Expectations</h3>
+        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Market Price & Expectations</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <MetricCard theme={theme} label="Current Market Price" value={safeMoney(currentPrice)} />
-          <MetricCard theme={theme} label="Forward Price-to-Earnings Ratio" value={safeRatio(forwardPE)} />
+          <MetricCard theme={theme} label="Current Price" value={safeMoney(currentPrice)} />
+          <MetricCard theme={theme} label="Forward P/E" value={safeRatio(forwardPE)} />
           <MetricCard theme={theme} label="Forward Earnings Yield" value={Number.isFinite(forwardEarningsYield) ? `${(forwardEarningsYield * 100).toFixed(2)}%` : 'N/A'} />
         </div>
         <div className="mt-4 text-xs leading-relaxed" style={{ color: subtleText }}>{priceNarrative}</div>
       </div>
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Section 2 - What Must Be True</h3>
+        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>What Must Be True</h3>
         <div className="text-xs mb-4" style={{ color: subtleText }}>{impliedExpectationsText}</div>
 
         <div className="text-[10px] mb-2" style={{ color: subtleText }}>Implied Earnings Per Share Growth</div>
@@ -532,7 +544,7 @@ function OverviewTab({ data, theme }) {
                 <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Required Return</th>
                 {horizons.map((years) => (
                   <th key={`eps-h-${years}`} className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>
-                    {years}-Year Implied Earnings Per Share Compound Annual Growth Rate
+                    {years}Y Implied EPS CAGR
                   </th>
                 ))}
               </tr>
@@ -560,7 +572,7 @@ function OverviewTab({ data, theme }) {
                 <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Required Return</th>
                 {horizons.map((years) => (
                   <th key={`fcf-h-${years}`} className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>
-                    {years}-Year Implied Free Cash Flow Compound Annual Growth Rate
+                    {years}Y Implied FCF CAGR
                   </th>
                 ))}
               </tr>
@@ -584,17 +596,17 @@ function OverviewTab({ data, theme }) {
           <div className="text-[10px] tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Where We Are Today (Baseline)</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-3 rounded-lg border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-              <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: subtleText }}>Current Earnings Growth</div>
+              <div className="text-[10px] uppercase tracking-wider mb-2 font-display" style={{ color: subtleText }}>Earnings Growth</div>
               <div className="text-xs leading-6" style={{ color: theme.text }}>
-                • Trailing Twelve Month Earnings Per Share Growth (Year-over-Year): {Number.isFinite(ttmEpsGrowth) ? `${ttmEpsGrowth >= 0 ? '+' : ''}${(ttmEpsGrowth * 100).toFixed(1)}%` : 'N/A'}<br />
-                • Five-Year Earnings Per Share Compound Annual Growth Rate: {Number.isFinite(eps5yCagr) ? `${eps5yCagr >= 0 ? '+' : ''}${(eps5yCagr * 100).toFixed(1)}%` : 'N/A'}
+                • TTM EPS Growth (YoY): {Number.isFinite(ttmEpsGrowth) ? `${ttmEpsGrowth >= 0 ? '+' : ''}${(ttmEpsGrowth * 100).toFixed(1)}%` : 'N/A'}<br />
+                • 5Y EPS CAGR: {Number.isFinite(eps5yCagr) ? `${eps5yCagr >= 0 ? '+' : ''}${(eps5yCagr * 100).toFixed(1)}%` : 'N/A'}
               </div>
             </div>
             <div className="p-3 rounded-lg border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-              <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: subtleText }}>Current Free Cash Flow Growth</div>
+              <div className="text-[10px] uppercase tracking-wider mb-2 font-display" style={{ color: subtleText }}>FCF Growth</div>
               <div className="text-xs leading-6" style={{ color: theme.text }}>
-                • Trailing Twelve Month Free Cash Flow Growth (Year-over-Year): {Number.isFinite(ttmFcfGrowth) ? `${ttmFcfGrowth >= 0 ? '+' : ''}${(ttmFcfGrowth * 100).toFixed(1)}%` : 'N/A'}<br />
-                • Five-Year Free Cash Flow Compound Annual Growth Rate: {Number.isFinite(fcf5yCagr) ? `${fcf5yCagr >= 0 ? '+' : ''}${(fcf5yCagr * 100).toFixed(1)}%` : 'N/A'}
+                • TTM FCF Growth (YoY): {Number.isFinite(ttmFcfGrowth) ? `${ttmFcfGrowth >= 0 ? '+' : ''}${(ttmFcfGrowth * 100).toFixed(1)}%` : 'N/A'}<br />
+                • 5Y FCF CAGR: {Number.isFinite(fcf5yCagr) ? `${fcf5yCagr >= 0 ? '+' : ''}${(fcf5yCagr * 100).toFixed(1)}%` : 'N/A'}
               </div>
             </div>
           </div>
@@ -609,38 +621,38 @@ function OverviewTab({ data, theme }) {
       </div>
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Section 3 - Business Reality Check</h3>
+        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Business Reality Check</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <MetricCard theme={theme} label="Net Profit Margin" value={Number.isFinite(netMargin) ? `${(netMargin * 100).toFixed(2)}%` : 'N/A'} />
-          <MetricCard theme={theme} label="Return on Invested Capital" value={Number.isFinite(roic) ? `${(roic * 100).toFixed(2)}%` : 'N/A'} />
-          <MetricCard theme={theme} label="Recent Revenue Growth (5-Year Compound Annual Growth Rate)" value={Number.isFinite(recentRevenueCagr) ? `${(recentRevenueCagr * 100).toFixed(2)}%` : 'N/A'} />
-          <MetricCard theme={theme} label="Recent Free Cash Flow Growth (5-Year Compound Annual Growth Rate)" value={Number.isFinite(recentFcfCagr) ? `${(recentFcfCagr * 100).toFixed(2)}%` : 'N/A'} />
-          <MetricCard theme={theme} label="Debt to Earnings Before Interest, Taxes, Depreciation, and Amortization" value={safeRatio(debtToEbitda)} />
+          <MetricCard theme={theme} label="Net Margin" value={Number.isFinite(netMargin) ? `${(netMargin * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="ROIC" value={Number.isFinite(roic) ? `${(roic * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="Revenue 5Y CAGR" value={Number.isFinite(recentRevenueCagr) ? `${(recentRevenueCagr * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="FCF 5Y CAGR" value={Number.isFinite(recentFcfCagr) ? `${(recentFcfCagr * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="Debt / EBITDA" value={safeRatio(debtToEbitda)} />
         </div>
         <div className="mt-4 text-xs leading-relaxed" style={{ color: subtleText }}>{businessRealityInterpretation}</div>
       </div>
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Section 4 - Valuation Context (Multiples)</h3>
+        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Valuation Context</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricCard theme={theme} label="Price-to-Earnings Ratio (Trailing Twelve Months)" value={safeRatio(currentPE)} />
-          <MetricCard theme={theme} label="Forward Price-to-Earnings Ratio" value={safeRatio(forwardPE)} />
-          <MetricCard theme={theme} label="Price-to-Free-Cash-Flow Ratio (Trailing Twelve Months)" value={safeRatio(currentPfcf)} />
+          <MetricCard theme={theme} label="P/E (TTM)" value={safeRatio(currentPE)} />
+          <MetricCard theme={theme} label="Forward P/E" value={safeRatio(forwardPE)} />
+          <MetricCard theme={theme} label="P/FCF (TTM)" value={safeRatio(currentPfcf)} />
           <MetricCard theme={theme} label="Forward Earnings Yield" value={Number.isFinite(forwardEarningsYield) ? `${(forwardEarningsYield * 100).toFixed(2)}%` : 'N/A'} />
         </div>
         <div className="mt-4 p-3 rounded-lg border text-[10px]" style={{ background: theme.bg, borderColor: theme.border, color: subtleText }}>
           Multiples reflect market expectations for future earnings growth and durability. High multiples are not inherently positive or negative.
         </div>
         <div className="mt-3 p-3 rounded-lg border text-[10px]" style={{ background: theme.bg, borderColor: theme.border, color: subtleText }}>
-          <span className="mr-2 px-2 py-0.5 rounded-full border text-[9px] tracking-wider uppercase" style={{ borderColor: theme.border, color: subtleText }}>
+          <span className="mr-2 px-2 py-0.5 rounded-full border text-[9px] tracking-wider uppercase font-display" style={{ borderColor: theme.border, color: subtleText }}>
             Heuristic
           </span>
-          Price-to-Earnings-to-Growth Ratio: {safeRatio(data?.valuationRatios?.current?.pegRatio)} | Price-to-Sales-to-Growth Ratio: {safeRatio(data?.valuationRatios?.current?.psgRatio)}
+          PEG: {safeRatio(data?.valuationRatios?.current?.pegRatio)} | PSG: {safeRatio(data?.valuationRatios?.current?.psgRatio)}
         </div>
       </div>
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Section 5 - Scenario Sensitivity</h3>
+        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Scenario Sensitivity</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <MetricCard theme={theme} label={scenarios.base.label} value={safeMoney(scenarios.base.value)} />
           <MetricCard theme={theme} label={scenarios.stress.label} value={safeMoney(scenarios.stress.value)} />
@@ -653,7 +665,7 @@ function OverviewTab({ data, theme }) {
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Section 6 - Model-Based References (Assumption-Sensitive)</h3>
+          <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Model-Based References</h3>
           <button
             onClick={() => setShowReferences((v) => !v)}
             className="px-3 py-2 rounded-lg text-[10px] font-semibold tracking-wider border"
@@ -665,10 +677,10 @@ function OverviewTab({ data, theme }) {
 
         {showReferences && (
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            <MetricCard theme={theme} label="Discounted Cash Flow Composite Output" value={safeMoney(references.dcfComposite)} />
-            <MetricCard theme={theme} label="Historical Mean Price-to-Earnings Anchor" value={safeMoney(references.meanPeValue)} />
-            <MetricCard theme={theme} label="Historical Mean Price-to-Sales Anchor" value={safeMoney(references.meanPsValue)} />
-            <MetricCard theme={theme} label="Analyst Mean Target" value={safeMoney(references.analystMeanTarget)} />
+            <MetricCard theme={theme} label="DCF Composite" value={safeMoney(references.dcfComposite)} />
+            <MetricCard theme={theme} label="Mean P/E Anchor" value={safeMoney(references.meanPeValue)} />
+            <MetricCard theme={theme} label="Mean P/S Anchor" value={safeMoney(references.meanPsValue)} />
+            <MetricCard theme={theme} label="Analyst Target" value={safeMoney(references.analystMeanTarget)} />
           </div>
         )}
       </div>
@@ -957,7 +969,7 @@ function ValuationTab({ data, theme }) {
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-valuation" aria-labelledby="tab-valuation">
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: theme.textSecondary }}>Valuation Assumptions</h3>
+        <h3 className="text-xs font-semibold tracking-widest uppercase mb-4 font-display" style={{ color: theme.textSecondary }}>Valuation Assumptions</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <label className="text-xs" style={{ color: valuationSubtleText }}>
             Required Return
@@ -990,7 +1002,7 @@ function ValuationTab({ data, theme }) {
             </div>
           </label>
           <label className="text-xs" style={{ color: valuationSubtleText }}>
-            Terminal Price-to-Earnings Multiple
+            Terminal P/E Multiple
             <div className="mt-2 flex items-center gap-3">
               <input
                 type="range"
@@ -1006,14 +1018,14 @@ function ValuationTab({ data, theme }) {
           </label>
         </div>
         <div className="mt-3 text-[10px]" style={{ color: valuationSubtleText }}>
-          Terminal multiple captures long-term business quality after growth fades; small changes materially affect valuation.
+          Terminal multiple captures long-term quality after growth fades. Small changes materially affect output.
         </div>
       </div>
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>Section 1 - Is Today&apos;s Price Sensible?</h3>
+        <h3 className="text-xs font-semibold tracking-widest uppercase mb-2 font-display" style={{ color: theme.textSecondary }}>Is Today&apos;s Price Sensible?</h3>
         <div className="text-xs mb-4" style={{ color: valuationSubtleText }}>{impliedSummary}</div>
-        <div className="text-[10px] mb-2" style={{ color: valuationSubtleText }}>Reverse Price-to-Earnings (Implied Earnings Per Share Growth)</div>
+        <div className="text-[10px] mb-2 font-display" style={{ color: valuationSubtleText }}>Reverse P/E (Implied EPS Growth)</div>
         <div className="overflow-x-auto mb-4">
           <table className="w-full text-xs">
             <thead>
@@ -1021,7 +1033,7 @@ function ValuationTab({ data, theme }) {
                 <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Required Return</th>
                 {fadeHorizons.map((h) => (
                   <th key={`head-${h}`} className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>
-                    Implied Earnings Per Share Compound Annual Growth Rate ({h} Years)
+                    Implied EPS CAGR ({h}Y)
                   </th>
                 ))}
               </tr>
@@ -1041,13 +1053,13 @@ function ValuationTab({ data, theme }) {
           </table>
         </div>
         <div className="mt-3 text-[10px]" style={{ color: valuationSubtleText }}>
-          Model assumptions: terminal Price-to-Earnings ratio {terminalPEBase.toFixed(1)}, earnings per share base {safeMoney(latestEPS)}.
+          Assumptions: terminal P/E {terminalPEBase.toFixed(1)}x, EPS base {safeMoney(latestEPS)}.
         </div>
         <div className="mt-2 text-[10px]" style={{ color: valuationSubtleText }}>
-          Implied growth reflects current earnings normalization and margin expansion; not all of this growth must come from revenue.
+          Not all implied growth must come from revenue; margin expansion and buybacks contribute.
         </div>
 
-        <div className="text-[10px] mt-4 mb-2" style={{ color: valuationSubtleText }}>Reverse Price-to-Free-Cash-Flow (Implied Cash Growth)</div>
+        <div className="text-[10px] mt-4 mb-2 font-display" style={{ color: valuationSubtleText }}>Reverse P/FCF (Implied Cash Growth)</div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
@@ -1055,7 +1067,7 @@ function ValuationTab({ data, theme }) {
                 <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Required Return</th>
                 {fadeHorizons.map((h) => (
                   <th key={`fcf-head-${h}`} className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>
-                    Implied Free Cash Flow Compound Annual Growth Rate ({h} Years)
+                    Implied FCF CAGR ({h}Y)
                   </th>
                 ))}
               </tr>
@@ -1075,18 +1087,18 @@ function ValuationTab({ data, theme }) {
           </table>
         </div>
         <div className="mt-2 text-[10px]" style={{ color: valuationSubtleText }}>
-          Cash model assumptions: terminal Price-to-Free-Cash-Flow ratio {terminalPfcfBase.toFixed(1)}x, free cash flow per share base {safeMoney(latestFCFPerShare)}.
+          Assumptions: terminal P/FCF {terminalPfcfBase.toFixed(1)}x, FCF/share base {safeMoney(latestFCFPerShare)}.
         </div>
 
-        <div className="text-[10px] mt-4 mb-2" style={{ color: valuationSubtleText }}>Return Decomposition (Approximate)</div>
+        <div className="text-[10px] mt-4 mb-2 font-display" style={{ color: valuationSubtleText }}>Return Decomposition</div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr style={{ background: theme.tableBg }}>
                 <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Scenario</th>
-                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Earnings Per Share Growth</th>
-                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Dividend Yield and Buyback Yield Proxy</th>
-                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Valuation Multiple Effect</th>
+                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>EPS Growth</th>
+                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Div + Buyback Yield</th>
+                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Multiple Effect</th>
                 <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Expected Return</th>
               </tr>
             </thead>
@@ -1109,7 +1121,7 @@ function ValuationTab({ data, theme }) {
         <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[10px] tracking-widest uppercase mb-1" style={{ color: valuationSubtleText }}>Section 2 - Cashflow Scenarios (Growth and Duration Sensitivity)</div>
+              <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: valuationSubtleText }}>Cashflow Scenarios</div>
               <div className="text-xl font-bold" style={{ color: theme.text }}>
                 {safeMoney(dcfRangeLow)} - {safeMoney(dcfRangeHigh)}
               </div>
@@ -1134,7 +1146,7 @@ function ValuationTab({ data, theme }) {
                 <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: valuationSubtleText }}>{s.label}</div>
                 <div className="text-base font-semibold mb-1" style={{ color: theme.text }}>{safeMoney(dcfScenarioValues[s.key])}</div>
                 <div className="text-[10px]" style={{ color: valuationSubtleText }}>
-                  Growth Rate={safePercent(scenarioByName[s.key].growth * 100)} | Required Return={safePercent(scenarioByName[s.key].requiredReturn * 100)} | Terminal Price-to-Free-Cash-Flow Ratio={(s.key === 'stress' ? clamp(terminalPfcfBase - 2, 6, 24) : s.key === 'expansion' ? clamp(terminalPfcfBase + 2, 8, 30) : terminalPfcfBase).toFixed(1)}
+                  g={safePercent(scenarioByName[s.key].growth * 100)} | r={safePercent(scenarioByName[s.key].requiredReturn * 100)} | Terminal P/FCF={(s.key === 'stress' ? clamp(terminalPfcfBase - 2, 6, 24) : s.key === 'expansion' ? clamp(terminalPfcfBase + 2, 8, 30) : terminalPfcfBase).toFixed(1)}x
                 </div>
               </div>
             ))}
@@ -1145,47 +1157,47 @@ function ValuationTab({ data, theme }) {
       <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="text-[10px] tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>Synthesis</div>
         <div className="text-xs leading-relaxed" style={{ color: valuationSubtleText }}>
-          At {safeMoney(currentPrice)}, the market implies about {Number.isFinite(synthesisGrowth5y) ? `${(synthesisGrowth5y * 100).toFixed(1)}%` : 'N/A'} to {Number.isFinite(synthesisGrowth10y) ? `${(synthesisGrowth10y * 100).toFixed(1)}%` : 'N/A'} earnings per share compound annual growth rate (5 years to 10 years) at {assumptionReturn.toFixed(1)}% required return. Scenario outcomes stay acceptable only if elevated growth persists through the selected horizon; returns deteriorate quickly if growth fades within 3-4 years or if terminal valuation multiples compress materially.
+          At {safeMoney(currentPrice)}, the market implies ~{Number.isFinite(synthesisGrowth5y) ? `${(synthesisGrowth5y * 100).toFixed(1)}%` : 'N/A'} to {Number.isFinite(synthesisGrowth10y) ? `${(synthesisGrowth10y * 100).toFixed(1)}%` : 'N/A'} EPS CAGR (5Y-10Y) at {assumptionReturn.toFixed(1)}% required return. Returns deteriorate quickly if growth fades within 3-4 years or terminal multiples compress.
         </div>
       </div>
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Section 3 - Multiples Dashboard (Context)</h3>
+        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Multiples Dashboard</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricCard theme={theme} label="Price-to-Earnings Ratio (Trailing Twelve Months)" value={safeRatio(currentPE)} />
-          <MetricCard theme={theme} label="Earnings Yield (Earnings-to-Price)" value={Number.isFinite(currentEarningsYield) ? `${(currentEarningsYield * 100).toFixed(2)}%` : 'N/A'} />
-          <MetricCard theme={theme} label="Forward Price-to-Earnings Ratio" value={safeRatio(forwardPE)} />
-          <MetricCard theme={theme} label="Forward Earnings Yield" value={Number.isFinite(forwardEarningsYield) ? `${(forwardEarningsYield * 100).toFixed(2)}%` : 'N/A'} />
-          <MetricCard theme={theme} label="Price-to-Free-Cash-Flow Ratio (Trailing Twelve Months)" value={safeRatio(pfcfTtm)} />
-          <MetricCard theme={theme} label="Price-to-Free-Cash-Flow Ratio (Three-Year Average Free Cash Flow)" value={safeRatio(pfcf3y)} />
-          <MetricCard theme={theme} label="Free Cash Flow Yield (Trailing Twelve Months)" value={Number.isFinite(fcfYield) ? `${(fcfYield * 100).toFixed(2)}%` : 'N/A'} />
-          <MetricCard theme={theme} label="Growth Needed (10% and 12% Return Targets)" value={`${Number.isFinite(growthNeededForReturn10) ? `${(growthNeededForReturn10 * 100).toFixed(1)}%` : 'N/A'} / ${Number.isFinite(growthNeededForReturn12) ? `${(growthNeededForReturn12 * 100).toFixed(1)}%` : 'N/A'}`} />
+          <MetricCard theme={theme} label="P/E (TTM)" value={safeRatio(currentPE)} />
+          <MetricCard theme={theme} label="Earnings Yield" value={Number.isFinite(currentEarningsYield) ? `${(currentEarningsYield * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="Forward P/E" value={safeRatio(forwardPE)} />
+          <MetricCard theme={theme} label="Fwd Earnings Yield" value={Number.isFinite(forwardEarningsYield) ? `${(forwardEarningsYield * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="P/FCF (TTM)" value={safeRatio(pfcfTtm)} />
+          <MetricCard theme={theme} label="P/FCF (3Y Avg)" value={safeRatio(pfcf3y)} />
+          <MetricCard theme={theme} label="FCF Yield (TTM)" value={Number.isFinite(fcfYield) ? `${(fcfYield * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="Growth Needed (10% / 12%)" value={`${Number.isFinite(growthNeededForReturn10) ? `${(growthNeededForReturn10 * 100).toFixed(1)}%` : 'N/A'} / ${Number.isFinite(growthNeededForReturn12) ? `${(growthNeededForReturn12 * 100).toFixed(1)}%` : 'N/A'}`} />
         </div>
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <MetricCard theme={theme} label="Justified Price-to-Earnings Ratio (Stress)" value={safeRatio(justifiedPeRange.stress)} />
-          <MetricCard theme={theme} label="Justified Price-to-Earnings Ratio (Base)" value={safeRatio(justifiedPeRange.base)} />
-          <MetricCard theme={theme} label="Justified Price-to-Earnings Ratio (Expansion)" value={safeRatio(justifiedPeRange.expansion)} />
+          <MetricCard theme={theme} label="Justified P/E (Stress)" value={safeRatio(justifiedPeRange.stress)} />
+          <MetricCard theme={theme} label="Justified P/E (Base)" value={safeRatio(justifiedPeRange.base)} />
+          <MetricCard theme={theme} label="Justified P/E (Expansion)" value={safeRatio(justifiedPeRange.expansion)} />
         </div>
         <div className="mt-4 p-3 rounded-lg border text-[10px]" style={{ background: theme.bg, borderColor: theme.border, color: valuationSubtleText }}>
-          <span className="mr-2 px-2 py-0.5 rounded-full border text-[9px] tracking-wider uppercase" style={{ borderColor: theme.border, color: valuationSubtleText }}>
+          <span className="mr-2 px-2 py-0.5 rounded-full border text-[9px] tracking-wider uppercase font-display" style={{ borderColor: theme.border, color: valuationSubtleText }}>
             Heuristic
           </span>
-          Price-to-Earnings-to-Growth Ratio and Price-to-Sales-to-Growth Ratio can break when growth exceeds ~30-40% or margins/base earnings are shifting.
-          <span className="ml-2" style={{ color: valuationSubtleText }}>Price-to-Earnings-to-Growth Ratio {safeRatio(currentPeg)} | Price-to-Sales-to-Growth Ratio {safeRatio(currentPsg)}</span>
+          PEG and PSG ratios can break when growth exceeds ~30-40% or margins are shifting.
+          <span className="ml-2" style={{ color: valuationSubtleText }}>PEG {safeRatio(currentPeg)} | PSG {safeRatio(currentPsg)}</span>
         </div>
       </div>
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Section 4 - Market Context</h3>
+        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Market Context</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <MetricCard theme={theme} label="Historical Mean Price-to-Earnings Value" value={safeMoney(meanPeAnchor)} />
-          <MetricCard theme={theme} label="Historical Mean Price-to-Sales Value" value={safeMoney(meanPsAnchor)} />
+          <MetricCard theme={theme} label="Mean P/E Value" value={safeMoney(meanPeAnchor)} />
+          <MetricCard theme={theme} label="Mean P/S Value" value={safeMoney(meanPsAnchor)} />
           {showPB ? (
-            <MetricCard theme={theme} label="Historical Mean Price-to-Book Value" value={safeMoney(meanPbAnchor)} />
+            <MetricCard theme={theme} label="Mean P/B Value" value={safeMoney(meanPbAnchor)} />
           ) : (
-            <MetricCard theme={theme} label="Price-to-Book Ratio Usage" value="Hidden (non-asset-heavy sector)" />
+            <MetricCard theme={theme} label="P/B Usage" value="Hidden (non-asset-heavy)" />
           )}
-          <MetricCard theme={theme} label="Analyst Mean Target" value={safeMoney(analystTarget)} />
+          <MetricCard theme={theme} label="Analyst Target" value={safeMoney(analystTarget)} />
         </div>
         <div className="mt-3 text-[10px]" style={{ color: valuationSubtleText }}>
           Historical multiples and analyst targets are context anchors, not intrinsic truth.
@@ -1195,7 +1207,7 @@ function ValuationTab({ data, theme }) {
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>[!] Legacy / Advanced</h3>
+            <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Legacy / Advanced</h3>
             <div className="text-[10px] mt-1" style={{ color: valuationSubtleText }}>
               Composite (Legacy) blends DCF + historical anchors + analyst target. Assumption-sensitive.
             </div>
@@ -1280,7 +1292,7 @@ function ValuationTab({ data, theme }) {
 
       {historicalValuationRatios.length > 0 && (
         <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Valuation Ratio History (Core Only)</h3>
+          <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Valuation Ratio History (Core Only)</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -1335,7 +1347,7 @@ function FinancialsTab({ data, theme, formatPercent, formatRatio }) {
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-financials" aria-labelledby="tab-financials">
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>
+        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>
           Historical Financial Ratios
         </h3>
         <div className="overflow-x-auto">
@@ -1583,7 +1595,7 @@ function OperatingMetricsTab({ data, theme }) {
 
   const renderTable = (title, rows) => (
     <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-      <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>{title}</h3>
+      <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>{title}</h3>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -1618,7 +1630,7 @@ function OperatingMetricsTab({ data, theme }) {
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-operating-metrics" aria-labelledby="tab-operating-metrics">
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Profitability Ratios</h3>
+        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Profitability Ratios</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           <MetricCard theme={theme} label="Gross Profit Margin (TTM)" value={formatCell(ttmGross, 'percent')} />
           <MetricCard theme={theme} label="Gross Profit Margin (5-year Average)" value={formatCell(gross5yAvg, 'percent')} />
@@ -1637,7 +1649,7 @@ function OperatingMetricsTab({ data, theme }) {
       {renderTable('Debt & Liquidity Ratios', debtLiquidityRows)}
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Efficiency Ratios</h3>
+        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Efficiency Ratios</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           <MetricCard theme={theme} label="Asset Turnover Ratio (TTM)" value={formatCell(ttmAssetTurnover, 'ratio')} />
           <MetricCard theme={theme} label="CapEx to Operating Cash Flow (TTM)" value={formatCell(ttmCapexToOcf, 'ratio')} />
@@ -1655,7 +1667,7 @@ function OperatingMetricsTab({ data, theme }) {
       {renderTable('Price Ratios', priceRatioRows)}
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Growth</h3>
+        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Growth</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
@@ -1718,7 +1730,7 @@ function ChartsTab({ theme, viewMode, setViewMode, marginData, returnData, incom
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-charts" aria-labelledby="tab-charts">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Financial Charts</h3>
+        <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Financial Charts</h3>
         <div className="flex rounded-lg p-1 border" style={{ background: theme.bg, borderColor: theme.border }}>
           <button
             onClick={() => setViewMode('annual')}
@@ -1758,7 +1770,7 @@ function ProfileTab({ data, theme }) {
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-profile" aria-labelledby="tab-profile">
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase" style={{ color: theme.textSecondary }}>Company Profile</h3>
+        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Company Profile</h3>
         <p className="text-xs leading-relaxed" style={{ color: theme.textSecondary }}>
           {data?.profile?.description?.slice(0, 600)}
           {data?.profile?.description?.length > 600 ? '...' : ''}
@@ -1885,8 +1897,8 @@ function InsiderActivityTab({ data, theme }) {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <h3 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Monthly Buy vs Sell Value</h3>
-          <div className="text-[11px] mb-3" style={{ color: theme.textMuted }}>
-            X-axis: month. Y-axis: insider transaction value. Compare green buys vs red sells.
+          <div className="text-[10px] mb-3" style={{ color: theme.textMuted }}>
+            Monthly buy vs sell volume by dollar value
           </div>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={monthlyFlow} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
@@ -1906,8 +1918,8 @@ function InsiderActivityTab({ data, theme }) {
 
         <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <h3 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Monthly Net Insider Flow</h3>
-          <div className="text-[11px] mb-3" style={{ color: theme.textMuted }}>
-            Positive bars mean insiders bought more than sold in that month; negative bars mean the opposite.
+          <div className="text-[10px] mb-3" style={{ color: theme.textMuted }}>
+            Net flow = buys minus sells per month
           </div>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={monthlyFlow} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
@@ -1949,7 +1961,7 @@ function InsiderActivityTab({ data, theme }) {
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-start justify-between gap-3 mb-4">
-          <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Recent Insider Transactions (6M)</h3>
+          <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Recent Insider Transactions (6M)</h3>
           <div className="text-[10px]" style={{ color: theme.textMuted }}>Most recent filings in the last 6 months</div>
         </div>
 
@@ -2077,8 +2089,8 @@ function InstitutionalOwnershipTab({ data, theme }) {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <h3 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Largest Holders by Reported Value</h3>
-          <div className="text-[11px] mb-3" style={{ color: theme.textMuted }}>
-            X-axis: reported market value. Y-axis: institution/fund name. This highlights concentration among top holders.
+          <div className="text-[10px] mb-3" style={{ color: theme.textMuted }}>
+            Position size by reported market value
           </div>
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={topHoldersChart} layout="vertical" margin={{ top: 8, right: 18, left: 0, bottom: 8 }}>
@@ -2100,8 +2112,8 @@ function InstitutionalOwnershipTab({ data, theme }) {
 
         <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <h3 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Holder Action Distribution</h3>
-          <div className="text-[11px] mb-3" style={{ color: theme.textMuted }}>
-            Based on reported share or percentage change in holdings. `Unknown` means the data source did not include change fields.
+          <div className="text-[10px] mb-3" style={{ color: theme.textMuted }}>
+            Buying, selling, or unchanged based on reported delta
           </div>
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={actionBars} margin={{ top: 8, right: 18, left: 0, bottom: 8 }}>
@@ -2125,7 +2137,7 @@ function InstitutionalOwnershipTab({ data, theme }) {
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-start justify-between gap-3 mb-4">
-          <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Largest Institutional and Fund Holders</h3>
+          <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Largest Institutional and Fund Holders</h3>
           <div className="text-[10px]" style={{ color: theme.textMuted }}>Sorted by reported position value</div>
         </div>
         {holders.length > 0 ? (
@@ -2828,11 +2840,11 @@ function TradingTab({ data, theme }) {
             <MetricCard theme={theme} label="Target 1" value={formatPx(signal.targets?.tp1)} />
             <MetricCard theme={theme} label="Target 2 (Mean)" value={formatPx(signal.targets?.tp2)} />
           </div>
-          <div className="mt-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-            Z-score status: <b>{zScoreMeaning}</b>. Example: <b>0.05σ</b> is near average and usually neutral, not a strong buy/sell signal.
+          <div className="mt-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+            Z-score: <b>{zScoreMeaning}</b>
           </div>
           <div className="mt-4">
-            <div className="text-[10px] tracking-widest uppercase mb-2" style={{ color: theme.textTertiary }}>Standard Deviation Ladder (Entry Context)</div>
+            <div className="text-[10px] tracking-widest uppercase mb-2 font-display" style={{ color: theme.textTertiary }}>Sigma Ladder</div>
             <div className="relative h-10 rounded-lg border overflow-hidden" style={{ borderColor: theme.border }}>
               <div
                 className="absolute inset-0"
@@ -2861,8 +2873,8 @@ function TradingTab({ data, theme }) {
             <div className="mt-1 flex justify-between text-[10px]" style={{ color: theme.textTertiary }}>
               <span>-3σ</span><span>-2σ</span><span>-1σ</span><span>0σ</span><span>+1σ</span><span>+2σ</span><span>+3σ</span>
             </div>
-            <div className="mt-1 text-[10px]" style={{ color: theme.textTertiary }}>
-              Left side (negative sigma) = cheaper vs recent mean. Near 0σ = fair/neutral. Right side (positive sigma) = richer/extended.
+            <div className="mt-1 text-[9px]" style={{ color: theme.textTertiary }}>
+              Negative = cheaper vs mean. 0σ = neutral. Positive = extended.
             </div>
           </div>
           {Array.isArray(signal.rationale) && signal.rationale.length > 0 && (
@@ -2877,7 +2889,7 @@ function TradingTab({ data, theme }) {
 
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-          <h3 className="text-xs font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Trading Regime (Ticker-Driven)</h3>
+          <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Trading Regime (Ticker-Driven)</h3>
           <div className="flex items-center gap-2">
             {['6M', '1Y', '2Y'].map((tf) => (
               <button
@@ -2898,11 +2910,8 @@ function TradingTab({ data, theme }) {
             </div>
           </div>
         </div>
-        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-          How to read this chart: <b>X-axis</b> is date. <b>Y-axis</b> is price. Colored lines are trend references (VWAP, moving averages). Dashed horizontal lines mark liquidity/value levels.
-        </div>
-        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-          <b>Note:</b> Sigma/std-dev analytics are shown in dedicated sections below. This chart focuses on market structure and trading indicators.
+        <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+          Price vs anchored VWAPs and moving averages. Dashed lines mark liquidity levels (VAH/VAL/POC).
         </div>
         <ResponsiveContainer width="100%" height={420}>
           <LineChart data={analysis.chartRows} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
@@ -2939,8 +2948,8 @@ function TradingTab({ data, theme }) {
 
       <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <h4 className="text-[11px] font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Rolling Z-Score (60d)</h4>
-        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-          How to read: mean here = <b>60-day rolling average price</b>. Formula: <b>z = (price - 60d mean) / 60d standard deviation</b>. `0` means near average. `+2`/`-2` means stretched. `+3`/`-3` is rare and usually extreme.
+        <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+          z = (price - 60d mean) / 60d std dev. 0 = average, +/-2 = stretched, +/-3 = extreme.
         </div>
         <ResponsiveContainer width="100%" height={190}>
           <LineChart data={analysis.zScoreRows} margin={{ top: 8, right: 16, left: 0, bottom: 6 }}>
@@ -2965,7 +2974,7 @@ function TradingTab({ data, theme }) {
 
       <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between mb-3">
-          <h4 className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Z-Score Distribution</h4>
+          <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Z-Score Distribution</h4>
           {Number.isFinite(signal?.zScore) && (
             <div className="text-[10px] font-semibold px-2 py-1 rounded border" style={{ color: actionTone, borderColor: `${actionTone}55`, background: `${actionTone}14` }}>
               Current: {signal.zScore.toFixed(2)}σ
@@ -2992,16 +3001,10 @@ function TradingTab({ data, theme }) {
             helpText="Share of historical days where z-score stayed between -3 and +3."
           />
         </div>
-        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-          Empirical rule benchmark (normal distribution): about <b>68.3%</b> within ±1σ, <b>95.4%</b> within ±2σ, <b>99.7%</b> within ±3σ.
-          Your observed tail beyond ±2σ is <b>{analysis.tailPct.toFixed(1)}%</b>.
-        </div>
-        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+        <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+          Normal benchmark: 68.3% within ±1σ, 95.4% within ±2σ. Observed tail beyond ±2σ: <b>{analysis.tailPct.toFixed(1)}%</b>.
           Zone: <span style={{ color: actionTone, fontWeight: 700 }}>{analysis.currentZone}</span>
-          {Number.isFinite(signal?.zScore) ? ` | Current position: ${signal.zScore.toFixed(2)}σ from mean` : ' | Current position: N/A'}
-        </div>
-        <div className="mb-2 text-xs" style={{ color: theme.textSecondary }}>
-          What this means: each bar shows how often price stayed in that sigma bucket in the selected timeframe. <b>Y-axis</b> = bucket range (`σ`). <b>X-axis</b> = frequency (% of days). Real markets are often fat-tailed, so extremes happen more than textbook normal models.
+          {Number.isFinite(signal?.zScore) ? ` | ${signal.zScore.toFixed(2)}σ from mean` : ''}
         </div>
         <ResponsiveContainer width="100%" height={380}>
           <BarChart
@@ -3051,23 +3054,14 @@ function TradingTab({ data, theme }) {
 
       <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between mb-3">
-          <h4 className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: theme.textSecondary }}>Price vs 50DMA Deviation</h4>
+          <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Price vs 50DMA Deviation</h4>
           <div className="text-[10px] font-semibold px-2 py-1 rounded border" style={{ color: actionTone, borderColor: `${actionTone}55`, background: `${actionTone}14` }}>
             {Number.isFinite(analysis.latestDeviationPct) ? `${analysis.latestDeviationPct.toFixed(2)}%` : 'N/A'}
           </div>
         </div>
-        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-          How to read: `0%` means price is near 50DMA. Above `+5%` is stretched up, below `-5%` is stretched down.
-          Current zone: <span style={{ color: actionTone, fontWeight: 700 }}> {analysis.deviationZone}</span>. Probabilities below are based on full available history in this data feed ({analysis.deviationSampleSize} days).
-        </div>
-        <div className="mb-3 text-xs rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-          <div><b>Interpretation:</b> {deviationSummary} {raritySummary}</div>
-          <div className="mt-1"><b>Histogram axes:</b> Y-axis = deviation buckets from 50DMA (in %). X-axis = frequency (% of historical days).</div>
-          <div className="mt-1"><b>Percentile Rank:</b> fraction of historical days with deviation less than or equal to today. Lower percentile means deeper downside stretch.</div>
-          <div className="mt-1"><b>One-Sided (Down):</b> probability of seeing a deviation at or below today (useful for downside oversold context).</div>
-          <div className="mt-1"><b>One-Sided (Up):</b> probability of seeing a deviation at or above today (useful for upside overextension context).</div>
-          <div className="mt-1"><b>Two-Sided Rarity:</b> probability of seeing an absolute deviation as large as today, in either direction.</div>
-          <div className="mt-1"><b>Rule of thumb:</b> below 5% = rare, 5-15% = uncommon, 15-30% = moderate, above 30% = common.</div>
+        <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+          0% = at 50DMA, ±5% = stretched. Zone: <span style={{ color: actionTone, fontWeight: 700 }}>{analysis.deviationZone}</span> ({analysis.deviationSampleSize} days history).
+          {deviationSummary} {raritySummary}
         </div>
         <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
           <MetricCard
@@ -3471,65 +3465,66 @@ export default function StockValuationCalculator() {
   };
 
   return (
-    <div className="min-h-screen transition-colors duration-300" style={{ background: t.bg, color: t.text }}>
+    <div className="min-h-screen transition-colors duration-300 noise-overlay relative" style={{ background: t.bg, color: t.text }}>
       {/* Top Navigation Bar */}
       <header
-        className="sticky top-0 z-50 backdrop-blur-xl border-b transition-colors duration-300"
-        style={{ background: isDark ? 'rgba(10,10,15,0.85)' : 'rgba(248,249,252,0.85)', borderColor: t.border }}
+        className="sticky top-0 z-50 glass border-b transition-colors duration-300"
+        style={{ background: t.headerBg, borderColor: t.border }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
+          <div className="flex items-center justify-between h-13">
             {/* Logo / Brand */}
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: t.positive }}></div>
-                <span className="text-xs font-bold tracking-widest uppercase" style={{ color: t.text }}>SVC</span>
+                <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: t.positive }} />
+                <span className="text-[11px] font-bold tracking-[0.2em] uppercase font-display" style={{ color: t.text }}>SVC</span>
               </div>
-              <div className="hidden sm:block h-4 w-px" style={{ background: t.border }}></div>
-              <span className="hidden sm:block text-[10px] tracking-wider uppercase" style={{ color: t.textTertiary }}>
-                Stock Valuation Calculator
+              <div className="hidden sm:block h-3.5 w-px" style={{ background: t.border }} />
+              <span className="hidden sm:block text-[10px] tracking-wider font-display" style={{ color: t.textTertiary }}>
+                Stock Valuation
               </span>
             </div>
 
-            {/* Search Bar (in header) */}
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
+            {/* Search Bar */}
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center rounded-lg border overflow-hidden" style={{ borderColor: t.border, background: t.bgInput }}>
                 <input
                   type="text"
                   value={ticker}
                   onChange={(e) => setTicker(e.target.value.toUpperCase())}
                   onKeyDown={(e) => e.key === 'Enter' && fetchStockData()}
-                  placeholder="Enter ticker..."
+                  placeholder="Ticker..."
                   aria-label="Stock ticker symbol"
-                  className="w-28 sm:w-40 px-3 py-2 text-xs font-mono rounded-lg border transition-all"
-                  style={{ background: t.bgInput, borderColor: t.border, color: t.text }}
+                  className="w-24 sm:w-36 px-3 py-2 text-xs bg-transparent border-none focus:ring-0 focus:shadow-none"
+                  style={{ color: t.text, outline: 'none', boxShadow: 'none' }}
                 />
                 <button
                   onClick={fetchStockData}
                   disabled={loading}
-                  className="px-4 py-2 text-[10px] font-semibold tracking-wider rounded-lg transition-all"
+                  className="px-4 py-2 text-[10px] font-semibold tracking-wider transition-all font-display border-l"
                   style={loading
-                    ? { background: t.bgElevated, color: t.textTertiary, cursor: 'not-allowed' }
-                    : { background: '#2563eb', color: '#fff' }
+                    ? { background: t.bgElevated, color: t.textTertiary, cursor: 'not-allowed', borderColor: t.border }
+                    : { background: '#2563eb', color: '#fff', borderColor: 'transparent' }
                   }
                 >
-                  {loading ? 'LOADING...' : 'ANALYZE'}
+                  {loading ? '...' : 'GO'}
                 </button>
               </div>
 
               {/* Theme Toggle */}
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-lg border transition-all hover:scale-105"
-                style={{ borderColor: t.border, color: t.textSecondary }}
+                className="p-2 rounded-lg border transition-all"
+                style={{ borderColor: t.border, color: t.textSecondary, background: t.bgCard }}
                 aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               >
                 {isDark ? (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
                   </svg>
                 ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                   </svg>
                 )}
@@ -3541,32 +3536,55 @@ export default function StockValuationCalculator() {
 
       {/* Error Message */}
       {error && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
-          <div className="p-3 rounded-lg text-xs border" role="alert" style={{ background: t.negativeBg, color: t.negative, borderColor: t.negativeBorder }}>{error}</div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 animate-fadeIn">
+          <div className="p-3 rounded-xl text-xs border flex items-center gap-2" role="alert" style={{ background: t.negativeBg, color: t.negative, borderColor: t.negativeBorder }}>
+            <span className="text-base">!</span> {error}
+          </div>
         </div>
       )}
 
       {/* Loading State */}
       {loading && (
-        <div className="text-center py-32">
-          <div className="inline-flex flex-col items-center gap-4">
-            <div className="w-10 h-10 border-2 rounded-full animate-spin" style={{ borderColor: t.border, borderTopColor: t.accent }}></div>
-            <div className="text-sm tracking-wide" style={{ color: t.textTertiary }}>Analyzing financial data...</div>
+        <div className="text-center py-36 animate-fadeIn">
+          <div className="inline-flex flex-col items-center gap-5">
+            <div className="relative w-12 h-12">
+              <div className="absolute inset-0 border-2 rounded-full animate-spin" style={{ borderColor: t.border, borderTopColor: t.accent }} />
+              <div className="absolute inset-2 border-2 rounded-full animate-spin" style={{ borderColor: t.border, borderTopColor: t.accentAlt, animationDirection: 'reverse', animationDuration: '0.8s' }} />
+            </div>
+            <div className="text-xs tracking-widest uppercase font-display" style={{ color: t.textTertiary }}>Analyzing...</div>
           </div>
         </div>
       )}
 
       {/* Empty / Landing State */}
       {!data && !loading && (
-        <div className="text-center py-32">
-          <div className="inline-flex flex-col items-center gap-4 max-w-md">
-            <div className="text-4xl font-bold tracking-wider" style={{ color: t.text }}>STOCK VALUATION</div>
-            <p className="text-sm tracking-wide" style={{ color: t.textTertiary }}>
-              Professional fundamental analysis & intrinsic value estimation
+        <div className="flex items-center justify-center min-h-[75vh]">
+          <div className="text-center max-w-lg px-6 animate-fadeIn">
+            <div className="mb-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] tracking-widest uppercase font-display mb-6" style={{ borderColor: t.border, color: t.textTertiary, background: t.bgCard }}>
+                <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: t.positive }} />
+                Live Data
+              </div>
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4 font-display" style={{ color: t.text }}>
+              Stock Valuation<br/>
+              <span style={{ color: t.accent }}>Calculator</span>
+            </h1>
+            <p className="text-sm leading-relaxed mb-8 font-display" style={{ color: t.textSecondary }}>
+              Professional fundamental analysis, intrinsic value estimation, and trading regime detection for any US-listed equity.
             </p>
-            <p className="text-[10px] tracking-wide" style={{ color: t.textMuted }}>
-              Enter any US stock ticker above (e.g., AAPL, MSFT, GOOGL, NVDA, TSLA)
-            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'TSLA', 'AMZN'].map((sym) => (
+                <button
+                  key={sym}
+                  onClick={() => { setTicker(sym); }}
+                  className="px-3 py-1.5 rounded-lg text-[10px] font-semibold tracking-wider border transition-all font-display"
+                  style={{ color: t.textSecondary, borderColor: t.border, background: t.bgCard }}
+                >
+                  {sym}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -3575,28 +3593,28 @@ export default function StockValuationCalculator() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {/* Company Header */}
           <div
-            className="p-6 sm:p-8 rounded-2xl text-white mb-6 relative overflow-hidden animate-fadeIn"
-            style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #8b5cf6 100%)' }}
+            className="p-6 sm:p-8 rounded-2xl mb-6 relative overflow-hidden animate-fadeIn"
+            style={{ background: t.heroGradient }}
           >
-            <div className="absolute inset-0 opacity-30" aria-hidden="true" style={{ backgroundImage: 'radial-gradient(circle at 25% 25%, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+            <div className="absolute inset-0 opacity-20" aria-hidden="true" style={{ backgroundImage: 'radial-gradient(circle at 30% 40%, rgba(255,255,255,0.06) 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
             <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
               <div>
-                <h2 className="text-xl sm:text-2xl font-bold mb-2">{data?.profile?.companyName || 'Unknown'}</h2>
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-sm">{data?.profile?.symbol || ''}</span>
-                  <span className="px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-sm">{data?.profile?.exchangeShortName || ''}</span>
-                  <span className="px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-sm">{data?.profile?.sector || ''}</span>
+                <h2 className="text-xl sm:text-2xl font-bold mb-2.5 font-display" style={{ color: isDark ? '#fff' : t.text }}>{data?.profile?.companyName || 'Unknown'}</h2>
+                <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                  {[data?.profile?.symbol, data?.profile?.exchangeShortName, data?.profile?.sector].filter(Boolean).map((tag) => (
+                    <span key={tag} className="px-2.5 py-1 rounded-full font-display tracking-wide" style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: isDark ? 'rgba(255,255,255,0.8)' : t.textSecondary }}>{tag}</span>
+                  ))}
                 </div>
               </div>
               <div className="text-left sm:text-right">
-                <div className="text-3xl sm:text-5xl font-bold tracking-tight">
-                  ${data.quote?.price?.toFixed(2) ?? '—'}
+                <div className="text-3xl sm:text-5xl font-bold tracking-tight font-display" style={{ color: isDark ? '#fff' : t.text }}>
+                  ${data.quote?.price?.toFixed(2) ?? '\u2014'}
                 </div>
                 <div
-                  className="text-sm font-semibold mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full"
+                  className="text-xs font-semibold mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-display"
                   style={{
-                    background: data.quote?.changesPercentage >= 0 ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
-                    color: data.quote?.changesPercentage >= 0 ? '#6ee7b7' : '#fca5a5',
+                    background: data.quote?.changesPercentage >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                    color: data.quote?.changesPercentage >= 0 ? (isDark ? '#6ee7b7' : '#059669') : (isDark ? '#fca5a5' : '#dc2626'),
                   }}
                 >
                   {data.quote?.changesPercentage >= 0 ? '+' : '-'}$
@@ -3607,8 +3625,8 @@ export default function StockValuationCalculator() {
           </div>
 
           {/* Tab Navigation */}
-          <div className="mb-6 border-b" style={{ borderColor: t.border }}>
-            <nav className="flex gap-0 overflow-x-auto" role="tablist" aria-label="Analysis sections">
+          <div className="mb-6">
+            <nav className="flex gap-1 overflow-x-auto pb-0.5 -mx-1 px-1" role="tablist" aria-label="Analysis sections">
               {NAV_TABS.map((tab) => (
                 <button
                   key={tab.id}
@@ -3617,26 +3635,30 @@ export default function StockValuationCalculator() {
                   aria-selected={activeTab === tab.id}
                   aria-controls={`tabpanel-${tab.id}`}
                   onClick={() => setActiveTab(tab.id)}
-                  className="px-5 py-3 text-xs font-semibold tracking-wider uppercase whitespace-nowrap transition-all border-b-2"
+                  className="px-3.5 py-2 text-[10px] font-semibold tracking-wider uppercase whitespace-nowrap transition-all rounded-lg font-display flex items-center gap-1.5"
                   style={{
-                    color: activeTab === tab.id ? t.accent : t.textTertiary,
-                    borderBottomColor: activeTab === tab.id ? t.accent : 'transparent',
+                    color: activeTab === tab.id ? (isDark ? '#fff' : t.text) : t.textTertiary,
+                    background: activeTab === tab.id ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)') : 'transparent',
                   }}
-                  onMouseEnter={(e) => { if (activeTab !== tab.id) e.currentTarget.style.color = t.textSecondary; }}
-                  onMouseLeave={(e) => { if (activeTab !== tab.id) e.currentTarget.style.color = t.textTertiary; }}
+                  onMouseEnter={(e) => { if (activeTab !== tab.id) { e.currentTarget.style.color = t.textSecondary; e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)'; } }}
+                  onMouseLeave={(e) => { if (activeTab !== tab.id) { e.currentTarget.style.color = t.textTertiary; e.currentTarget.style.background = 'transparent'; } }}
                 >
+                  <span className="text-[9px] opacity-60">{tab.icon}</span>
                   {tab.label}
                 </button>
               ))}
             </nav>
+            <div className="h-px mt-1" style={{ background: t.border }} />
           </div>
 
           {/* Active Tab Content */}
           {renderTab()}
 
           {/* Footer */}
-          <div className="mt-10 pt-6 text-center text-[10px] tracking-wide" style={{ borderTop: `1px solid ${t.border}`, color: t.textMuted }}>
-            Data provided by Financial Modeling Prep | Built with Next.js & Recharts
+          <div className="mt-12 pt-6 pb-8 text-center" style={{ borderTop: `1px solid ${t.border}` }}>
+            <div className="text-[10px] tracking-wider font-display" style={{ color: t.textMuted }}>
+              SEC EDGAR & Yahoo Finance | Next.js & Recharts
+            </div>
           </div>
         </div>
       )}
