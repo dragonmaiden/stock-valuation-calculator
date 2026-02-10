@@ -3217,12 +3217,13 @@ function TradingTab({ data, theme }) {
             )}
           </div>
           <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-            How far price strays from its 60-day average. Blue band = normal range. Orange band = stretched. Beyond orange = extreme.
+            How far price strays from its 60-day average. Blue = normal. Orange = stretched. Red = extreme — rare opportunities or warning signs.
           </div>
           <div className="mb-2 flex items-center justify-end gap-3 text-[9px]" style={{ color: theme.textTertiary }}>
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 rounded" style={{ background: theme.positive }} />Z-Score</span>
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: '#3b82f6', opacity: 0.2 }} />±1σ Normal</span>
             <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: '#f59e0b', opacity: 0.2 }} />±2σ Stretched</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: '#ef4444', opacity: 0.2 }} />±3σ Extreme</span>
           </div>
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={analysis.zScoreRows} margin={{ top: 10, right: 16, left: 0, bottom: 6 }}>
@@ -3235,7 +3236,9 @@ function TradingTab({ data, theme }) {
               {/* ±2σ band - orange (stretched) */}
               <ReferenceArea y1={1} y2={2} fill="#f59e0b" fillOpacity={0.12} />
               <ReferenceArea y1={-2} y2={-1} fill="#f59e0b" fillOpacity={0.12} />
-              {/* Beyond ±2σ - no fill, just open space = extreme */}
+              {/* ±3σ band - red (extreme) */}
+              <ReferenceArea y1={2} y2={3} fill="#ef4444" fillOpacity={0.10} />
+              <ReferenceArea y1={-3} y2={-2} fill="#ef4444" fillOpacity={0.10} />
               <ReferenceLine y={0} stroke={theme.textTertiary} strokeWidth={1} />
               <Line type="monotone" dataKey="zScore" stroke={theme.positive} dot={false} strokeWidth={1.8} name="Z-Score" />
             </LineChart>
