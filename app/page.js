@@ -3114,10 +3114,10 @@ function TradingTab({ data, theme }) {
 
       {/* Z-Score Heat Map + Sigma Price Ladder */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* Z-Score area chart with colored bands */}
+        {/* Z-Score with sigma bands */}
         <div className="xl:col-span-2 p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Price Deviation Heat Map</h4>
+            <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Price Deviation (60-Day Z-Score)</h4>
             {Number.isFinite(signal?.zScore) && (
               <div className="text-[10px] font-semibold px-2 py-1 rounded border" style={{ color: actionTone, borderColor: `${actionTone}55`, background: `${actionTone}14` }}>
                 Current: {signal.zScore.toFixed(2)}σ
@@ -3125,43 +3125,29 @@ function TradingTab({ data, theme }) {
             )}
           </div>
           <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-            How far price strays from its 60-day average over time. Green = near or below average (cheaper). Red = far above average (expensive). The line shows the z-score history.
+            How far price strays from its 60-day average. Blue band = normal range. Orange band = stretched. Beyond orange = extreme.
+          </div>
+          <div className="mb-2 flex items-center justify-end gap-3 text-[9px]" style={{ color: theme.textTertiary }}>
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 rounded" style={{ background: theme.positive }} />Z-Score</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: '#3b82f6', opacity: 0.2 }} />±1σ Normal</span>
+            <span className="flex items-center gap-1"><span className="inline-block w-3 h-2.5 rounded-sm" style={{ background: '#f59e0b', opacity: 0.2 }} />±2σ Stretched</span>
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={analysis.zScoreRows} margin={{ top: 10, right: 16, left: 0, bottom: 6 }}>
-              <defs>
-                <linearGradient id="zScoreGradientPos" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={theme.negative} stopOpacity={0.6} />
-                  <stop offset="35%" stopColor={theme.warning} stopOpacity={0.3} />
-                  <stop offset="100%" stopColor={theme.positive} stopOpacity={0.05} />
-                </linearGradient>
-                <linearGradient id="zScoreGradientNeg" x1="0" y1="1" x2="0" y2="0">
-                  <stop offset="0%" stopColor={theme.positive} stopOpacity={0.6} />
-                  <stop offset="35%" stopColor="#22d3ee" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor={theme.positive} stopOpacity={0.05} />
-                </linearGradient>
-              </defs>
+            <LineChart data={analysis.zScoreRows} margin={{ top: 10, right: 16, left: 0, bottom: 6 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} minTickGap={28} />
               <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} domain={[-3.5, 3.5]} />
               <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v) => [Number.isFinite(v) ? `${v.toFixed(2)}σ` : 'N/A', 'Price Deviation']} />
-              <ReferenceArea y1={-1} y2={1} fill={theme.positive} fillOpacity={0.06} />
-              <ReferenceArea y1={1} y2={2} fill={theme.warning} fillOpacity={0.08} />
-              <ReferenceArea y1={-2} y2={-1} fill="#22d3ee" fillOpacity={0.06} />
-              <ReferenceArea y1={2} y2={3.5} fill={theme.negative} fillOpacity={0.08} />
-              <ReferenceArea y1={-3.5} y2={-2} fill={theme.positive} fillOpacity={0.08} />
-              <ReferenceLine y={0} stroke={theme.textTertiary} strokeDasharray="4 3" label={{ value: 'Mean', position: 'insideTopLeft', fill: theme.textTertiary, fontSize: 9 }} />
-              <ReferenceLine y={2} stroke={theme.warning} strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: '+2σ Expensive', position: 'insideTopLeft', fill: theme.warning, fontSize: 9 }} />
-              <ReferenceLine y={-2} stroke="#22d3ee" strokeDasharray="3 3" strokeOpacity={0.5} label={{ value: '-2σ Cheap', position: 'insideBottomLeft', fill: '#22d3ee', fontSize: 9 }} />
-              <Area type="monotone" dataKey="zScore" stroke={tradePalette.zLine} strokeWidth={1.8} fill="url(#zScoreGradientPos)" fillOpacity={1} baseValue={0} name="Above Mean" dot={false} />
-              <Area type="monotone" dataKey="zScore" stroke="transparent" fill="url(#zScoreGradientNeg)" fillOpacity={1} baseValue={0} name="Below Mean" dot={false} />
-            </AreaChart>
+              {/* ±1σ band - blue (normal) */}
+              <ReferenceArea y1={-1} y2={1} fill="#3b82f6" fillOpacity={0.12} />
+              {/* ±2σ band - orange (stretched) */}
+              <ReferenceArea y1={1} y2={2} fill="#f59e0b" fillOpacity={0.12} />
+              <ReferenceArea y1={-2} y2={-1} fill="#f59e0b" fillOpacity={0.12} />
+              {/* Beyond ±2σ - no fill, just open space = extreme */}
+              <ReferenceLine y={0} stroke={theme.textTertiary} strokeWidth={1} />
+              <Line type="monotone" dataKey="zScore" stroke={theme.positive} dot={false} strokeWidth={1.8} name="Z-Score" />
+            </LineChart>
           </ResponsiveContainer>
-          <div className="mt-2 flex items-center justify-center gap-4 text-[9px]" style={{ color: theme.textTertiary }}>
-            <span className="flex items-center gap-1"><span className="inline-block w-6 h-2.5 rounded-sm" style={{ background: `linear-gradient(90deg, ${theme.positive}88, ${theme.positive}22)` }} />Cheap (below avg)</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-6 h-2.5 rounded-sm" style={{ background: `${theme.positive}18` }} />Fair value</span>
-            <span className="flex items-center gap-1"><span className="inline-block w-6 h-2.5 rounded-sm" style={{ background: `linear-gradient(90deg, ${theme.warning}22, ${theme.negative}88)` }} />Expensive (above avg)</span>
-          </div>
         </div>
 
         {/* Sigma Price Ladder */}
@@ -3210,91 +3196,64 @@ function TradingTab({ data, theme }) {
         </div>
       </div>
 
+      {/* Price vs 50-Day Trend */}
       <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between mb-3">
-          <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Price vs 50DMA Deviation</h4>
+          <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Price vs 50-Day Trend</h4>
           <div className="text-[10px] font-semibold px-2 py-1 rounded border" style={{ color: actionTone, borderColor: `${actionTone}55`, background: `${actionTone}14` }}>
-            {Number.isFinite(analysis.latestDeviationPct) ? `${analysis.latestDeviationPct.toFixed(2)}%` : 'N/A'}
+            {Number.isFinite(analysis.latestDeviationPct) ? `${analysis.latestDeviationPct >= 0 ? '+' : ''}${analysis.latestDeviationPct.toFixed(2)}%` : 'N/A'}
           </div>
         </div>
         <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-          0% = at 50DMA, ±5% = stretched. Zone: <span style={{ color: actionTone, fontWeight: 700 }}>{analysis.deviationZone}</span> ({analysis.deviationSampleSize} days history).
-          {deviationSummary} {raritySummary}
+          How far the current price is from its 50-day moving average, compared to history. Center (0%) = right at the trend. {deviationSummary} {raritySummary}
         </div>
-        <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+        <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
           <MetricCard
             theme={theme}
-            label="Percentile Rank"
-            value={`${analysis.deviationPercentile.toFixed(1)}th`}
-            subtext="Lower = more oversold vs 50DMA"
-            helpText="Percent of historical observations less than or equal to current deviation."
+            label="How Rare Is This?"
+            value={analysis.twoSidedAbsProb <= 5 ? 'Very Rare' : analysis.twoSidedAbsProb <= 15 ? 'Uncommon' : analysis.twoSidedAbsProb <= 30 ? 'Moderate' : 'Common'}
+            subtext={`This deviation only happens ${analysis.twoSidedAbsProb.toFixed(1)}% of the time`}
+            helpText="How often the price has been this far (or further) from the 50-day trend in either direction."
+            tone={analysis.twoSidedAbsProb <= 10 ? 'warning' : 'neutral'}
           />
           <MetricCard
             theme={theme}
-            label="One-Sided (Down)"
-            value={`${analysis.oneSidedDownProb.toFixed(1)}%`}
-            subtext="P(dev <= current)"
-            helpText="Probability of seeing deviation at or below the current level (downside tail)."
-          />
-          <MetricCard
-            theme={theme}
-            label="One-Sided (Up)"
-            value={`${analysis.oneSidedUpProb.toFixed(1)}%`}
-            subtext="P(dev >= current)"
-            helpText="Probability of seeing deviation at or above the current level (upside tail)."
-          />
-          <MetricCard
-            theme={theme}
-            label="Two-Sided Rarity"
-            value={`${analysis.twoSidedAbsProb.toFixed(1)}%`}
-            subtext="P(|dev| >= |current|)"
-            helpText="Probability of seeing an absolute move at least as large as current, either up or down."
+            label="Trend Position"
+            value={`${analysis.deviationPercentile.toFixed(0)}th percentile`}
+            subtext={analysis.deviationPercentile <= 20 ? 'Near historical lows vs trend' : analysis.deviationPercentile >= 80 ? 'Near historical highs vs trend' : 'Within normal range vs trend'}
+            helpText="Where this deviation ranks in the full history. Lower = more oversold, higher = more overbought relative to the 50-day trend."
+            tone={analysis.deviationPercentile <= 20 || analysis.deviationPercentile >= 80 ? 'warning' : 'positive'}
           />
         </div>
-        <ResponsiveContainer width="100%" height={380}>
-          <BarChart
-            layout="vertical"
-            data={analysis.deviationHistogram}
-            margin={{ top: 10, right: 24, left: 6, bottom: 10 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
-            <XAxis
-              type="number"
-              tick={{ fontSize: 10, fill: theme.textTertiary }}
-              axisLine={{ stroke: theme.chartGrid }}
-              tickLine={false}
-              tickFormatter={(v) => `${Number(v).toFixed(1)}%`}
-            />
-            <YAxis
-              type="category"
-              dataKey="label"
-              width={86}
-              tick={{ fontSize: 10, fill: theme.textTertiary }}
-              axisLine={{ stroke: theme.chartGrid }}
-              tickLine={false}
-            />
-            <Tooltip
-              contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
-              formatter={(v, k, p) => [`${Number(v).toFixed(1)}%`, `Frequency (${p.payload.count} bars)`]}
-            />
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={analysis.deviationHistogram} margin={{ top: 10, right: 16, left: -4, bottom: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 9, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} interval={1} angle={-35} textAnchor="end" height={45} />
+            <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Number(v).toFixed(0)}%`} />
+            <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v, k, p) => [`${Number(v).toFixed(1)}% of trading days (${p.payload.count} days)`, '']} />
             {analysis.currentDeviationBinLabel && (
-              <ReferenceLine
-                y={analysis.currentDeviationBinLabel}
-                stroke={actionTone}
-                strokeWidth={2}
-                label={{ value: 'You are here', position: 'right', fill: actionTone, fontSize: 10 }}
-              />
+              <ReferenceLine x={analysis.currentDeviationBinLabel} stroke={actionTone} strokeWidth={2} strokeDasharray="4 3" label={{ value: 'You', position: 'top', fill: actionTone, fontSize: 10 }} />
             )}
-            <Bar dataKey="pct" name="% of days" radius={[0, 4, 4, 0]} minPointSize={3}>
+            <Bar dataKey="pct" name="% of days" radius={[4, 4, 0, 0]} minPointSize={2}>
               {analysis.deviationHistogram.map((b, i) => {
-                const extreme = b.low <= -10 || b.high >= 10;
                 const isCurrentBin = analysis.currentDeviationBinLabel === b.label;
-                const fill = isCurrentBin ? actionTone : extreme ? tradePalette.histStretch : tradePalette.histNeutral;
-                return <Cell key={`devbin-${i}`} fill={fill} fillOpacity={isCurrentBin ? 1 : 0.85} />;
+                const midVal = (b.low + b.high) / 2;
+                // Green near center (normal), yellow when stretched, red at extremes
+                const fill = isCurrentBin ? actionTone
+                  : Math.abs(midVal) <= 3 ? theme.positive
+                  : Math.abs(midVal) <= 7 ? theme.warning
+                  : theme.negative;
+                const opacity = isCurrentBin ? 1 : 0.35 + (b.pct / Math.max(...analysis.deviationHistogram.map((h) => h.pct))) * 0.6;
+                return <Cell key={`devbin-${i}`} fill={fill} fillOpacity={opacity} />;
               })}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
+        <div className="mt-1 flex items-center justify-between text-[9px] px-1" style={{ color: theme.textTertiary }}>
+          <span style={{ color: theme.positive }}>Below trend (cheaper)</span>
+          <span>At trend</span>
+          <span style={{ color: theme.negative }}>Above trend (pricier)</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
