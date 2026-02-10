@@ -228,30 +228,54 @@ button[title*="mode"]:hover:not(:disabled) {
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
-  height: 4px;
-  border-radius: 2px;
+  height: 6px;
+  border-radius: 3px;
   outline: none;
   cursor: pointer;
+  background: rgba(128,128,128,0.25);
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(128,128,128,0.25);
 }
 
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--accent-blue);
   cursor: pointer;
-  border: 2px solid rgba(255,255,255,0.2);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  border: 2px solid rgba(255,255,255,0.3);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.35);
+  margin-top: -6px;
+  transition: box-shadow 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.2), 0 1px 6px rgba(0,0,0,0.35);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(128,128,128,0.25);
+  border: none;
 }
 
 input[type="range"]::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--accent-blue);
   cursor: pointer;
-  border: 2px solid rgba(255,255,255,0.2);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  border: 2px solid rgba(255,255,255,0.3);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.35);
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.2), 0 1px 6px rgba(0,0,0,0.35);
 }

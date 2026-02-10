@@ -706,7 +706,7 @@ function ValuationTab({ data, theme }) {
   const currentPrice = data?.quote?.price || data?.dcf?.currentPrice || null;
   const sharesOutstanding = data?.dcf?.assumptions?.sharesOutstanding || data?.favorites?.sharesOutstanding || null;
   const [assumptionReturn, setAssumptionReturn] = useState(10);
-  const [assumptionHorizon, setAssumptionHorizon] = useState(10);
+  const assumptionHorizon = 10;
 
   const historicalValuationRatios = data?.valuationRatios?.historical || [];
   const latestIncome = (data?.income || [])[data?.income?.length - 1] || {};
@@ -718,29 +718,136 @@ function ValuationTab({ data, theme }) {
     ? latestCashflow.freeCashFlow / sharesOutstanding
     : null;
 
+  const hasPositiveEarnings = Number.isFinite(latestEPS) && latestEPS > 0;
   const blendedGrowth = (() => {
-    const growthSignals = [
-      Number.isFinite(data?.dcf?.assumptions?.revenueGrowth) ? data.dcf.assumptions.revenueGrowth / 100 : null,
-      Number.isFinite(data?.dcf?.assumptions?.netIncomeGrowth) ? data.dcf.assumptions.netIncomeGrowth / 100 : null,
-      Number.isFinite(data?.favorites?.epsGrowth) ? data.favorites.epsGrowth : null,
-    ].filter((v) => Number.isFinite(v));
+    const revG = Number.isFinite(data?.dcf?.assumptions?.revenueGrowth) ? data.dcf.assumptions.revenueGrowth / 100 : null;
+    const niG = Number.isFinite(data?.dcf?.assumptions?.netIncomeGrowth) ? data.dcf.assumptions.netIncomeGrowth / 100 : null;
+    const epsG = Number.isFinite(data?.favorites?.epsGrowth) ? data.favorites.epsGrowth : null;
+    const growthSignals = hasPositiveEarnings
+      ? [revG, niG, epsG].filter((v) => Number.isFinite(v))
+      : [revG, Number.isFinite(data?.dcf?.assumptions?.fcfGrowth) ? data.dcf.assumptions.fcfGrowth / 100 : null, epsG].filter((v) => Number.isFinite(v) && v > 0);
     if (!growthSignals.length) return 0.08;
     return clamp(growthSignals.reduce((sum, v) => sum + v, 0) / growthSignals.length, 0.0, 0.22);
   })();
 
-  const currentPE = data?.valuationRatios?.current?.peRatio || data?.quote?.pe || null;
-  const defaultTerminalPE = Number.isFinite(currentPE) ? clamp(currentPE * 0.85, 10, 24) : 16;
-  const [assumptionTerminalPE, setAssumptionTerminalPE] = useState(defaultTerminalPE);
+  // ═══════════════════════════════════════════════════════════════
+  // FIRST-PRINCIPLES MODEL: Revenue → FCF Margin → Fair Value
+  // ═══════════════════════════════════════════════════════════════
+  const latestRevenue = data?.dcf?.assumptions?.latestRevenue || latestIncome?.revenue || null;
+  const latestFCF = data?.dcf?.assumptions?.latestFCF || latestCashflow?.freeCashFlow || null;
+  const currentFcfMargin = Number.isFinite(latestRevenue) && latestRevenue > 0 && Number.isFinite(latestFCF)
+    ? latestFCF / latestRevenue : null;
+  const terminalGrowthRate = 0.025;
+  const fpProjectionYears = 10;
+
+  const defaultRevGrowth = Number.isFinite(data?.dcf?.assumptions?.revenueGrowth)
+    ? Math.round(clamp(data.dcf.assumptions.revenueGrowth, 1, 45)) : 8;
+  const defaultTargetFcfMargin = (() => {
+    const cm = currentFcfMargin;
+    if (!Number.isFinite(cm)) return 15;
+    if (cm > 0.25) return Math.round(cm * 100);
+    if (cm > 0.10) return Math.round(clamp(cm * 100 + 4, 15, 35));
+    if (cm > 0) return Math.round(clamp(cm * 100 + 8, 12, 30));
+    return 15;
+  })();
+
+  const [assumptionRevGrowth, setAssumptionRevGrowth] = useState(defaultRevGrowth);
+  const [assumptionTargetFcfMargin, setAssumptionTargetFcfMargin] = useState(defaultTargetFcfMargin);
 
   useEffect(() => {
-    setAssumptionTerminalPE(defaultTerminalPE);
-  }, [defaultTerminalPE, data?.profile?.symbol]);
+    setAssumptionRevGrowth(defaultRevGrowth);
+    setAssumptionTargetFcfMargin(defaultTargetFcfMargin);
+  }, [defaultRevGrowth, defaultTargetFcfMargin, data?.profile?.symbol]);
 
+  const calcFirstPrinciplesDCF = ({ revGrowth, targetFcfMargin, requiredReturn }) => {
+    if (!Number.isFinite(latestRevenue) || latestRevenue <= 0 || !Number.isFinite(sharesOutstanding) || sharesOutstanding <= 0) return { fairValue: null, yearlyData: [] };
+    const r = requiredReturn / 100;
+    const tMargin = targetFcfMargin / 100;
+    const curMargin = Number.isFinite(currentFcfMargin) ? currentFcfMargin : 0;
+    const g0 = revGrowth / 100;
+    let pv = 0;
+    let prevRev = latestRevenue;
+    let lastFcf = 0;
+    const yearlyData = [];
+    for (let t = 1; t <= fpProjectionYears; t++) {
+      const yearGrowth = g0 + (terminalGrowthRate - g0) * ((t - 1) / (fpProjectionYears - 1));
+      const rev = prevRev * (1 + yearGrowth);
+      const margin = curMargin + (tMargin - curMargin) * (t / fpProjectionYears);
+      const fcf = rev * margin;
+      const discounted = fcf / Math.pow(1 + r, t);
+      pv += discounted;
+      lastFcf = fcf;
+      yearlyData.push({ year: t, revenue: rev, fcfMargin: margin, fcf, discounted });
+      prevRev = rev;
+    }
+    let tvPV = 0;
+    if (lastFcf > 0 && r > terminalGrowthRate) {
+      const tv = lastFcf * (1 + terminalGrowthRate) / (r - terminalGrowthRate);
+      tvPV = tv / Math.pow(1 + r, fpProjectionYears);
+      pv += tvPV;
+    }
+    const fairValue = pv / sharesOutstanding;
+    return { fairValue: Number.isFinite(fairValue) && fairValue > 0 ? fairValue : null, yearlyData, tvPV: tvPV / sharesOutstanding };
+  };
+
+  const fpBase = calcFirstPrinciplesDCF({ revGrowth: assumptionRevGrowth, targetFcfMargin: assumptionTargetFcfMargin, requiredReturn: assumptionReturn });
+  const fpStress = calcFirstPrinciplesDCF({ revGrowth: Math.max(assumptionRevGrowth - 8, 0), targetFcfMargin: Math.max(assumptionTargetFcfMargin - 5, 2), requiredReturn: Math.min(assumptionReturn + 2, 16) });
+  const fpExpansion = calcFirstPrinciplesDCF({ revGrowth: Math.min(assumptionRevGrowth + 5, 50), targetFcfMargin: Math.min(assumptionTargetFcfMargin + 5, 50), requiredReturn: Math.max(assumptionReturn - 2, 6) });
+
+  const fpUpside = Number.isFinite(currentPrice) && Number.isFinite(fpBase.fairValue)
+    ? ((fpBase.fairValue - currentPrice) / currentPrice) * 100 : null;
+
+  // Reverse DCF: what does the market imply?
+  const solveImplied = (paramName, fixedParams) => {
+    if (!Number.isFinite(currentPrice) || currentPrice <= 0) return null;
+    let lo = 0, hi = paramName === 'revGrowth' ? 60 : 55;
+    for (let i = 0; i < 40; i++) {
+      const mid = (lo + hi) / 2;
+      const params = { ...fixedParams, [paramName]: mid };
+      const result = calcFirstPrinciplesDCF(params);
+      if (!Number.isFinite(result.fairValue)) { lo = mid; continue; }
+      if (result.fairValue * sharesOutstanding / sharesOutstanding > currentPrice) hi = mid;
+      else lo = mid;
+    }
+    const result = (lo + hi) / 2;
+    return result > 0.1 && result < (paramName === 'revGrowth' ? 58 : 53) ? result : null;
+  };
+
+  const impliedRevGrowth = solveImplied('revGrowth', { targetFcfMargin: assumptionTargetFcfMargin, requiredReturn: assumptionReturn });
+  const impliedTargetMargin = solveImplied('targetFcfMargin', { revGrowth: assumptionRevGrowth, requiredReturn: assumptionReturn });
+
+  // Reverse sensitivity grid
+  const marginTestPoints = [
+    Math.max(assumptionTargetFcfMargin - 10, 5),
+    assumptionTargetFcfMargin,
+    Math.min(assumptionTargetFcfMargin + 10, 50),
+  ].filter((v, i, a) => a.indexOf(v) === i);
+  const growthTestPoints = [
+    Math.max(assumptionRevGrowth - 10, 0),
+    assumptionRevGrowth,
+    Math.min(assumptionRevGrowth + 10, 50),
+  ].filter((v, i, a) => a.indexOf(v) === i);
+  const sensitivityGrid = marginTestPoints.map((margin) =>
+    growthTestPoints.map((growth) => {
+      const result = calcFirstPrinciplesDCF({ revGrowth: growth, targetFcfMargin: margin, requiredReturn: assumptionReturn });
+      return { growth, margin, fairValue: result.fairValue };
+    })
+  );
+
+  // FCF waterfall chart data
+  const fpWaterfallData = fpBase.yearlyData.map((y) => ({
+    name: `Y${y.year}`,
+    'FCF/Share': +(y.fcf / sharesOutstanding).toFixed(2),
+    'PV': +(y.discounted / sharesOutstanding).toFixed(2),
+  })).concat(Number.isFinite(fpBase.tvPV) ? [{ name: 'Terminal', 'FCF/Share': 0, 'PV': +fpBase.tvPV.toFixed(2) }] : []);
+
+  // ═══════════════════════════════════════════════════════════════
+  // LEGACY MODEL (kept for Legacy/Advanced section)
+  // ═══════════════════════════════════════════════════════════════
+  const currentPE = data?.valuationRatios?.current?.peRatio || data?.quote?.pe || null;
+  const defaultTerminalPE = Number.isFinite(currentPE) ? clamp(currentPE * 0.85, 10, 24) : 16;
   const baseRequiredReturn = assumptionReturn / 100;
-  const terminalPEBase = assumptionTerminalPE;
-  const discountRates = Array.from(new Set([0.08, baseRequiredReturn, 0.12])).sort((a, b) => a - b);
-  const fadeHorizons = Array.from(new Set([5, assumptionHorizon])).sort((a, b) => a - b);
-
+  const terminalPEBase = defaultTerminalPE;
   const scenarioByName = {
     stress: { growth: clamp(blendedGrowth - 0.05, -0.02, 0.12), requiredReturn: clamp(baseRequiredReturn + 0.02, 0.08, 0.16), terminalPE: clamp(terminalPEBase - 3, 8, 20) },
     base: { growth: clamp(blendedGrowth, 0.01, 0.18), requiredReturn: baseRequiredReturn, terminalPE: terminalPEBase },
@@ -766,34 +873,8 @@ function ValuationTab({ data, theme }) {
     expansion: calcTwoStageEarningsValue({ ...scenarioByName.expansion, years: assumptionHorizon }),
   };
 
-  const calcImpliedGrowth = ({ basePerShare, requiredReturn, years, terminalPE }) => {
-    if (!Number.isFinite(currentPrice) || currentPrice <= 0) return null;
-    if (!Number.isFinite(basePerShare) || basePerShare <= 0) return null;
-    if (!Number.isFinite(requiredReturn) || !Number.isFinite(terminalPE) || terminalPE <= 0) return null;
-    const rhs = (currentPrice * Math.pow(1 + requiredReturn, years)) / (basePerShare * terminalPE);
-    if (!Number.isFinite(rhs) || rhs <= 0) return null;
-    const g = Math.pow(rhs, 1 / years) - 1;
-    return Number.isFinite(g) ? g : null;
-  };
 
-  const impliedRows = discountRates.map((r) => {
-    const horizonValues = fadeHorizons.map((years) => {
-      const growth = calcImpliedGrowth({ basePerShare: latestEPS, requiredReturn: r, years, terminalPE: terminalPEBase });
-      return { years, growth };
-    });
-    return { requiredReturn: r, horizonValues };
-  });
 
-  const impliedSummary = (() => {
-    const baseCase = calcImpliedGrowth({
-      basePerShare: latestEPS,
-      requiredReturn: scenarioByName.base.requiredReturn,
-      years: assumptionHorizon,
-      terminalPE: scenarioByName.base.terminalPE,
-    });
-    if (!Number.isFinite(baseCase)) return 'Implied growth unavailable with current EPS inputs.';
-    return `At today’s price, market implies about ${(baseCase * 100).toFixed(1)}% EPS CAGR for ${assumptionHorizon} years at a ${assumptionReturn.toFixed(1)}% required return.`;
-  })();
 
   const fcfYield = Number.isFinite(latestFCFPerShare) && Number.isFinite(currentPrice) && currentPrice > 0
     ? latestFCFPerShare / currentPrice
@@ -818,74 +899,11 @@ function ValuationTab({ data, theme }) {
   const growthNeededForReturn10 = Number.isFinite(fcfYield) ? Math.max(0, 0.1 - fcfYield) : null;
   const growthNeededForReturn12 = Number.isFinite(fcfYield) ? Math.max(0, 0.12 - fcfYield) : null;
 
-  const terminalPfcfBase = clamp(terminalPEBase * 0.85, 8, 28);
-  const impliedFcfRows = discountRates.map((r) => {
-    const horizonValues = fadeHorizons.map((years) => {
-      const growth = calcImpliedGrowth({ basePerShare: latestFCFPerShare, requiredReturn: r, years, terminalPE: terminalPfcfBase });
-      return { years, growth };
-    });
-    return { requiredReturn: r, horizonValues };
-  });
-
-  const calcTwoStageFcfValue = ({ growth, requiredReturn, terminalPfcf, years = 7 }) => {
-    if (!Number.isFinite(latestFCFPerShare) || latestFCFPerShare <= 0) return null;
-    let pv = 0;
-    for (let t = 1; t <= years; t++) {
-      const fcfT = latestFCFPerShare * Math.pow(1 + growth, t);
-      pv += fcfT / Math.pow(1 + requiredReturn, t);
-    }
-    const terminalFcf = latestFCFPerShare * Math.pow(1 + growth, years);
-    const terminalValue = terminalFcf * terminalPfcf;
-    pv += terminalValue / Math.pow(1 + requiredReturn, years);
-    return Number.isFinite(pv) && pv > 0 ? pv : null;
-  };
-
-  const dcfScenarioValues = {
-    stress: calcTwoStageFcfValue({
-      growth: clamp(scenarioByName.stress.growth - 0.01, -0.03, 0.10),
-      requiredReturn: scenarioByName.stress.requiredReturn,
-      terminalPfcf: clamp(terminalPfcfBase - 2, 6, 24),
-      years: assumptionHorizon,
-    }),
-    base: calcTwoStageFcfValue({
-      growth: clamp(scenarioByName.base.growth, 0, 0.18),
-      requiredReturn: scenarioByName.base.requiredReturn,
-      terminalPfcf: terminalPfcfBase,
-      years: assumptionHorizon,
-    }),
-    expansion: calcTwoStageFcfValue({
-      growth: clamp(scenarioByName.expansion.growth + 0.01, 0.02, 0.24),
-      requiredReturn: scenarioByName.expansion.requiredReturn,
-      terminalPfcf: clamp(terminalPfcfBase + 2, 8, 30),
-      years: assumptionHorizon,
-    }),
-  };
-
   const justifiedPeRange = {
     stress: Number.isFinite(scenarioValues.stress) && Number.isFinite(latestEPS) && latestEPS > 0 ? scenarioValues.stress / latestEPS : null,
     base: Number.isFinite(scenarioValues.base) && Number.isFinite(latestEPS) && latestEPS > 0 ? scenarioValues.base / latestEPS : null,
     expansion: Number.isFinite(scenarioValues.expansion) && Number.isFinite(latestEPS) && latestEPS > 0 ? scenarioValues.expansion / latestEPS : null,
   };
-
-  const shareholderYield = Number.isFinite(data?.favorites?.dividendYield) ? data.favorites.dividendYield : 0;
-  const returnDecomposition = Object.entries(scenarioByName).map(([key, s]) => {
-    const multipleEffect = Number.isFinite(currentPE) && currentPE > 0
-      ? Math.pow(s.terminalPE / currentPE, 1 / assumptionHorizon) - 1
-      : 0;
-    const expectedReturn = s.growth + shareholderYield + multipleEffect;
-    return {
-      key,
-      growth: s.growth,
-      shareholderYield,
-      multipleEffect,
-      expectedReturn,
-    };
-  });
-
-  const meanPeAnchor = data?.valuationRatios?.other?.meanPEValue ?? null;
-  const meanPsAnchor = data?.valuationRatios?.other?.meanPSValue ?? null;
-  const meanPbAnchor = data?.valuationRatios?.other?.meanPBValue ?? null;
-  const analystTarget = (data?.dcf?.compositeMethods || []).find((m) => m.key === 'analystTargetValue')?.rawValue || null;
 
   const shortMethodNameByKey = {
     dcf20Year: 'DCF 20Y (Cash Flow)',
@@ -950,262 +968,481 @@ function ValuationTab({ data, theme }) {
       entry.key !== 'psgValue'
     );
 
-  const dcfRangeLow = Number.isFinite(dcfScenarioValues.stress) ? dcfScenarioValues.stress : dcfScenarioValues.base;
-  const dcfRangeHigh = Number.isFinite(dcfScenarioValues.expansion) ? dcfScenarioValues.expansion : dcfScenarioValues.base;
-  const dcfRangeUpside = Number.isFinite(currentPrice) && Number.isFinite(dcfScenarioValues.base)
-    ? ((dcfScenarioValues.base - currentPrice) / currentPrice) * 100
-    : null;
-  const synthesisGrowth5y = calcImpliedGrowth({
-    basePerShare: latestEPS,
-    requiredReturn: baseRequiredReturn,
-    years: 5,
-    terminalPE: terminalPEBase,
-  });
-  const synthesisGrowth10y = calcImpliedGrowth({
-    basePerShare: latestEPS,
-    requiredReturn: baseRequiredReturn,
-    years: 10,
-    terminalPE: terminalPEBase,
-  });
+  // — Verdict computations (uses first-principles model) —
+  const verdictUpside = fpUpside;
+  const marginOfSafetyPrice = Number.isFinite(fpBase.fairValue) ? fpBase.fairValue * 0.8 : null;
+  const verdictLabel = !Number.isFinite(verdictUpside) ? 'Insufficient Data'
+    : verdictUpside > 20 ? 'Undervalued'
+    : verdictUpside > 0 ? 'Slightly Undervalued'
+    : verdictUpside > -15 ? 'Fairly Valued'
+    : 'Overvalued';
+  const verdictColor = verdictLabel === 'Undervalued' ? theme.positive
+    : verdictLabel === 'Slightly Undervalued' ? theme.positive
+    : verdictLabel === 'Fairly Valued' ? theme.warning
+    : verdictLabel === 'Overvalued' ? theme.negative
+    : theme.textTertiary;
+  const fpRangeLow = Number.isFinite(fpStress.fairValue) ? fpStress.fairValue : fpBase.fairValue;
+  const fpRangeHigh = Number.isFinite(fpExpansion.fairValue) ? fpExpansion.fairValue : fpBase.fairValue;
+  const verdictBarMin = Number.isFinite(fpRangeLow) ? fpRangeLow : 0;
+  const verdictBarMax = Number.isFinite(fpRangeHigh) ? fpRangeHigh : 0;
+  const verdictBarPosition = Number.isFinite(currentPrice) && verdictBarMax > verdictBarMin
+    ? clamp(((currentPrice - verdictBarMin) / (verdictBarMax - verdictBarMin)) * 100, 0, 100)
+    : 50;
+  const verdictBarBasePos = Number.isFinite(fpBase.fairValue) && verdictBarMax > verdictBarMin
+    ? clamp(((fpBase.fairValue - verdictBarMin) / (verdictBarMax - verdictBarMin)) * 100, 0, 100)
+    : 50;
+
+  // — Percentile computations —
+  const computePercentile = (key) => {
+    const vals = historicalValuationRatios.map((h) => h[key]).filter((v) => Number.isFinite(v) && v > 0);
+    const current = data?.valuationRatios?.current?.[key];
+    if (!vals.length || !Number.isFinite(current)) return null;
+    const sorted = [...vals].sort((a, b) => a - b);
+    const below = sorted.filter((v) => v < current).length;
+    const pctile = Math.round((below / sorted.length) * 100);
+    return { min: sorted[0], max: sorted[sorted.length - 1], current, pctile };
+  };
+  const percentileMetrics = [
+    { label: 'P/E', key: 'peRatio' },
+    { label: 'P/S', key: 'psRatio' },
+    ...(showPB ? [{ label: 'P/B', key: 'pbRatio' }] : []),
+  ].map((m) => ({ ...m, ...computePercentile(m.key) })).filter((m) => m.current != null);
+
+  // — Football field data (uses FP model as primary) —
+  const footballFieldData = [
+    ...valuationMethodsForChart.map((entry) => ({
+      name: entry.name,
+      value: entry.plotValue,
+      type: entry.type,
+    })),
+    ...(Number.isFinite(fpStress.fairValue) ? [{ name: 'FP Model (Stress)', value: fpStress.fairValue, type: 'scenario' }] : []),
+    ...(Number.isFinite(fpBase.fairValue) ? [{ name: 'FP Model (Base)', value: fpBase.fairValue, type: 'scenario' }] : []),
+    ...(Number.isFinite(fpExpansion.fairValue) ? [{ name: 'FP Model (Expansion)', value: fpExpansion.fairValue, type: 'scenario' }] : []),
+  ].sort((a, b) => a.value - b.value);
+
+  const methodColorByTypeExtended = { ...methodColorByType, scenario: '#8b5cf6' };
+
+  // — Expanded synthesis —
+  const pePctile = percentileMetrics.find((m) => m.key === 'peRatio');
+  const psPctile = percentileMetrics.find((m) => m.key === 'psRatio');
+  const expandedSynthesis = (() => {
+    const parts = [];
+    if (Number.isFinite(impliedRevGrowth)) {
+      parts.push(`At $${currentPrice?.toFixed(2)}, the market implies ~${impliedRevGrowth.toFixed(1)}% revenue CAGR (at ${assumptionTargetFcfMargin}% target FCF margin, ${assumptionReturn}% required return).`);
+    }
+    if (Number.isFinite(impliedTargetMargin)) {
+      parts.push(`Alternatively, at ${assumptionRevGrowth}% revenue growth, the implied target FCF margin is ${impliedTargetMargin.toFixed(1)}%.`);
+    }
+    if (pePctile) {
+      parts.push(`P/E of ${pePctile.current.toFixed(1)}x is at the ${pePctile.pctile}th percentile of its historical range.`);
+    } else if (psPctile) {
+      parts.push(`P/S of ${psPctile.current.toFixed(1)}x is at the ${psPctile.pctile}th percentile of its historical range.`);
+    }
+    if (Number.isFinite(fpRangeLow) && Number.isFinite(fpRangeHigh)) {
+      parts.push(`Scenario range: $${fpRangeLow.toFixed(2)} (stress) to $${fpRangeHigh.toFixed(2)} (expansion).`);
+    }
+    if (Number.isFinite(marginOfSafetyPrice)) {
+      parts.push(`20% margin of safety: buy below $${marginOfSafetyPrice.toFixed(2)}.`);
+    }
+    return parts.length ? parts.join(' ') : 'Insufficient data for synthesis.';
+  })();
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-valuation" aria-labelledby="tab-valuation">
+
+      {/* A. Valuation Verdict */}
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold tracking-widest uppercase mb-4 font-display" style={{ color: theme.textSecondary }}>Valuation Assumptions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <label className="text-xs" style={{ color: valuationSubtleText }}>
-            Required Return
-            <div className="mt-2 flex items-center gap-3">
-              <input
-                type="range"
-                min="6"
-                max="16"
-                step="0.5"
-                value={assumptionReturn}
-                onChange={(e) => setAssumptionReturn(Number(e.target.value))}
-                className="w-full"
-              />
-              <span className="min-w-[52px] text-right font-semibold" style={{ color: theme.text }}>{assumptionReturn.toFixed(1)}%</span>
+        <h3 className="text-xs font-semibold tracking-widest uppercase mb-5 font-display" style={{ color: theme.textSecondary }}>Valuation Verdict</h3>
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4">
+          {/* Left — Fair Value Range */}
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: valuationSubtleText }}>Fair Value Range (Revenue → FCF)</div>
+            <div className="text-xl font-bold" style={{ color: theme.text }}>
+              {safeMoney(fpRangeLow)} – {safeMoney(fpRangeHigh)}
             </div>
-          </label>
-          <label className="text-xs" style={{ color: valuationSubtleText }}>
-            Horizon
-            <div className="mt-2 flex items-center gap-3">
-              <input
-                type="range"
-                min="3"
-                max="12"
-                step="1"
-                value={assumptionHorizon}
-                onChange={(e) => setAssumptionHorizon(Number(e.target.value))}
-                className="w-full"
-              />
-              <span className="min-w-[52px] text-right font-semibold" style={{ color: theme.text }}>{assumptionHorizon}Y</span>
-            </div>
-          </label>
-          <label className="text-xs" style={{ color: valuationSubtleText }}>
-            Terminal P/E Multiple
-            <div className="mt-2 flex items-center gap-3">
-              <input
-                type="range"
-                min="8"
-                max="35"
-                step="0.5"
-                value={assumptionTerminalPE}
-                onChange={(e) => setAssumptionTerminalPE(Number(e.target.value))}
-                className="w-full"
-              />
-              <span className="min-w-[52px] text-right font-semibold" style={{ color: theme.text }}>{assumptionTerminalPE.toFixed(1)}x</span>
-            </div>
-          </label>
-        </div>
-        <div className="mt-3 text-[10px]" style={{ color: valuationSubtleText }}>
-          Terminal multiple captures long-term quality after growth fades. Small changes materially affect output.
-        </div>
-      </div>
-
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold tracking-widest uppercase mb-2 font-display" style={{ color: theme.textSecondary }}>Is Today&apos;s Price Sensible?</h3>
-        <div className="text-xs mb-4" style={{ color: valuationSubtleText }}>{impliedSummary}</div>
-        <div className="text-[10px] mb-2 font-display" style={{ color: valuationSubtleText }}>Reverse P/E (Implied EPS Growth)</div>
-        <div className="overflow-x-auto mb-4">
-          <table className="w-full text-xs">
-            <thead>
-              <tr style={{ background: theme.tableBg }}>
-                <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Required Return</th>
-                {fadeHorizons.map((h) => (
-                  <th key={`head-${h}`} className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>
-                    Implied EPS CAGR ({h}Y)
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {impliedRows.map((row) => (
-                <tr key={row.requiredReturn} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                  <td className="px-3 py-3" style={{ color: theme.text }}>{(row.requiredReturn * 100).toFixed(0)}%</td>
-                  {row.horizonValues.map((h) => (
-                    <td key={`${row.requiredReturn}-${h.years}`} className="px-3 py-3 text-right" style={{ color: Number.isFinite(h.growth) && h.growth <= 0.12 ? theme.positive : theme.warning }}>
-                      {Number.isFinite(h.growth) ? `${(h.growth * 100).toFixed(1)}%` : '-'}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-3 text-[10px]" style={{ color: valuationSubtleText }}>
-          Assumptions: terminal P/E {terminalPEBase.toFixed(1)}x, EPS base {safeMoney(latestEPS)}.
-        </div>
-        <div className="mt-2 text-[10px]" style={{ color: valuationSubtleText }}>
-          Not all implied growth must come from revenue; margin expansion and buybacks contribute.
-        </div>
-
-        <div className="text-[10px] mt-4 mb-2 font-display" style={{ color: valuationSubtleText }}>Reverse P/FCF (Implied Cash Growth)</div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr style={{ background: theme.tableBg }}>
-                <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Required Return</th>
-                {fadeHorizons.map((h) => (
-                  <th key={`fcf-head-${h}`} className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>
-                    Implied FCF CAGR ({h}Y)
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {impliedFcfRows.map((row) => (
-                <tr key={`fcf-${row.requiredReturn}`} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                  <td className="px-3 py-3" style={{ color: theme.text }}>{(row.requiredReturn * 100).toFixed(0)}%</td>
-                  {row.horizonValues.map((h) => (
-                    <td key={`fcf-${row.requiredReturn}-${h.years}`} className="px-3 py-3 text-right" style={{ color: Number.isFinite(h.growth) && h.growth <= 0.12 ? theme.positive : theme.warning }}>
-                      {Number.isFinite(h.growth) ? `${(h.growth * 100).toFixed(1)}%` : '-'}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-2 text-[10px]" style={{ color: valuationSubtleText }}>
-          Assumptions: terminal P/FCF {terminalPfcfBase.toFixed(1)}x, FCF/share base {safeMoney(latestFCFPerShare)}.
-        </div>
-
-        <div className="text-[10px] mt-4 mb-2 font-display" style={{ color: valuationSubtleText }}>Return Decomposition</div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr style={{ background: theme.tableBg }}>
-                <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Scenario</th>
-                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>EPS Growth</th>
-                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Div + Buyback Yield</th>
-                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Multiple Effect</th>
-                <th className="px-3 py-3 text-right font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>Expected Return</th>
-              </tr>
-            </thead>
-            <tbody>
-              {returnDecomposition.map((row) => (
-                <tr key={`decomp-${row.key}`} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                  <td className="px-3 py-3 capitalize" style={{ color: theme.text }}>{row.key}</td>
-                  <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{safePercent(row.growth * 100)}</td>
-                  <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{safePercent(row.shareholderYield * 100)}</td>
-                  <td className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{safePercent(row.multipleEffect * 100)}</td>
-                  <td className="px-3 py-3 text-right font-semibold" style={{ color: row.expectedReturn >= 0 ? theme.positive : theme.negative }}>{safePercent(row.expectedReturn * 100)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4">
-        <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: valuationSubtleText }}>Cashflow Scenarios</div>
-              <div className="text-xl font-bold" style={{ color: theme.text }}>
-                {safeMoney(dcfRangeLow)} - {safeMoney(dcfRangeHigh)}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] uppercase tracking-widest" style={{ color: valuationSubtleText }}>Base Scenario</div>
-              <div className="text-xl font-bold" style={{ color: Number.isFinite(dcfRangeUpside) && dcfRangeUpside >= 0 ? theme.positive : theme.negative }}>
-                {safeMoney(dcfScenarioValues.base)}
-              </div>
-              <div className="text-xs" style={{ color: Number.isFinite(dcfRangeUpside) && dcfRangeUpside >= 0 ? theme.positive : theme.negative }}>
-                {Number.isFinite(dcfRangeUpside) ? `${dcfRangeUpside >= 0 ? '+' : ''}${dcfRangeUpside.toFixed(1)}% vs current` : 'N/A vs current'}
-              </div>
+            <div className="text-xs mt-1" style={{ color: valuationSubtleText }}>
+              Base: {safeMoney(fpBase.fairValue)}
+              {Number.isFinite(verdictUpside) && (
+                <span className="ml-2 font-semibold" style={{ color: verdictUpside >= 0 ? theme.positive : theme.negative }}>
+                  ({verdictUpside >= 0 ? '+' : ''}{verdictUpside.toFixed(1)}%)
+                </span>
+              )}
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+          {/* Center — Verdict Badge */}
+          <div className="flex flex-col items-center justify-center px-4">
+            <div
+              className="px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase font-display"
+              style={{ background: verdictColor + '18', color: verdictColor, border: `1px solid ${verdictColor}33` }}
+            >
+              {verdictLabel}
+            </div>
+            <div className="text-xs mt-2 font-semibold" style={{ color: theme.text }}>
+              Now: {safeMoney(currentPrice)}
+            </div>
+          </div>
+          {/* Right — Margin of Safety */}
+          <div className="flex-1 min-w-0 text-right">
+            <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: valuationSubtleText }}>Margin of Safety</div>
+            <div className="text-xl font-bold" style={{ color: theme.accent }}>{safeMoney(marginOfSafetyPrice)}</div>
+            <div className="text-[10px] mt-1" style={{ color: valuationSubtleText }}>Buy below this for 20% cushion</div>
+          </div>
+        </div>
+        {/* Range bar */}
+        {Number.isFinite(fpStress.fairValue) && Number.isFinite(fpExpansion.fairValue) && (
+          <div className="mt-5">
+            <div className="relative h-3 rounded-full overflow-hidden" style={{ background: theme.bgElevated }}>
+              <div className="absolute inset-0 rounded-full" style={{
+                background: `linear-gradient(to right, ${theme.negative}44, ${theme.warning}44, ${theme.positive}44)`,
+              }} />
+              {/* Base marker */}
+              <div className="absolute top-0 h-full w-0.5" style={{ left: `${verdictBarBasePos}%`, background: theme.accent, opacity: 0.6 }} />
+              {/* Current price marker */}
+              <div className="absolute -top-0.5 w-4 h-4 rounded-full border-2 transform -translate-x-1/2" style={{
+                left: `${verdictBarPosition}%`,
+                background: theme.bgCard,
+                borderColor: verdictColor,
+              }} />
+            </div>
+            <div className="flex justify-between mt-1 text-[9px]" style={{ color: valuationSubtleText }}>
+              <span>Stress {safeMoney(fpStress.fairValue)}</span>
+              <span>Base {safeMoney(fpBase.fairValue)}</span>
+              <span>Expansion {safeMoney(fpExpansion.fairValue)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* B. Valuation Assumptions (First-Principles) */}
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold tracking-widest uppercase mb-1 font-display" style={{ color: theme.textSecondary }}>Valuation Assumptions</h3>
+        <div className="text-[10px] mb-5" style={{ color: valuationSubtleText }}>Revenue → FCF margin → perpetuity exit. All three inputs are researchable. Drag to stress-test.</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <div className="flex items-baseline justify-between mb-0.5">
+              <span className="text-xs font-medium" style={{ color: theme.text }}>Required Return</span>
+              <span className="text-sm font-bold tabular-nums" style={{ color: theme.accent }}>{assumptionReturn.toFixed(1)}%</span>
+            </div>
+            <div className="text-[10px] mb-2" style={{ color: valuationSubtleText }}>Your hurdle rate — the annual return you need to justify buying.</div>
+            <input type="range" min="6" max="16" step="0.5" value={assumptionReturn} onChange={(e) => setAssumptionReturn(Number(e.target.value))} className="w-full" />
+            <div className="flex justify-between mt-1 text-[9px]" style={{ color: theme.textMuted }}>
+              <span>6% bond-like</span>
+              <span style={{ color: theme.textTertiary }}>10% typical</span>
+              <span>16% high bar</span>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline justify-between mb-0.5">
+              <span className="text-xs font-medium" style={{ color: theme.text }}>Revenue Growth</span>
+              <span className="text-sm font-bold tabular-nums" style={{ color: theme.accent }}>{assumptionRevGrowth}%</span>
+            </div>
+            <div className="text-[10px] mb-2" style={{ color: valuationSubtleText }}>
+              Starting annual revenue growth, fading linearly to 2.5% terminal.
+              {Number.isFinite(data?.dcf?.assumptions?.revenueGrowth) && (
+                <span className="ml-1" style={{ color: theme.textTertiary }}>Historical: {data.dcf.assumptions.revenueGrowth.toFixed(0)}%</span>
+              )}
+            </div>
+            <input type="range" min="0" max="50" step="1" value={assumptionRevGrowth} onChange={(e) => setAssumptionRevGrowth(Number(e.target.value))} className="w-full" />
+            <div className="flex justify-between mt-1 text-[9px]" style={{ color: theme.textMuted }}>
+              <span>0% no growth</span>
+              <span style={{ color: theme.textTertiary }}>8-15% typical</span>
+              <span>50% hyper</span>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline justify-between mb-0.5">
+              <span className="text-xs font-medium" style={{ color: theme.text }}>Target FCF Margin</span>
+              <span className="text-sm font-bold tabular-nums" style={{ color: theme.accent }}>{assumptionTargetFcfMargin}%</span>
+            </div>
+            <div className="text-[10px] mb-2" style={{ color: valuationSubtleText }}>
+              Steady-state FCF margin at maturity.
+              {Number.isFinite(currentFcfMargin) && (
+                <span className="ml-1" style={{ color: theme.textTertiary }}>Current: {(currentFcfMargin * 100).toFixed(1)}%</span>
+              )}
+            </div>
+            <input type="range" min="2" max="50" step="1" value={assumptionTargetFcfMargin} onChange={(e) => setAssumptionTargetFcfMargin(Number(e.target.value))} className="w-full" />
+            <div className="flex justify-between mt-1 text-[9px]" style={{ color: theme.textMuted }}>
+              <span>2% thin</span>
+              <span style={{ color: theme.textTertiary }}>15-25% strong</span>
+              <span>50% elite</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* C. Valuation Range — Football Field */}
+      {footballFieldData.length > 0 && (
+        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h3 className="text-xs font-semibold tracking-widest uppercase mb-4 font-display" style={{ color: theme.textSecondary }}>Valuation Range</h3>
+          <ResponsiveContainer width="100%" height={Math.max(280, footballFieldData.length * 32)}>
+            <BarChart layout="vertical" data={footballFieldData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} horizontal={false} />
+              <XAxis
+                type="number"
+                domain={[0, (dataMax) => (Number.isFinite(dataMax) ? Math.ceil(dataMax * 1.15) : 100)]}
+                tick={{ fontSize: 10, fill: theme.textTertiary }}
+                tickFormatter={(v) => `$${v.toFixed(0)}`}
+                axisLine={{ stroke: theme.chartGrid }}
+                tickLine={false}
+              />
+              <YAxis
+                dataKey="name"
+                type="category"
+                tick={{ fontSize: 11, fill: theme.textSecondary }}
+                width={200}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                formatter={(value) => [`$${value?.toFixed(2)}`, 'Value']}
+                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                cursor={{ fill: theme.cursorFill }}
+              />
+              {Number.isFinite(currentPrice) && (
+                <ReferenceLine
+                  x={currentPrice}
+                  stroke="#ef4444"
+                  strokeWidth={2}
+                  strokeDasharray="6 3"
+                  label={{ value: `Now: $${currentPrice.toFixed(0)}`, position: 'top', fontSize: 10, fill: '#ef4444' }}
+                />
+              )}
+              <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                {footballFieldData.map((entry, index) => (
+                  <Cell key={`ff-cell-${index}`} fill={methodColorByTypeExtended[entry.type] || methodColorByTypeExtended.relative} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap gap-4 mt-3 text-[10px]" style={{ color: valuationSubtleText }}>
             {[
-              { label: 'Stress', key: 'stress' },
-              { label: 'Base', key: 'base' },
-              { label: 'Expansion', key: 'expansion' },
-            ].map((s) => (
-              <div key={s.key} className="p-3 rounded-xl border" style={{ background: theme.bg, borderColor: theme.border }}>
-                <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: valuationSubtleText }}>{s.label}</div>
-                <div className="text-base font-semibold mb-1" style={{ color: theme.text }}>{safeMoney(dcfScenarioValues[s.key])}</div>
-                <div className="text-[10px]" style={{ color: valuationSubtleText }}>
-                  g={safePercent(scenarioByName[s.key].growth * 100)} | r={safePercent(scenarioByName[s.key].requiredReturn * 100)} | Terminal P/FCF={(s.key === 'stress' ? clamp(terminalPfcfBase - 2, 6, 24) : s.key === 'expansion' ? clamp(terminalPfcfBase + 2, 8, 30) : terminalPfcfBase).toFixed(1)}x
-                </div>
-              </div>
+              { label: 'DCF', color: methodColorByTypeExtended.dcf },
+              { label: 'Relative', color: methodColorByTypeExtended.relative },
+              { label: 'Scenario', color: methodColorByTypeExtended.scenario },
+              { label: 'Analyst', color: methodColorByTypeExtended.analyst },
+              { label: 'Conservative', color: methodColorByTypeExtended.conservative },
+            ].map((l) => (
+              <span key={l.label} className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full inline-block" style={{ background: l.color }} />
+                {l.label}
+              </span>
             ))}
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-0.5 inline-block" style={{ background: '#ef4444' }} />
+              Current Price
+            </span>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <div className="text-[10px] tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>Synthesis</div>
-        <div className="text-xs leading-relaxed" style={{ color: valuationSubtleText }}>
-          At {safeMoney(currentPrice)}, the market implies ~{Number.isFinite(synthesisGrowth5y) ? `${(synthesisGrowth5y * 100).toFixed(1)}%` : 'N/A'} to {Number.isFinite(synthesisGrowth10y) ? `${(synthesisGrowth10y * 100).toFixed(1)}%` : 'N/A'} EPS CAGR (5Y-10Y) at {assumptionReturn.toFixed(1)}% required return. Returns deteriorate quickly if growth fades within 3-4 years or terminal multiples compress.
+      {/* D. What Does the Market Imply? (Reverse DCF) */}
+      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold tracking-widest uppercase mb-2 font-display" style={{ color: theme.textSecondary }}>What Does the Market Imply?</h3>
+        <div className="text-xs mb-4" style={{ color: valuationSubtleText }}>
+          Given your assumptions, what revenue growth or FCF margin does today&apos;s price require?
+        </div>
+
+        {/* Implied metrics — 2-column */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+          <div className="p-4 rounded-xl border" style={{ background: theme.bg, borderColor: theme.border }}>
+            <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: valuationSubtleText }}>Implied Revenue CAGR</div>
+            <div className="text-lg font-bold" style={{ color: Number.isFinite(impliedRevGrowth) && impliedRevGrowth <= assumptionRevGrowth ? theme.positive : theme.warning }}>
+              {Number.isFinite(impliedRevGrowth) ? `${impliedRevGrowth.toFixed(1)}%` : 'N/A'}
+            </div>
+            <div className="text-[10px] mt-1" style={{ color: valuationSubtleText }}>
+              Holding FCF margin at {assumptionTargetFcfMargin}% and {assumptionReturn}% return
+            </div>
+          </div>
+          <div className="p-4 rounded-xl border" style={{ background: theme.bg, borderColor: theme.border }}>
+            <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: valuationSubtleText }}>Implied Target FCF Margin</div>
+            <div className="text-lg font-bold" style={{ color: Number.isFinite(impliedTargetMargin) && impliedTargetMargin <= assumptionTargetFcfMargin ? theme.positive : theme.warning }}>
+              {Number.isFinite(impliedTargetMargin) ? `${impliedTargetMargin.toFixed(1)}%` : 'N/A'}
+            </div>
+            <div className="text-[10px] mt-1" style={{ color: valuationSubtleText }}>
+              Holding revenue growth at {assumptionRevGrowth}% and {assumptionReturn}% return
+            </div>
+          </div>
+        </div>
+
+        {/* Sensitivity grid */}
+        <div className="text-[10px] mb-2 font-display" style={{ color: valuationSubtleText }}>Sensitivity: Fair Value by Growth × FCF Margin</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ background: theme.tableBg }}>
+                <th className="px-3 py-3 text-left font-semibold" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>
+                  Margin ↓ / Growth →
+                </th>
+                {growthTestPoints.map((g) => (
+                  <th key={`sg-${g}`} className="px-3 py-3 text-right font-semibold" style={{ color: g === assumptionRevGrowth ? theme.accent : theme.textSecondary, borderBottom: `1px solid ${theme.border}` }}>
+                    {g}%
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sensitivityGrid.map((row, ri) => (
+                <tr key={`sr-${ri}`} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                  <td className="px-3 py-3 font-semibold" style={{ color: row[0].margin === assumptionTargetFcfMargin ? theme.accent : theme.text }}>
+                    {row[0].margin}% FCF
+                  </td>
+                  {row.map((cell, ci) => {
+                    const isBase = cell.growth === assumptionRevGrowth && cell.margin === assumptionTargetFcfMargin;
+                    const upside = Number.isFinite(cell.fairValue) && Number.isFinite(currentPrice) ? ((cell.fairValue - currentPrice) / currentPrice) * 100 : null;
+                    return (
+                      <td key={`sc-${ri}-${ci}`} className="px-3 py-3 text-right" style={{
+                        color: Number.isFinite(upside) && upside >= 0 ? theme.positive : theme.negative,
+                        fontWeight: isBase ? 700 : 400,
+                        background: isBase ? `${theme.accent}11` : 'transparent',
+                      }}>
+                        {safeMoney(cell.fairValue, 0)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-2 text-[10px]" style={{ color: valuationSubtleText }}>
+          At {assumptionReturn}% required return. Highlighted cell = your base case. Terminal growth: 2.5%.
+          {Number.isFinite(currentFcfMargin) && <span> Current FCF margin: {(currentFcfMargin * 100).toFixed(1)}%.</span>}
         </div>
       </div>
 
+      {/* E. FCF Waterfall — Year-by-Year Value Breakdown */}
+      {fpWaterfallData.length > 0 && (
+        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h3 className="text-xs font-semibold tracking-widest uppercase mb-1 font-display" style={{ color: theme.textSecondary }}>FCF Waterfall</h3>
+          <div className="text-[10px] mb-4" style={{ color: valuationSubtleText }}>Projected free cash flow per share and its present value, year by year. Terminal = perpetuity value of all cash flows beyond year 10.</div>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={fpWaterfallData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: theme.textSecondary }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} tickFormatter={(v) => `$${v}`} axisLine={false} tickLine={false} />
+              <Tooltip
+                formatter={(value, name) => [`$${value.toFixed(2)}`, name]}
+                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                cursor={{ fill: theme.cursorFill }}
+              />
+              <Legend wrapperStyle={{ fontSize: 10, color: theme.textSecondary }} />
+              <Bar dataKey="FCF/Share" fill={theme.accent} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="PV" fill={theme.positive} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* F. Scenario Analysis (First-Principles) */}
+      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: valuationSubtleText }}>Scenario Analysis</div>
+            <div className="text-xl font-bold" style={{ color: theme.text }}>
+              {safeMoney(fpRangeLow)} – {safeMoney(fpRangeHigh)}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] uppercase tracking-widest" style={{ color: valuationSubtleText }}>Base Case</div>
+            <div className="text-xl font-bold" style={{ color: Number.isFinite(fpUpside) && fpUpside >= 0 ? theme.positive : theme.negative }}>
+              {safeMoney(fpBase.fairValue)}
+            </div>
+            <div className="text-xs" style={{ color: Number.isFinite(fpUpside) && fpUpside >= 0 ? theme.positive : theme.negative }}>
+              {Number.isFinite(fpUpside) ? `${fpUpside >= 0 ? '+' : ''}${fpUpside.toFixed(1)}% vs current` : 'N/A vs current'}
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+          {[
+            { label: 'Stress', fp: fpStress, gAdj: -8, mAdj: -5, rAdj: +2 },
+            { label: 'Base', fp: fpBase, gAdj: 0, mAdj: 0, rAdj: 0 },
+            { label: 'Expansion', fp: fpExpansion, gAdj: +5, mAdj: +5, rAdj: -2 },
+          ].map((s) => (
+            <div key={s.label} className="p-3 rounded-xl border" style={{ background: theme.bg, borderColor: theme.border }}>
+              <div className="text-[10px] uppercase tracking-widest mb-1" style={{ color: valuationSubtleText }}>{s.label}</div>
+              <div className="text-base font-semibold mb-1" style={{ color: theme.text }}>{safeMoney(s.fp.fairValue)}</div>
+              <div className="text-[10px]" style={{ color: valuationSubtleText }}>
+                Rev {Math.max(assumptionRevGrowth + s.gAdj, 0)}% | FCF Margin {Math.max(Math.min(assumptionTargetFcfMargin + s.mAdj, 50), 2)}% | r={Math.min(Math.max(assumptionReturn + s.rAdj, 6), 16)}%
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* G. Multiples Dashboard (reworked with percentile bars) */}
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Multiples Dashboard</h3>
+        <h3 className="text-xs font-semibold tracking-widest uppercase mb-4 font-display" style={{ color: theme.textSecondary }}>Multiples Dashboard</h3>
+
+        {/* Percentile range bars */}
+        {percentileMetrics.length > 0 && (
+          <div className="space-y-4 mb-5">
+            {percentileMetrics.map((m) => {
+              const pctPos = m.max > m.min ? clamp(((m.current - m.min) / (m.max - m.min)) * 100, 0, 100) : 50;
+              const barColor = m.pctile > 75 ? theme.negative : m.pctile > 40 ? theme.warning : theme.positive;
+              return (
+                <div key={m.key}>
+                  <div className="flex justify-between items-baseline mb-1.5">
+                    <span className="text-xs font-semibold" style={{ color: theme.text }}>{m.label} <span style={{ color: barColor }}>{m.current.toFixed(1)}x</span></span>
+                    <span className="text-[10px]" style={{ color: valuationSubtleText }}>{m.pctile}th percentile</span>
+                  </div>
+                  <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: theme.bgElevated }}>
+                    <div className="absolute inset-0 rounded-full" style={{
+                      background: `linear-gradient(to right, ${theme.positive}55, ${theme.warning}55, ${theme.negative}55)`,
+                    }} />
+                    <div className="absolute top-0 w-3 h-full rounded-full transform -translate-x-1/2" style={{
+                      left: `${pctPos}%`,
+                      background: barColor,
+                      boxShadow: `0 0 6px ${barColor}66`,
+                    }} />
+                  </div>
+                  <div className="flex justify-between mt-0.5 text-[9px]" style={{ color: valuationSubtleText }}>
+                    <span>{m.min.toFixed(1)}x</span>
+                    <span>{m.max.toFixed(1)}x</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Metric cards grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricCard theme={theme} label="P/E (TTM)" value={safeRatio(currentPE)} />
-          <MetricCard theme={theme} label="Earnings Yield" value={Number.isFinite(currentEarningsYield) ? `${(currentEarningsYield * 100).toFixed(2)}%` : 'N/A'} />
-          <MetricCard theme={theme} label="Forward P/E" value={safeRatio(forwardPE)} />
-          <MetricCard theme={theme} label="Fwd Earnings Yield" value={Number.isFinite(forwardEarningsYield) ? `${(forwardEarningsYield * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="Forward P/E" value={!hasPositiveEarnings && !Number.isFinite(forwardPE) ? 'N/M' : safeRatio(forwardPE)} />
+          <MetricCard theme={theme} label="Fwd Earnings Yield" value={!hasPositiveEarnings && !Number.isFinite(forwardEarningsYield) ? 'N/M' : (Number.isFinite(forwardEarningsYield) ? `${(forwardEarningsYield * 100).toFixed(2)}%` : 'N/A')} />
           <MetricCard theme={theme} label="P/FCF (TTM)" value={safeRatio(pfcfTtm)} />
           <MetricCard theme={theme} label="P/FCF (3Y Avg)" value={safeRatio(pfcf3y)} />
           <MetricCard theme={theme} label="FCF Yield (TTM)" value={Number.isFinite(fcfYield) ? `${(fcfYield * 100).toFixed(2)}%` : 'N/A'} />
+          <MetricCard theme={theme} label="Earnings Yield" value={!hasPositiveEarnings ? 'N/M' : (Number.isFinite(currentEarningsYield) ? `${(currentEarningsYield * 100).toFixed(2)}%` : 'N/A')} />
           <MetricCard theme={theme} label="Growth Needed (10% / 12%)" value={`${Number.isFinite(growthNeededForReturn10) ? `${(growthNeededForReturn10 * 100).toFixed(1)}%` : 'N/A'} / ${Number.isFinite(growthNeededForReturn12) ? `${(growthNeededForReturn12 * 100).toFixed(1)}%` : 'N/A'}`} />
+          <MetricCard theme={theme} label="PEG / PSG" value={`${!hasPositiveEarnings && !Number.isFinite(currentPeg) ? 'N/M' : safeRatio(currentPeg)} / ${safeRatio(currentPsg)}`} />
         </div>
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <MetricCard theme={theme} label="Justified P/E (Stress)" value={safeRatio(justifiedPeRange.stress)} />
-          <MetricCard theme={theme} label="Justified P/E (Base)" value={safeRatio(justifiedPeRange.base)} />
-          <MetricCard theme={theme} label="Justified P/E (Expansion)" value={safeRatio(justifiedPeRange.expansion)} />
-        </div>
+
+        {/* Justified P/E row — hide when all null (negative earnings) */}
+        {(Number.isFinite(justifiedPeRange.stress) || Number.isFinite(justifiedPeRange.base) || Number.isFinite(justifiedPeRange.expansion)) && (
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <MetricCard theme={theme} label="Justified P/E (Stress)" value={safeRatio(justifiedPeRange.stress)} />
+            <MetricCard theme={theme} label="Justified P/E (Base)" value={safeRatio(justifiedPeRange.base)} />
+            <MetricCard theme={theme} label="Justified P/E (Expansion)" value={safeRatio(justifiedPeRange.expansion)} />
+          </div>
+        )}
+
         <div className="mt-4 p-3 rounded-lg border text-[10px]" style={{ background: theme.bg, borderColor: theme.border, color: valuationSubtleText }}>
           <span className="mr-2 px-2 py-0.5 rounded-full border text-[9px] tracking-wider uppercase font-display" style={{ borderColor: theme.border, color: valuationSubtleText }}>
             Heuristic
           </span>
-          PEG and PSG ratios can break when growth exceeds ~30-40% or margins are shifting.
-          <span className="ml-2" style={{ color: valuationSubtleText }}>PEG {safeRatio(currentPeg)} | PSG {safeRatio(currentPsg)}</span>
+          {!hasPositiveEarnings ? 'Company has negative earnings — P/E-based metrics show N/M (not meaningful). Valuation relies on P/FCF and P/S.' : 'PEG and PSG ratios can break when growth exceeds ~30-40% or margins are shifting.'}
         </div>
       </div>
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Market Context</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <MetricCard theme={theme} label="Mean P/E Value" value={safeMoney(meanPeAnchor)} />
-          <MetricCard theme={theme} label="Mean P/S Value" value={safeMoney(meanPsAnchor)} />
-          {showPB ? (
-            <MetricCard theme={theme} label="Mean P/B Value" value={safeMoney(meanPbAnchor)} />
-          ) : (
-            <MetricCard theme={theme} label="P/B Usage" value="Hidden (non-asset-heavy)" />
-          )}
-          <MetricCard theme={theme} label="Analyst Target" value={safeMoney(analystTarget)} />
-        </div>
-        <div className="mt-3 text-[10px]" style={{ color: valuationSubtleText }}>
-          Historical multiples and analyst targets are context anchors, not intrinsic truth.
+      {/* H. Expanded Synthesis */}
+      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="text-[10px] tracking-widest uppercase mb-2 font-display" style={{ color: theme.textSecondary }}>Synthesis</div>
+        <div className="text-xs leading-relaxed" style={{ color: valuationSubtleText }}>
+          {expandedSynthesis}
         </div>
       </div>
 
+      {/* I. Legacy / Advanced (unchanged) */}
       <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -1292,45 +1529,10 @@ function ValuationTab({ data, theme }) {
         )}
       </div>
 
-      {historicalValuationRatios.length > 0 && (
-        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Valuation Ratio History (Core Only)</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ background: theme.tableBg }}>
-                  <th className="px-3 py-3 text-left font-semibold sticky left-0" style={{ color: theme.textSecondary, borderBottom: `1px solid ${theme.border}`, background: theme.tableBg }}>Metric</th>
-                  {historicalValuationRatios.map((h) => (
-                    <th key={h.year} className="px-3 py-3 text-right font-medium min-w-[60px]" style={{ color: theme.textTertiary, borderBottom: `1px solid ${theme.border}` }}>{h.year}</th>
-                  ))}
-                  <th className="px-3 py-3 text-right font-semibold min-w-[70px]" style={{ color: theme.accent, borderBottom: `1px solid ${theme.border}`, background: theme.accent + '0d' }}>Current</th>
-                  <th className="px-3 py-3 text-right font-semibold min-w-[70px]" style={{ color: theme.accentAlt, borderBottom: `1px solid ${theme.border}`, background: theme.accentAlt + '0d' }}>10Y Avg</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { label: 'Price to Earnings (P/E) Ratio', key: 'peRatio' },
-                  { label: 'Price to Sales (P/S) Ratio', key: 'psRatio' },
-                  ...(showPB ? [{ label: 'Price to Book (P/B) Ratio', key: 'pbRatio' }] : []),
-                ].map(({ label, key }) => (
-                  <tr key={key} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                    <td className="px-3 py-3 font-medium sticky left-0" style={{ color: theme.text, background: theme.stickyBg }}>{label}</td>
-                    {historicalValuationRatios.map((h) => (
-                      <td key={`${h.year}-${key}`} className="px-3 py-3 text-right" style={{ color: theme.textSecondary }}>{Number.isFinite(h[key]) ? h[key].toFixed(2) : '-'}</td>
-                    ))}
-                    <td className="px-3 py-3 text-right font-semibold" style={{ color: theme.accent, background: theme.accent + '0d' }}>{Number.isFinite(data?.valuationRatios?.current?.[key]) ? data.valuationRatios.current[key].toFixed(2) : '-'}</td>
-                    <td className="px-3 py-3 text-right font-semibold" style={{ color: theme.accentAlt, background: theme.accentAlt + '0d' }}>{Number.isFinite(data?.valuationRatios?.tenYearAvg?.[key]) ? data.valuationRatios.tenYearAvg[key].toFixed(2) : '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
+      {/* J. Transparency Disclaimer (unchanged) */}
       <div className="p-5 rounded-2xl border text-[10px] leading-relaxed" style={{ background: theme.warningBg, borderColor: theme.warningBorder, color: theme.warningText }}>
-        <span className="font-semibold" style={{ color: theme.warningStrong }}>Transparency:</span> Core valuation now prioritizes reverse valuation, EPV floor, and 2-stage fundamentals scenarios.
-        Legacy composite methods remain available under the Legacy section and are intentionally labeled assumption-sensitive.
+        <span className="font-semibold" style={{ color: theme.warningStrong }}>Transparency:</span> Core valuation uses a first-principles DCF: Revenue → FCF margin convergence → perpetuity exit at 2.5% terminal growth.
+        All three inputs (required return, revenue growth, target FCF margin) are researchable. Legacy composite methods remain available under Legacy/Advanced.
       </div>
     </div>
   );
