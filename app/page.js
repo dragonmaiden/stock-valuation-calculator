@@ -2789,11 +2789,15 @@ function TradingTab({ data, theme }) {
       ? 'This is moderately common versus history.'
       : 'This is common versus history.'
     : 'Rarity estimate unavailable.';
-  const optimalBuyZone = signal?.entryZone?.side === 'BUY'
-    ? `${formatPx(signal.entryZone.low)} - ${formatPx(signal.entryZone.high)}`
-    : Number.isFinite(analysis.val) && Number.isFinite(analysis.yearlyVWAP)
+  const hasBuySignal = signal?.entryZone?.side === 'BUY';
+  const fallbackZone = Number.isFinite(analysis.val) && Number.isFinite(analysis.yearlyVWAP)
     ? `${formatPx(Math.min(analysis.val, analysis.yearlyVWAP))} - ${formatPx(Math.max(analysis.val, analysis.yearlyVWAP))}`
-    : 'Wait for Yearly VWAP reclaim + structure confirmation';
+    : null;
+  const optimalBuyZone = hasBuySignal
+    ? `${formatPx(signal.entryZone.low)} - ${formatPx(signal.entryZone.high)}`
+    : fallbackZone || 'No active zone';
+  const buyZoneTone = hasBuySignal ? 'positive' : 'neutral';
+  const buyZoneLabel = hasBuySignal ? 'Buy Zone (Active)' : 'Buy Zone (Watch)';
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-trading" aria-labelledby="tab-trading">
@@ -2810,22 +2814,22 @@ function TradingTab({ data, theme }) {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full lg:w-auto">
               <MetricCard
                 theme={theme}
-                label="Z-Score"
+                label="Price Position"
                 value={Number.isFinite(signal.zScore) ? `${signal.zScore.toFixed(2)}σ` : 'N/A'}
-                helpText="Number of standard deviations current price is from the rolling mean."
+                helpText="How far the current price is from its recent average. Negative = below average (cheaper), positive = above average (pricier)."
                 tone={zScoreTone}
               />
               <MetricCard
                 theme={theme}
                 label="Confidence"
                 value={Number.isFinite(signal.confidence) ? `${signal.confidence}%` : 'N/A'}
-                helpText="Composite confidence score from signal strength, regime fit, and trend quality."
+                helpText="How strong the current trading signal is, based on trend quality and price behavior."
               />
               <MetricCard
                 theme={theme}
-                label="Std Dev"
-                value={Number.isFinite(signal.stdDev) ? `${signal.stdDev.toFixed(2)}` : 'N/A'}
-                helpText="Standard deviation of recent prices used to normalize distance from the mean."
+                label="Volatility"
+                value={Number.isFinite(signal.stdDev) ? `$${signal.stdDev.toFixed(2)}` : 'N/A'}
+                helpText="Typical daily price swing in dollar terms. Higher = more volatile."
               />
             </div>
           </div>
@@ -2836,20 +2840,20 @@ function TradingTab({ data, theme }) {
               value={signal.entryZone ? `${formatPx(signal.entryZone.low)} - ${formatPx(signal.entryZone.high)}` : 'No active zone'}
               helpText="Primary action range from current signal."
             />
-            <MetricCard theme={theme} label="Optimal Buy Zone" value={optimalBuyZone} tone="positive" />
+            <MetricCard theme={theme} label={buyZoneLabel} value={optimalBuyZone} tone={buyZoneTone} />
             <MetricCard theme={theme} label="Target 1" value={formatPx(signal.targets?.tp1)} />
             <MetricCard theme={theme} label="Target 2 (Mean)" value={formatPx(signal.targets?.tp2)} />
           </div>
           <div className="mt-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
-            Z-score: <b>{zScoreMeaning}</b>
+            Price position: <b>{zScoreMeaning}</b> — how far the current price is from its recent average
           </div>
           <div className="mt-4">
-            <div className="text-[10px] tracking-widest uppercase mb-2 font-display" style={{ color: theme.textTertiary }}>Sigma Ladder</div>
+            <div className="text-[10px] tracking-widest uppercase mb-2 font-display" style={{ color: theme.textTertiary }}>Price vs Recent Average</div>
             <div className="relative h-10 rounded-lg border overflow-hidden" style={{ borderColor: theme.border }}>
               <div
                 className="absolute inset-0"
                 style={{
-                  background: `linear-gradient(90deg, ${theme.negativeBg} 0%, ${theme.warningBg} 33%, ${theme.neutralPillBg} 50%, ${theme.warningBg} 67%, ${theme.positiveBg} 100%)`,
+                  background: `linear-gradient(90deg, ${theme.positiveBg} 0%, ${theme.warningBg} 25%, ${theme.neutralPillBg} 50%, ${theme.warningBg} 75%, ${theme.negativeBg} 100%)`,
                 }}
               />
               {[0, 16.67, 33.33, 50, 66.67, 83.33, 100].map((pct, i) => (
@@ -2864,17 +2868,18 @@ function TradingTab({ data, theme }) {
                 style={{ left: `${ladderPositionPct}%`, background: actionTone }}
               />
               <div
-                className="absolute -top-1 text-[10px] px-1.5 py-0.5 rounded border"
+                className="absolute -top-1 text-[10px] px-1.5 py-0.5 rounded border font-semibold"
                 style={{ left: `calc(${ladderPositionPct}% - 20px)`, color: theme.text, borderColor: theme.border, background: theme.bgElevated }}
               >
                 {zScoreForLadder === null ? 'N/A' : `${zScoreForLadder.toFixed(2)}σ`}
               </div>
             </div>
-            <div className="mt-1 flex justify-between text-[10px]" style={{ color: theme.textTertiary }}>
-              <span>-3σ</span><span>-2σ</span><span>-1σ</span><span>0σ</span><span>+1σ</span><span>+2σ</span><span>+3σ</span>
-            </div>
-            <div className="mt-1 text-[9px]" style={{ color: theme.textTertiary }}>
-              Negative = cheaper vs mean. 0σ = neutral. Positive = extended.
+            <div className="mt-1.5 flex justify-between text-[9px] font-display" style={{ color: theme.textTertiary }}>
+              <span style={{ color: theme.positive }}>Cheap</span>
+              <span>Below Avg</span>
+              <span>Fair Value</span>
+              <span>Above Avg</span>
+              <span style={{ color: theme.negative }}>Expensive</span>
             </div>
           </div>
           {Array.isArray(signal.rationale) && signal.rationale.length > 0 && (
