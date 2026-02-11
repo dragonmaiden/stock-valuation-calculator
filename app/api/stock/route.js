@@ -316,7 +316,12 @@ export async function GET(request) {
     const symbol = ticker.toUpperCase();
 
     // Always fetch market data first so SEC outages do not take the whole API down.
-    const [yahooQuote, yahooStats, priceHistoryRaw] = await Promise.all([
+    const threeYearsAgo = new Date();
+    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+    const twelveYearsAgo = new Date();
+    twelveYearsAgo.setFullYear(twelveYearsAgo.getFullYear() - 12);
+
+    const [yahooQuote, yahooStats, priceHistoryRaw, ftsQuarterly, ftsAnnual] = await Promise.all([
       withTimeout(yahooFinance.quote(symbol), EXTERNAL_FETCH_TIMEOUT_MS, 'yahoo quote').catch(() => null),
       withTimeout(
         yahooFinance.quoteSummary(symbol, {
@@ -329,18 +334,30 @@ export async function GET(request) {
             'institutionOwnership',
             'fundOwnership',
             'majorHoldersBreakdown',
-            'incomeStatementHistory',
-            'incomeStatementHistoryQuarterly',
-            'balanceSheetHistory',
-            'balanceSheetHistoryQuarterly',
-            'cashflowStatementHistory',
-            'cashflowStatementHistoryQuarterly',
           ],
         }),
         EXTERNAL_FETCH_TIMEOUT_MS,
         'yahoo quoteSummary'
       ).catch(() => null),
       getHistoricalPrices(symbol),
+      withTimeout(
+        yahooFinance.fundamentalsTimeSeries(symbol, {
+          period1: threeYearsAgo,
+          type: 'quarterly',
+          module: 'all',
+        }),
+        EXTERNAL_FETCH_TIMEOUT_MS,
+        'yahoo fundamentalsTimeSeries quarterly'
+      ).catch(() => []),
+      withTimeout(
+        yahooFinance.fundamentalsTimeSeries(symbol, {
+          period1: twelveYearsAgo,
+          type: 'annual',
+          module: 'all',
+        }),
+        EXTERNAL_FETCH_TIMEOUT_MS,
+        'yahoo fundamentalsTimeSeries annual'
+      ).catch(() => []),
     ]);
 
     const hasYahooData = Boolean(yahooQuote) || (Array.isArray(priceHistoryRaw) && priceHistoryRaw.length > 0);
@@ -532,7 +549,7 @@ export async function GET(request) {
     const interestExpenseAnnualByYear = new Map(interestExpenseAnnual.map((r) => [String(r.fy), r.val]));
 
     // Build income statement data (annual)
-    const income = revenueAnnual.map((rev) => ({
+    let income = revenueAnnual.map((rev) => ({
       grossProfit: (() => {
         const directGross = grossProfitAnnualByEnd.get(rev.end);
         if (directGross !== null && directGross !== undefined) return directGross;
@@ -569,7 +586,7 @@ export async function GET(request) {
     })).reverse();
 
     // Build balance sheet data (annual)
-    const balance = assetsAnnual.map((asset) => ({
+    let balance = assetsAnnual.map((asset) => ({
       date: asset.end,
       calendarYear: String(asset.fy),
       totalAssets: asset.val || 0,
@@ -604,7 +621,7 @@ export async function GET(request) {
     })).reverse();
 
     // Build cash flow data (annual)
-    const cashflow = opCashFlowAnnual.map((ocf) => ({
+    let cashflow = opCashFlowAnnual.map((ocf) => ({
       date: ocf.end,
       calendarYear: String(ocf.fy),
       operatingCashFlow: ocf.val || 0,
@@ -622,14 +639,13 @@ export async function GET(request) {
       freeCashFlow: (ocf.val || 0) - ((capexQuarterlyByEnd.get(ocf.end)) || 0),
     })).reverse();
 
-    // --- Merge Yahoo Finance quarterly data for freshness ---
-    // Yahoo provides the most recent ~5 quarters faster than SEC filings.
-    // We use SEC as the deep historical base and overlay Yahoo for any newer quarters.
-    const yahooIncomeQ = yahooStats?.incomeStatementHistoryQuarterly?.incomeStatementHistory || [];
-    const yahooBalanceQ = yahooStats?.balanceSheetHistoryQuarterly?.balanceSheetStatements || [];
-    const yahooCashflowQ = yahooStats?.cashflowStatementHistoryQuarterly?.cashflowStatements || [];
+    // --- Merge Yahoo Finance fundamentalsTimeSeries data ---
+    // FTS replaces the broken quoteSummary financial statement modules.
+    // SEC is the deep historical base; FTS fills gaps for tickers with limited/no SEC data.
+    const ftsQ = Array.isArray(ftsQuarterly) ? ftsQuarterly : [];
+    const ftsA = Array.isArray(ftsAnnual) ? ftsAnnual : [];
 
-    function yahooDateToISO(d) {
+    function ftsDateToISO(d) {
       if (!d) return null;
       if (d instanceof Date) return d.toISOString().slice(0, 10);
       if (typeof d === 'number') return new Date(d * 1000).toISOString().slice(0, 10);
@@ -646,11 +662,90 @@ export async function GET(request) {
       return 'Q4';
     }
 
-    // Merge Yahoo income quarterly data into SEC data
-    const secIncomeDates = new Set(incomeQSec.map(r => r.date));
-    const yahooIncomeExtras = yahooIncomeQ
+    // --- Merge FTS annual data into SEC annual arrays ---
+    const secIncomeDatesAnnual = new Set(income.map(r => r.date));
+    const ftsIncomeAnnualExtras = ftsA
+      .filter(row => row.date && row.totalRevenue != null)
       .map(row => {
-        const date = yahooDateToISO(row.endDate);
+        const date = ftsDateToISO(row.date);
+        if (!date || secIncomeDatesAnnual.has(date)) return null;
+        const year = date.slice(0, 4);
+        const revenue = row.totalRevenue ?? 0;
+        const costOfRevenue = row.costOfRevenue ?? null;
+        const grossProfit = row.grossProfit ?? (costOfRevenue != null ? revenue - costOfRevenue : null);
+        return {
+          date,
+          calendarYear: year,
+          revenue,
+          costOfRevenue,
+          grossProfit,
+          operatingIncome: row.operatingIncome ?? null,
+          netIncome: row.netIncome ?? null,
+          interestExpense: row.interestExpenseNonOperating != null ? -Math.abs(row.interestExpenseNonOperating) : null,
+          depreciation: null,
+        };
+      })
+      .filter(Boolean);
+    if (ftsIncomeAnnualExtras.length > 0) {
+      income = [...income, ...ftsIncomeAnnualExtras].sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    const secBalanceDatesAnnual = new Set(balance.map(r => r.date));
+    const ftsBalanceAnnualExtras = ftsA
+      .filter(row => row.date && row.totalAssets != null)
+      .map(row => {
+        const date = ftsDateToISO(row.date);
+        if (!date || secBalanceDatesAnnual.has(date)) return null;
+        const year = date.slice(0, 4);
+        return {
+          date,
+          calendarYear: year,
+          totalAssets: row.totalAssets ?? 0,
+          totalEquity: row.stockholdersEquity ?? 0,
+          inventory: row.inventory ?? null,
+          accountsReceivable: row.accountsReceivable ?? null,
+          accountsPayable: row.accountsPayable ?? null,
+          netPPE: row.netPPE ?? null,
+          cashAndCashEquivalents: row.cashAndCashEquivalents ?? 0,
+          shortTermInvestments: row.otherShortTermInvestments ?? 0,
+          currentAssets: row.currentAssets ?? null,
+          currentLiabilities: row.currentLiabilities ?? null,
+          totalDebt: row.totalDebt ?? row.longTermDebt ?? 0,
+        };
+      })
+      .filter(Boolean);
+    if (ftsBalanceAnnualExtras.length > 0) {
+      balance = [...balance, ...ftsBalanceAnnualExtras].sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    const secCashflowDatesAnnual = new Set(cashflow.map(r => r.date));
+    const ftsCashflowAnnualExtras = ftsA
+      .filter(row => row.date && row.operatingCashFlow != null)
+      .map(row => {
+        const date = ftsDateToISO(row.date);
+        if (!date || secCashflowDatesAnnual.has(date)) return null;
+        const year = date.slice(0, 4);
+        const opCF = row.operatingCashFlow ?? 0;
+        const capex = row.capitalExpenditure != null ? -Math.abs(row.capitalExpenditure) : 0;
+        return {
+          date,
+          calendarYear: year,
+          operatingCashFlow: opCF,
+          capitalExpenditure: capex,
+          freeCashFlow: opCF + capex,
+        };
+      })
+      .filter(Boolean);
+    if (ftsCashflowAnnualExtras.length > 0) {
+      cashflow = [...cashflow, ...ftsCashflowAnnualExtras].sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    // --- Merge FTS quarterly data into SEC quarterly arrays ---
+    const secIncomeDates = new Set(incomeQSec.map(r => r.date));
+    const ftsIncomeExtras = ftsQ
+      .filter(row => row.date && row.totalRevenue != null)
+      .map(row => {
+        const date = ftsDateToISO(row.date);
         if (!date || secIncomeDates.has(date)) return null;
         const year = date.slice(0, 4);
         const revenue = row.totalRevenue ?? 0;
@@ -665,20 +760,21 @@ export async function GET(request) {
           grossProfit,
           operatingIncome: row.operatingIncome ?? null,
           netIncome: row.netIncome ?? null,
-          interestExpense: row.interestExpense ? -Math.abs(row.interestExpense) : null,
+          interestExpense: row.interestExpenseNonOperating != null ? -Math.abs(row.interestExpenseNonOperating) : null,
           depreciation: null,
         };
       })
       .filter(Boolean);
 
-    const incomeQ = [...incomeQSec, ...yahooIncomeExtras]
+    const incomeQ = [...incomeQSec, ...ftsIncomeExtras]
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Merge Yahoo balance sheet quarterly data
+    // Merge FTS balance sheet quarterly data
     const secBalanceDates = new Set(balanceQSec.map(r => r.date));
-    const yahooBalanceExtras = yahooBalanceQ
+    const ftsBalanceExtras = ftsQ
+      .filter(row => row.date && row.totalAssets != null)
       .map(row => {
-        const date = yahooDateToISO(row.endDate);
+        const date = ftsDateToISO(row.date);
         if (!date || secBalanceDates.has(date)) return null;
         const year = date.slice(0, 4);
         return {
@@ -686,44 +782,45 @@ export async function GET(request) {
           fiscalYear: year,
           period: guessQuarterPeriod(date),
           totalAssets: row.totalAssets ?? 0,
-          totalEquity: row.totalStockholderEquity ?? 0,
+          totalEquity: row.stockholdersEquity ?? 0,
           inventory: row.inventory ?? null,
-          accountsReceivable: row.netReceivables ?? null,
+          accountsReceivable: row.accountsReceivable ?? null,
           accountsPayable: row.accountsPayable ?? null,
-          netPPE: row.propertyPlantEquipment ?? null,
-          cashAndCashEquivalents: row.cash ?? 0,
-          shortTermInvestments: row.shortTermInvestments ?? 0,
-          currentAssets: row.totalCurrentAssets ?? null,
-          currentLiabilities: row.totalCurrentLiabilities ?? null,
-          totalDebt: row.longTermDebt ?? 0,
+          netPPE: row.netPPE ?? null,
+          cashAndCashEquivalents: row.cashAndCashEquivalents ?? 0,
+          shortTermInvestments: row.otherShortTermInvestments ?? 0,
+          currentAssets: row.currentAssets ?? null,
+          currentLiabilities: row.currentLiabilities ?? null,
+          totalDebt: row.totalDebt ?? row.longTermDebt ?? 0,
         };
       })
       .filter(Boolean);
 
-    const balanceQ = [...balanceQSec, ...yahooBalanceExtras]
+    const balanceQ = [...balanceQSec, ...ftsBalanceExtras]
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Merge Yahoo cash flow quarterly data
+    // Merge FTS cash flow quarterly data
     const secCashflowDates = new Set(cashflowQSec.map(r => r.date));
-    const yahooCashflowExtras = yahooCashflowQ
+    const ftsCashflowExtras = ftsQ
+      .filter(row => row.date && row.operatingCashFlow != null)
       .map(row => {
-        const date = yahooDateToISO(row.endDate);
+        const date = ftsDateToISO(row.date);
         if (!date || secCashflowDates.has(date)) return null;
         const year = date.slice(0, 4);
-        const opCF = row.totalCashFromOperatingActivities ?? 0;
-        const capex = row.capitalExpenditures ?? 0;
+        const opCF = row.operatingCashFlow ?? 0;
+        const capex = row.capitalExpenditure != null ? -Math.abs(row.capitalExpenditure) : 0;
         return {
           date,
           fiscalYear: year,
           period: guessQuarterPeriod(date),
           operatingCashFlow: opCF,
           capitalExpenditure: capex,
-          freeCashFlow: opCF + capex, // capex is already negative from Yahoo
+          freeCashFlow: opCF + capex,
         };
       })
       .filter(Boolean);
 
-    const cashflowQ = [...cashflowQSec, ...yahooCashflowExtras]
+    const cashflowQ = [...cashflowQSec, ...ftsCashflowExtras]
       .sort((a, b) => a.date.localeCompare(b.date));
 
     const balanceByYear = new Map(balance.map(b => [String(b.calendarYear), b]));
@@ -1871,6 +1968,10 @@ export async function GET(request) {
       yahoo: {
         quote: Boolean(yahooQuote),
         fundamentals: Boolean(yahooStats),
+        fundamentalsTimeSeries: {
+          quarterly: ftsQ.length,
+          annual: ftsA.length,
+        },
         history: Array.isArray(priceHistoryRaw) && priceHistoryRaw.length > 0,
         institutionOwnership: institutionHolders.length > 0,
         fundOwnership: fundHolders.length > 0,
