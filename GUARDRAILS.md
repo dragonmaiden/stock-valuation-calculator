@@ -78,6 +78,87 @@ If any answer is "no" — **stop, revert, and ask the user what they want.**
 
 ---
 
+## Engineering Principles
+
+Follow these when writing code. They're not optional.
+
+### DRY — Don't Repeat Yourself
+If you see the same calculation in 3 places, extract it into ONE function.
+But don't preemptively DRY things — wait until there are **actually** 3+ copies.
+Two is fine. Three means refactor.
+
+### KISS — Keep It Stupid Simple
+Write the dumbest code that works. No clever one-liners, no tricky ternaries.
+A 5-line `if/else` is better than a 1-line conditional chain nobody can read.
+```js
+// ❌ "clever"
+const margin = rev ? (rev - cogs) / rev * 100 : rev === 0 ? 0 : null;
+
+// ✅ simple
+let margin = null;
+if (rev && rev !== 0) {
+  margin = ((rev - cogs) / rev) * 100;
+}
+```
+
+### YAGNI — You Aren't Gonna Need It
+Don't build for imaginary future requirements. Build for TODAY's roadmap.
+No "this might be useful later" code. If it's not in ROADMAP.md, it doesn't exist.
+
+### Single Responsibility
+Each function does ONE thing. Each file has ONE purpose.
+If a function name has "and" in it — split it.
+```js
+// ❌ fetchAndCalculateAndFormat()
+// ✅ fetchStockData() → calculateMargins() → formatForDisplay()
+```
+
+### Fail Loudly, Handle Gracefully
+- Financial calculations with bad input → return `null` + log warning, never return 0
+- API errors → show clear error message to user, never show stale/wrong data
+- Missing data → display "N/A", never display blank or zero
+```js
+// ❌ silent failure
+const pe = price / eps; // eps could be 0 → Infinity
+
+// ✅ explicit handling
+const pe = eps > 0 ? price / eps : null;
+```
+
+### Naming
+- Variables: descriptive, no abbreviations. `grossProfitMargin` not `gpm`
+- Functions: verb + noun. `calculateGrossMargin()` not `margin()`
+- Boolean: start with is/has/should. `isUndervalued` not `undervalued`
+- Constants: explain the magic number. `MARGIN_OF_SAFETY = 0.25` not just `0.25`
+
+### Numbers Are Sacred
+This is a **financial app**. Wrong numbers = wrong investment decisions.
+- Always use the right precision (2 decimal places for percentages, 0 for large dollar amounts)
+- Never mix units (dollars vs billions vs millions)
+- Always label: "Revenue: $383.3B" not just "383285000000"
+- Round at the LAST step, not intermediate calculations
+- Use `toFixed(2)` for display, not for math
+
+### Comments
+- Don't comment WHAT the code does — the code should be readable enough
+- DO comment WHY — business logic, formula sources, non-obvious decisions
+```js
+// ❌ // calculate the margin
+const margin = (rev - cogs) / rev;
+
+// ✅ // Graham's original formula from "The Intelligent Investor" ch.14
+// Uses sqrt(22.5 × EPS × BookValue) — the 22.5 comes from PE=15 × PB=1.5
+const grahamNumber = Math.sqrt(22.5 * eps * bookValue);
+```
+
+### Performance
+- Don't optimize prematurely — fix correctness first
+- But don't be wasteful — avoid re-fetching data you already have
+- Expensive calculations (DCF, multi-model) should be memoized
+- API calls should be cached (SEC data doesn't change hourly)
+
+---
+
 ## Anti-Patterns to Avoid
 
 | ❌ Don't | ✅ Do Instead |
