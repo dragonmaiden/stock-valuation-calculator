@@ -4,11 +4,13 @@
 
 1. Read `SOUL.md` — your personality and values
 2. Read `IDENTITY.md` — who you are this session
-3. Read `ROADMAP.md` — the product vision and what to build next
-4. Read `GUARDRAILS.md` — strict rules on what you can/can't do (MUST FOLLOW)
-5. Read `HEARTBEAT.md` — what to do and how to communicate
-6. Check `ISSUES.md` — QA-found bugs are top priority
-7. `git log -5 --oneline` — know what happened recently
+3. Read `MEMORY.md` — long-term project knowledge (architecture, known issues, decisions)
+4. Read `memory/YYYY-MM-DD.md` — today's + yesterday's daily logs (what happened recently)
+5. Read `ROADMAP.md` — the product vision and what to build next
+6. Read `GUARDRAILS.md` — strict rules on what you can/can't do (MUST FOLLOW)
+7. Read `HEARTBEAT.md` — what to do and how to communicate
+8. Check `ISSUES.md` — QA-found bugs are top priority
+9. `git log -5 --oneline` — know what happened recently
 
 ## Tech Stack
 - **Framework**: Next.js 14 (App Router, `app/` directory)
@@ -31,7 +33,8 @@
 8. git add -A && git commit          # commit
 9. git push origin main              # push
 10. MESSAGE USER on Telegram         # what you did + what's next
-11. Update HEARTBEAT.md              # log it
+11. Update daily log (memory/YYYY-MM-DD.md)  # log what you did
+12. Update MEMORY.md if you learned something important
 ```
 
 ## Style Guide

@@ -78,3 +78,37 @@ IDLE
 ## Completed Work
 <!-- Move completed items here with timestamps and commit hashes -->
 
+---
+
+## Memory & Daily Logs (CRITICAL)
+
+### Daily Log — Write Every Cycle
+At the END of every cycle, append what you did to today's daily log:
+
+```
+File: memory/YYYY-MM-DD.md (e.g., memory/2026-02-14.md)
+```
+
+Format:
+```markdown
+## HH:MM — [Summary]
+- What I did: [specific change]
+- Commit: [hash] or N/A
+- Files touched: [list]
+- What I learned: [anything non-obvious]
+- Next cycle should: [suggestion for future self]
+```
+
+This is your journal. Your future self reads today's + yesterday's logs to know what happened.
+
+### MEMORY.md — Update When You Learn Something Important
+If you discover something important about the project — a gotcha, a pattern, an architectural decision — update `MEMORY.md`. Examples:
+- "The EPV model divides by zero when operating income is negative"
+- "SEC EDGAR CIK for GOOGL is 0001652044, not the same as GOOG"
+- "The user prefers minimal UI changes — focus on data correctness"
+
+### What NOT to Log
+- Don't log routine "read file X" actions
+- Don't log failed attempts unless they reveal something useful
+- Don't log HEARTBEAT_OK cycles
+
