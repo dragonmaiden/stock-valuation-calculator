@@ -3,7 +3,7 @@ import YahooFinance from 'yahoo-finance2';
 
 export const runtime = 'nodejs';
 
-const yahooFinance = new YahooFinance();
+const yahooFinance = new YahooFinance({ validation: { logErrors: false } });
 const SEC_BASE = 'https://data.sec.gov';
 const USER_AGENT = `StockValuationCalculator/1.0 (${process.env.SEC_CONTACT_EMAIL || 'admin@stockvaluationcalculator.app'})`;
 const EXTERNAL_FETCH_TIMEOUT_MS = 12000;
@@ -115,7 +115,7 @@ function getMetricValues(facts, fieldNames, period = 'FY', limit = 20) {
     if (period === 'Q') {
       // Quarterly: require fp in Q1-Q4 and a single-quarter span (~3 months)
       filtered = data.filter(d => {
-        if (!['Q1','Q2','Q3','Q4'].includes(d.fp)) return false;
+        if (!['Q1', 'Q2', 'Q3', 'Q4'].includes(d.fp)) return false;
         if (d.start && d.end) {
           const months = (new Date(d.end) - new Date(d.start)) / (1000 * 60 * 60 * 24 * 30);
           return months < 5;
@@ -220,8 +220,8 @@ function normalizeInsiderTransactions(rows = []) {
       const side = isSellText || (sharesRaw !== null && sharesRaw < 0)
         ? 'SELL'
         : isBuyText || (sharesRaw !== null && sharesRaw > 0)
-        ? 'BUY'
-        : 'UNKNOWN';
+          ? 'BUY'
+          : 'UNKNOWN';
 
       const absShares = sharesRaw !== null ? Math.abs(sharesRaw) : null;
       const estimatedValue = valueRaw === null && absShares !== null && priceRaw !== null
@@ -339,25 +339,33 @@ export async function GET(request) {
         EXTERNAL_FETCH_TIMEOUT_MS,
         'yahoo quoteSummary'
       ).catch(() => null),
-      getHistoricalPrices(symbol),
-      withTimeout(
-        yahooFinance.fundamentalsTimeSeries(symbol, {
-          period1: threeYearsAgo,
-          type: 'quarterly',
-          module: 'all',
-        }),
-        EXTERNAL_FETCH_TIMEOUT_MS,
-        'yahoo fundamentalsTimeSeries quarterly'
-      ).catch(() => []),
-      withTimeout(
-        yahooFinance.fundamentalsTimeSeries(symbol, {
-          period1: twelveYearsAgo,
-          type: 'annual',
-          module: 'all',
-        }),
-        EXTERNAL_FETCH_TIMEOUT_MS,
-        'yahoo fundamentalsTimeSeries annual'
-      ).catch(() => []),
+      getHistoricalPrices(symbol).catch(() => []),
+      (async () => {
+        try {
+          return await withTimeout(
+            yahooFinance.fundamentalsTimeSeries(symbol, {
+              period1: threeYearsAgo,
+              type: 'quarterly',
+              module: 'all',
+            }),
+            EXTERNAL_FETCH_TIMEOUT_MS,
+            'yahoo fundamentalsTimeSeries quarterly'
+          );
+        } catch { return []; }
+      })(),
+      (async () => {
+        try {
+          return await withTimeout(
+            yahooFinance.fundamentalsTimeSeries(symbol, {
+              period1: twelveYearsAgo,
+              type: 'annual',
+              module: 'all',
+            }),
+            EXTERNAL_FETCH_TIMEOUT_MS,
+            'yahoo fundamentalsTimeSeries annual'
+          );
+        } catch { return []; }
+      })(),
     ]);
 
     const hasYahooData = Boolean(yahooQuote) || (Array.isArray(priceHistoryRaw) && priceHistoryRaw.length > 0);
@@ -872,30 +880,30 @@ export async function GET(request) {
 
     const priceHistory = Array.isArray(priceHistoryRaw)
       ? priceHistoryRaw
-          .map((row) => {
-            const isoDate = formatDateISO(row?.date);
-            if (!isoDate || !Number.isFinite(row?.close)) return null;
-            return {
-              date: isoDate,
-              open: Number.isFinite(row?.open) ? row.open : null,
-              high: Number.isFinite(row?.high) ? row.high : null,
-              low: Number.isFinite(row?.low) ? row.low : null,
-              close: Number.isFinite(row?.close) ? row.close : null,
-              volume: Number.isFinite(row?.volume) ? row.volume : null,
-            };
-          })
-          .filter(Boolean)
-          .sort((a, b) => a.date.localeCompare(b.date))
+        .map((row) => {
+          const isoDate = formatDateISO(row?.date);
+          if (!isoDate || !Number.isFinite(row?.close)) return null;
+          return {
+            date: isoDate,
+            open: Number.isFinite(row?.open) ? row.open : null,
+            high: Number.isFinite(row?.high) ? row.high : null,
+            low: Number.isFinite(row?.low) ? row.low : null,
+            close: Number.isFinite(row?.close) ? row.close : null,
+            volume: Number.isFinite(row?.volume) ? row.volume : null,
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.date.localeCompare(b.date))
       : [];
 
     const calculateTradingSignals = (historyRows, latestPrice) => {
       const rows = Array.isArray(historyRows)
         ? historyRows.filter((r) =>
-            Number.isFinite(r?.close) &&
-            Number.isFinite(r?.high) &&
-            Number.isFinite(r?.low) &&
-            Number.isFinite(r?.volume)
-          )
+          Number.isFinite(r?.close) &&
+          Number.isFinite(r?.high) &&
+          Number.isFinite(r?.low) &&
+          Number.isFinite(r?.volume)
+        )
         : [];
 
       if (!Number.isFinite(latestPrice) || latestPrice <= 0 || rows.length < 60) {
@@ -947,8 +955,8 @@ export async function GET(request) {
       const meanType = Number.isFinite(avwap)
         ? 'Anchored VWAP (YTD)'
         : Number.isFinite(vwma20)
-        ? 'VWMA-20'
-        : 'SMA-50';
+          ? 'VWMA-20'
+          : 'SMA-50';
       const mean = Number.isFinite(avwap) ? avwap : (Number.isFinite(vwma20) ? vwma20 : sma50);
 
       const stdWindow = closes.slice(-60);
@@ -1891,9 +1899,9 @@ export async function GET(request) {
     const earningsValues = recentIncome.map(i => i.netIncome).filter(v => v > 0);
     const earningsVariance = earningsValues.length > 1
       ? Math.sqrt(earningsValues.reduce((sum, v, _, arr) => {
-          const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
-          return sum + Math.pow(v - mean, 2);
-        }, 0) / earningsValues.length) / (earningsValues.reduce((a, b) => a + b, 0) / earningsValues.length)
+        const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+        return sum + Math.pow(v - mean, 2);
+      }, 0) / earningsValues.length) / (earningsValues.reduce((a, b) => a + b, 0) / earningsValues.length)
       : 1;
     const predictabilityScore = Math.max(0, Math.min(100, 100 - (earningsVariance * 200)));
 
@@ -1925,7 +1933,7 @@ export async function GET(request) {
     const financialStrengthScore = Math.min(100, (
       (debtToEbitda < 1 ? 50 : debtToEbitda < 2 ? 35 : debtToEbitda < 3 ? 20 : 10) +
       (latestBalance?.cashAndCashEquivalents > latestBalance?.totalDebt ? 50 :
-       latestBalance?.cashAndCashEquivalents > latestBalance?.totalDebt * 0.5 ? 35 : 20)
+        latestBalance?.cashAndCashEquivalents > latestBalance?.totalDebt * 0.5 ? 35 : 20)
     ));
 
     // 6. Valuation Rank - Based on upside potential
