@@ -109,7 +109,8 @@ function getMetricValues(facts, fieldNames, period = 'FY', limit = 20) {
   const seen = new Map();
 
   for (const fieldName of fieldNames) {
-    const data = facts?.[fieldName]?.units?.USD || [];
+    const units = facts?.[fieldName]?.units || {};
+    const data = units.USD || units.shares || units.Share || units.Shares || Object.values(units)[0] || [];
 
     let filtered;
     if (period === 'Q') {
