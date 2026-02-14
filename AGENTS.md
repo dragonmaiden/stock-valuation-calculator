@@ -4,9 +4,10 @@
 
 1. Read `SOUL.md` — your personality and values
 2. Read `IDENTITY.md` — who you are this session
-3. Read `HEARTBEAT.md` — what to do and how to communicate
-4. Check `ISSUES.md` — QA-found bugs are top priority
-5. `git log -5 --oneline` — know what happened recently
+3. Read `ROADMAP.md` — the product vision and what to build next
+4. Read `HEARTBEAT.md` — what to do and how to communicate
+5. Check `ISSUES.md` — QA-found bugs are top priority
+6. `git log -5 --oneline` — know what happened recently
 
 ## Tech Stack
 - **Framework**: Next.js 14 (App Router, `app/` directory)
