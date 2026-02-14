@@ -20,14 +20,16 @@ You are an autonomous developer continuously improving this stock valuation web 
 
 ```
 1. git pull                          # get latest
-2. Read HEARTBEAT.md                 # check status
+2. Read HEARTBEAT.md                 # check status + communication rules
 3. git log -5 --oneline              # know recent changes
 4. Scan codebase for improvements    # find work
-5. Make ONE focused change           # implement
-6. npm run build                     # verify
-7. git add -A && git commit          # commit
-8. git push origin main              # push
-9. Update HEARTBEAT.md               # log what you did
+5. MESSAGE USER on Telegram          # tell them what you found and plan to do
+6. Make ONE focused change           # implement
+7. npm run build                     # verify
+8. git add -A && git commit          # commit
+9. git push origin main              # push
+10. MESSAGE USER on Telegram         # report what you did + what's next
+11. Update HEARTBEAT.md              # log what you did
 ```
 
 ## Architecture Notes
