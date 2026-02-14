@@ -387,11 +387,25 @@ function OverviewTab({ data, theme }) {
   })();
 
   const calcQuarterlyTtmGrowth = (rows, valueKey) => {
-    const clean = (rows || []).filter((r) => Number.isFinite(r?.[valueKey]));
+    const clean = (rows || [])
+      .filter((r) => Number.isFinite(r?.[valueKey]) && r?.date)
+      .map((r) => ({ ...r, dateMs: Date.parse(`${r.date}T00:00:00Z`) }))
+      .filter((r) => Number.isFinite(r.dateMs))
+      .sort((a, b) => a.dateMs - b.dateMs);
+
     if (clean.length < 8) return null;
-    const latest4 = clean.slice(-4).reduce((sum, r) => sum + r[valueKey], 0);
-    const prev4 = clean.slice(-8, -4).reduce((sum, r) => sum + r[valueKey], 0);
+
+    // Use only the latest 8 contiguous quarters so TTM is truly 4-quarter vs prior 4-quarter.
+    const latest8 = clean.slice(-8);
+    for (let i = 1; i < latest8.length; i += 1) {
+      const gapDays = (latest8[i].dateMs - latest8[i - 1].dateMs) / (1000 * 60 * 60 * 24);
+      if (gapDays < 60 || gapDays > 130) return null;
+    }
+
+    const prev4 = latest8.slice(0, 4).reduce((sum, r) => sum + r[valueKey], 0);
+    const latest4 = latest8.slice(4).reduce((sum, r) => sum + r[valueKey], 0);
     if (!Number.isFinite(prev4) || prev4 === 0) return null;
+
     return (latest4 - prev4) / Math.abs(prev4);
   };
 
