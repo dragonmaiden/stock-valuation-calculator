@@ -210,7 +210,7 @@ function ChartSection({ title, chartData, dataKeys, colors, unit = '', dataKeyX 
         </div>
       </div>
       <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={chartData} margin={{ top: 10, right: 16, left: -4, bottom: 5 }}>
+        <BarChart data={chartData} margin={{ top: 10, right: 16, left: -4, bottom: 5 }} barSize={18} barGap={3}>
           <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} vertical={false} />
           <XAxis dataKey={dataKeyX} tick={{ fontFamily: "'Inter', sans-serif", fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
           <YAxis
@@ -225,7 +225,7 @@ function ChartSection({ title, chartData, dataKeys, colors, unit = '', dataKeyX 
             formatter={(value) => [formatTooltipValue(value), '']}
             cursor={{ fill: theme.cursorFill }}
           />
-          <Legend wrapperStyle={{ fontFamily: "'Inter', sans-serif", fontSize: 10, color: theme.textSecondary, paddingTop: '8px' }} />
+
           {dataKeys.map((key, i) => (
             <Bar key={key} dataKey={key} fill={colors[i]} radius={[3, 3, 0, 0]} />
           ))}
@@ -265,7 +265,7 @@ function MetricCard({ label, value, subtext, helpText, tone = 'neutral', theme }
           </span>
         )}
       </div>
-      <div className="text-xl font-semibold tracking-tight" style={{ color: toneStyles.valueColor }}>{value}</div>
+      <div className="text-xl font-semibold tracking-tight" style={{ color: toneStyles.valueColor, opacity: (value === 'N/A' || value === 'N/M' || value === 'N/M / N/A') ? 0.35 : 1 }}>{value}</div>
       {subtext && <div className="text-[11px] mt-1.5 leading-snug" style={{ color: theme.textMuted }}>{subtext}</div>}
     </div>
   );
@@ -638,7 +638,7 @@ function OverviewTab({ data, theme }) {
 
       <div className="p-6 rounded-2xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Business Reality Check</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <MetricCard theme={theme} label="Net Margin" value={Number.isFinite(netMargin) ? `${(netMargin * 100).toFixed(2)}%` : 'N/A'} />
           <MetricCard theme={theme} label="ROIC" value={Number.isFinite(roic) ? `${(roic * 100).toFixed(2)}%` : 'N/A'} />
           <MetricCard theme={theme} label="Revenue 5Y CAGR" value={Number.isFinite(recentRevenueCagr) ? `${(recentRevenueCagr * 100).toFixed(2)}%` : 'N/A'} />
@@ -1969,13 +1969,13 @@ function ChartsTab({ theme, viewMode, setViewMode, marginData, returnData, incom
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {viewMode === 'annual' && (
           <>
-            <ChartSection theme={theme} title="PROFITABILITY MARGINS (%)" chartData={marginData} dataKeys={['Gross Margin', 'Operating Margin', 'Net Margin']} colors={['#3b82f6', '#f97316', '#22c55e']} unit="%" dataKeyX="year" />
-            <ChartSection theme={theme} title="RETURN ON CAPITAL (%)" chartData={returnData} dataKeys={['ROE', 'ROIC', 'ROA']} colors={['#3b82f6', '#f97316', '#92400e']} unit="%" dataKeyX="year" />
+            <ChartSection theme={theme} title="PROFITABILITY MARGINS (%)" chartData={marginData} dataKeys={['Gross Margin', 'Operating Margin', 'Net Margin']} colors={['#6366f1', '#f59e0b', '#10b981']} unit="%" dataKeyX="year" />
+            <ChartSection theme={theme} title="RETURN ON CAPITAL (%)" chartData={returnData} dataKeys={['ROE', 'ROIC', 'ROA']} colors={['#6366f1', '#f59e0b', '#8b5cf6']} unit="%" dataKeyX="year" />
           </>
         )}
-        <ChartSection theme={theme} title="INCOME STATEMENT ($B)" chartData={incomeData} dataKeys={['Revenue', 'Operating Income', 'Net Income']} colors={['#3b82f6', '#f97316', '#22c55e']} unit="B" />
-        <ChartSection theme={theme} title="CASH FLOW ($B)" chartData={cashFlowData} dataKeys={['Operating CF', 'Free Cash Flow', 'CapEx']} colors={['#f97316', '#166534', '#ec4899']} unit="B" />
-        <ChartSection theme={theme} title="BALANCE SHEET ($B)" chartData={balanceData} dataKeys={['Cash & Investments', 'Total Debt']} colors={['#22c55e', '#dc2626']} unit="B" />
+        <ChartSection theme={theme} title="INCOME STATEMENT ($B)" chartData={incomeData} dataKeys={['Revenue', 'Operating Income', 'Net Income']} colors={['#6366f1', '#f59e0b', '#10b981']} unit="B" />
+        <ChartSection theme={theme} title="CASH FLOW ($B)" chartData={cashFlowData} dataKeys={['Operating CF', 'Free Cash Flow', 'CapEx']} colors={['#f59e0b', '#10b981', '#ef4444']} unit="B" />
+        <ChartSection theme={theme} title="BALANCE SHEET ($B)" chartData={balanceData} dataKeys={['Cash & Investments', 'Total Debt']} colors={['#10b981', '#ef4444']} unit="B" />
       </div>
     </div>
   );
@@ -2296,7 +2296,7 @@ function InstitutionalOwnershipTab({ data, theme }) {
         Institutional ownership shows the largest reporting institutions/funds and whether they are increasing or reducing holdings when reported changes are available.
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <MetricCard theme={theme} label="Total Tracked Holders" value={String(summary.totalTracked || holders.length || 0)} subtext={`${institutions.length} institutions | ${funds.length} funds`} tone="neutral" />
         <MetricCard theme={theme} label="Buying Holders" value={String(summary.buyingCount || 0)} subtext="Reported increases" tone="positive" />
         <MetricCard theme={theme} label="Selling Holders" value={String(summary.sellingCount || 0)} subtext="Reported reductions" tone="negative" />
