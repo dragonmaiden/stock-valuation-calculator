@@ -19,96 +19,96 @@ import {
   Cell,
 } from 'recharts';
 
-// Theme definitions
+// Theme definitions — Apple Minimalism "Cupertino"
 const themes = {
   dark: {
-    bg: '#08090d',
-    bgCard: '#111318',
-    bgElevated: '#191c24',
-    bgInput: '#0d0e13',
-    border: 'rgba(255, 255, 255, 0.06)',
-    borderHover: 'rgba(255, 255, 255, 0.12)',
-    borderStrong: 'rgba(255, 255, 255, 0.16)',
-    text: '#eceef4',
-    textSecondary: '#9498a8',
-    textTertiary: '#5d6170',
-    textMuted: '#3a3e4c',
-    chartGrid: 'rgba(255,255,255,0.05)',
-    chartTooltipBg: '#191c24',
-    chartTooltipBorder: 'rgba(255,255,255,0.1)',
-    tableBg: '#0d0e13',
-    tableRowHover: 'rgba(255,255,255,0.025)',
-    tableRowAlt: 'rgba(255,255,255,0.015)',
-    stickyBg: '#111318',
-    cursorFill: 'rgba(255,255,255,0.03)',
-    neutralPillBg: 'rgba(255,255,255,0.04)',
-    positive: '#34d399',
-    negative: '#f87171',
-    fairValue: '#9498a8',
-    positiveBg: 'rgba(16,185,129,0.08)',
-    negativeBg: 'rgba(239,68,68,0.08)',
-    positiveBorder: 'rgba(16,185,129,0.18)',
-    negativeBorder: 'rgba(239,68,68,0.18)',
-    accent: '#60a5fa',
-    accentAlt: '#a78bfa',
-    warning: '#fbbf24',
-    warningText: 'rgba(253,230,138,0.7)',
-    warningBg: 'rgba(245,158,11,0.06)',
-    warningBorder: 'rgba(245,158,11,0.18)',
-    warningStrong: '#fbbf24',
-    headerBg: 'rgba(8,9,13,0.88)',
-    heroGradient: 'linear-gradient(135deg, #0c1929 0%, #1a2744 40%, #2a1f4e 100%)',
+    bg: '#000000',
+    bgCard: '#1c1c1e',
+    bgElevated: '#2c2c2e',
+    bgInput: '#1c1c1e',
+    border: '#38383a',
+    borderHover: '#48484a',
+    borderStrong: '#636366',
+    text: '#f2f2f7',
+    textSecondary: 'rgba(235, 235, 245, 0.6)',
+    textTertiary: 'rgba(235, 235, 245, 0.3)',
+    textMuted: '#3a3a3c',
+    chartGrid: '#2c2c2e',
+    chartTooltipBg: 'rgba(28, 28, 30, 0.85)',
+    chartTooltipBorder: '#38383a',
+    tableBg: 'transparent',
+    tableRowHover: '#2c2c2e',
+    tableRowAlt: 'transparent',
+    stickyBg: '#1c1c1e',
+    cursorFill: 'rgba(255,255,255,0.04)',
+    neutralPillBg: '#2c2c2e',
+    positive: '#32d74b',
+    negative: '#ff453a',
+    fairValue: '#8e8e93',
+    positiveBg: 'rgba(50, 215, 75, 0.12)',
+    negativeBg: 'rgba(255, 69, 58, 0.12)',
+    positiveBorder: 'rgba(50, 215, 75, 0.2)',
+    negativeBorder: 'rgba(255, 69, 58, 0.2)',
+    accent: '#0a84ff',
+    accentAlt: '#64d2ff',
+    warning: '#ff9f0a',
+    warningText: '#ff9f0a',
+    warningBg: 'rgba(255, 159, 10, 0.12)',
+    warningBorder: 'rgba(255, 159, 10, 0.2)',
+    warningStrong: '#ffd60a',
+    headerBg: 'rgba(0, 0, 0, 0.72)',
+    heroGradient: '#000000',
   },
   light: {
-    bg: '#f5f6fa',
+    bg: '#f2f2f7',
     bgCard: '#ffffff',
-    bgElevated: '#eef0f7',
+    bgElevated: '#f9f9fb',
     bgInput: '#ffffff',
-    border: 'rgba(0, 0, 0, 0.07)',
-    borderHover: 'rgba(0, 0, 0, 0.14)',
-    borderStrong: 'rgba(0, 0, 0, 0.2)',
-    text: '#0f1729',
-    textSecondary: '#4b5563',
-    textTertiary: '#94a3b8',
-    textMuted: '#cbd5e1',
-    chartGrid: 'rgba(0,0,0,0.06)',
-    chartTooltipBg: '#ffffff',
-    chartTooltipBorder: 'rgba(0,0,0,0.08)',
-    tableBg: '#f5f6fa',
-    tableRowHover: 'rgba(0,0,0,0.02)',
-    tableRowAlt: 'rgba(0,0,0,0.015)',
+    border: '#e5e5ea',
+    borderHover: '#d1d1d6',
+    borderStrong: '#c7c7cc',
+    text: '#1c1c1e',
+    textSecondary: '#6c6c70',
+    textTertiary: '#8e8e93',
+    textMuted: '#aeaeb2',
+    chartGrid: '#f2f2f7',
+    chartTooltipBg: 'rgba(255, 255, 255, 0.85)',
+    chartTooltipBorder: '#e5e5ea',
+    tableBg: 'transparent',
+    tableRowHover: '#f2f2f7',
+    tableRowAlt: 'transparent',
     stickyBg: '#ffffff',
-    cursorFill: 'rgba(0,0,0,0.03)',
-    neutralPillBg: 'rgba(0,0,0,0.03)',
-    positive: '#059669',
-    negative: '#dc2626',
-    fairValue: '#4b5563',
-    positiveBg: 'rgba(5,150,105,0.06)',
-    negativeBg: 'rgba(220,38,38,0.06)',
-    positiveBorder: 'rgba(5,150,105,0.18)',
-    negativeBorder: 'rgba(220,38,38,0.18)',
-    accent: '#2563eb',
-    accentAlt: '#7c3aed',
-    warning: '#d97706',
-    warningText: '#92400e',
-    warningBg: 'rgba(217,119,6,0.05)',
-    warningBorder: 'rgba(217,119,6,0.18)',
-    warningStrong: '#b45309',
-    headerBg: 'rgba(245,246,250,0.88)',
-    heroGradient: 'linear-gradient(135deg, #dbeafe 0%, #e0e7ff 40%, #ede9fe 100%)',
+    cursorFill: 'rgba(0,0,0,0.02)',
+    neutralPillBg: '#f2f2f7',
+    positive: '#34c759',
+    negative: '#ff3b30',
+    fairValue: '#8e8e93',
+    positiveBg: 'rgba(52, 199, 89, 0.1)',
+    negativeBg: 'rgba(255, 59, 48, 0.1)',
+    positiveBorder: 'rgba(52, 199, 89, 0.2)',
+    negativeBorder: 'rgba(255, 59, 48, 0.2)',
+    accent: '#007aff',
+    accentAlt: '#5ac8fa',
+    warning: '#ff9500',
+    warningText: '#ff9500',
+    warningBg: 'rgba(255, 149, 0, 0.1)',
+    warningBorder: 'rgba(255, 149, 0, 0.2)',
+    warningStrong: '#ffcc00',
+    headerBg: 'rgba(242, 242, 247, 0.72)',
+    heroGradient: '#f2f2f7',
   },
 };
 
 const NAV_TABS = [
-  { id: 'overview', label: 'Overview', icon: '\u25C8' },
-  { id: 'valuation', label: 'Valuation', icon: '\u25B2' },
-  { id: 'financials', label: 'Financials', icon: '\u25A0' },
-  { id: 'operating-metrics', label: 'Metrics', icon: '\u25C6' },
-  { id: 'charts', label: 'Charts', icon: '\u25CF' },
-  { id: 'trading', label: 'Trading', icon: '\u2261' },
-  { id: 'institutional', label: 'Institutions', icon: '\u25CB' },
-  { id: 'insider', label: 'Insiders', icon: '\u25D0' },
-  { id: 'profile', label: 'Profile', icon: '\u25CE' },
+  { id: 'overview', label: 'OVRVW', icon: '1' },
+  { id: 'valuation', label: 'VALTN', icon: '2' },
+  { id: 'financials', label: 'FINCL', icon: '3' },
+  { id: 'operating-metrics', label: 'METRX', icon: '4' },
+  { id: 'charts', label: 'CHART', icon: '5' },
+  { id: 'trading', label: 'TRADE', icon: '6' },
+  { id: 'institutional', label: 'INSTN', icon: '7' },
+  { id: 'insider', label: 'INSDR', icon: '8' },
+  { id: 'profile', label: 'PROFL', icon: '9' },
 ];
 
 const TICKER_REGEX = /^[A-Z0-9.\-]{1,10}$/;
@@ -190,12 +190,12 @@ function ChartSection({ title, chartData, dataKeys, colors, unit = '', dataKeyX 
 
   return (
     <div
-      className="p-5 rounded-2xl border transition-colors card-hover"
+      className="p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5 transition-colors card-hover"
       style={{ background: theme.bgCard, borderColor: theme.border }}
     >
       <div className="flex items-center justify-between mb-4">
         <h3
-          className="text-[10px] font-semibold tracking-widest uppercase font-display"
+          className="text-[10px] font-semibold tracking-tight font-sans"
           style={{ color: theme.textSecondary }}
         >
           {title}
@@ -212,20 +212,20 @@ function ChartSection({ title, chartData, dataKeys, colors, unit = '', dataKeyX 
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={chartData} margin={{ top: 10, right: 16, left: -4, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} vertical={false} />
-          <XAxis dataKey={dataKeyX} tick={{ fontFamily: 'var(--font-mono)', fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
+          <XAxis dataKey={dataKeyX} tick={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
           <YAxis
             domain={yDomain}
             tickFormatter={formatAxisTick}
-            tick={{ fontFamily: 'var(--font-mono)', fontSize: 10, fill: theme.textTertiary }}
+            tick={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: 10, fill: theme.textTertiary }}
             axisLine={false}
             tickLine={false}
           />
           <Tooltip
-            contentStyle={{ fontFamily: 'var(--font-mono)', fontSize: 11, borderRadius: '10px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text, boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}
+            contentStyle={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: 11, borderRadius: '0', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text, boxShadow: '0 8px 32px rgba(0,0,0,0.25)' }}
             formatter={(value) => [formatTooltipValue(value), '']}
             cursor={{ fill: theme.cursorFill }}
           />
-          <Legend wrapperStyle={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: theme.textSecondary, paddingTop: '8px' }} />
+          <Legend wrapperStyle={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', fontSize: 10, color: theme.textSecondary, paddingTop: '8px' }} />
           {dataKeys.map((key, i) => (
             <Bar key={key} dataKey={key} fill={colors[i]} radius={[3, 3, 0, 0]} />
           ))}
@@ -246,17 +246,17 @@ function MetricCard({ label, value, subtext, helpText, tone = 'neutral', theme }
 
   return (
     <div
-      className="p-4 rounded-xl border transition-all duration-200 group"
+      className="p-5 rounded-2xl transition-all duration-300 group shadow-sm border border-black/5 dark:border-white/5"
       style={{ background: toneStyles.background, borderColor: toneStyles.borderColor }}
       onMouseEnter={(e) => e.currentTarget.style.borderColor = theme.borderHover}
       onMouseLeave={(e) => e.currentTarget.style.borderColor = toneStyles.borderColor}
     >
-      <div className="flex items-center gap-1.5 mb-2">
-        {toneStyles.dot && <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: toneStyles.dot }} />}
-        <div className="text-[10px] tracking-wider uppercase leading-tight font-display" style={{ color: theme.textTertiary }}>{label}</div>
+      <div className="flex items-center gap-1.5 mb-1">
+        {toneStyles.dot && <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: toneStyles.dot }} />}
+        <div className="text-xs font-medium tracking-tight" style={{ color: theme.textSecondary }}>{label}</div>
         {helpText && (
           <span
-            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border text-[8px] font-bold cursor-help flex-shrink-0"
+            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border text-[9px] font-medium cursor-help flex-shrink-0"
             style={{ color: theme.textTertiary, borderColor: theme.borderStrong, background: theme.bgElevated }}
             title={helpText}
             aria-label={helpText}
@@ -265,8 +265,8 @@ function MetricCard({ label, value, subtext, helpText, tone = 'neutral', theme }
           </span>
         )}
       </div>
-      <div className="text-base font-semibold tracking-tight" style={{ color: toneStyles.valueColor }}>{value}</div>
-      {subtext && <div className="text-[10px] mt-1.5 leading-snug" style={{ color: theme.textMuted }}>{subtext}</div>}
+      <div className="text-xl font-semibold tracking-tight" style={{ color: toneStyles.valueColor }}>{value}</div>
+      {subtext && <div className="text-[11px] mt-1.5 leading-snug" style={{ color: theme.textMuted }}>{subtext}</div>}
     </div>
   );
 }
@@ -538,8 +538,8 @@ function OverviewTab({ data, theme }) {
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview">
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Market Price & Expectations</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-4 tracking-tight font-sans" style={{ color: theme.textSecondary }}>Market Price & Expectations</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <MetricCard theme={theme} label="Current Price" value={safeMoney(currentPrice)} />
           <MetricCard theme={theme} label="Forward P/E" value={safeRatio(forwardPE)} />
@@ -548,8 +548,8 @@ function OverviewTab({ data, theme }) {
         <div className="mt-4 text-xs leading-relaxed" style={{ color: subtleText }}>{priceNarrative}</div>
       </div>
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>What Must Be True</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-4 tracking-tight font-sans" style={{ color: theme.textSecondary }}>What Must Be True</h3>
         <div className="text-xs mb-4" style={{ color: subtleText }}>{impliedExpectationsText}</div>
 
         <div className="text-[10px] mb-2" style={{ color: subtleText }}>Implied Earnings Per Share Growth</div>
@@ -609,17 +609,17 @@ function OverviewTab({ data, theme }) {
         </div>
 
         <div className="mt-5 p-4 rounded-xl border" style={{ background: theme.bg, borderColor: theme.border }}>
-          <div className="text-[10px] tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Where We Are Today (Baseline)</div>
+          <div className="text-[10px] tracking-tight mb-3" style={{ color: theme.textSecondary }}>Where We Are Today (Baseline)</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-3 rounded-lg border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-              <div className="text-[10px] uppercase tracking-wider mb-2 font-display" style={{ color: subtleText }}>Earnings Growth</div>
+              <div className="text-[10px] uppercase tracking-wider mb-2 font-sans" style={{ color: subtleText }}>Earnings Growth</div>
               <div className="text-xs leading-6" style={{ color: theme.text }}>
                 • TTM EPS Growth (YoY): {Number.isFinite(ttmEpsGrowth) ? `${ttmEpsGrowth >= 0 ? '+' : ''}${(ttmEpsGrowth * 100).toFixed(1)}%` : 'N/A'}<br />
                 • 5Y EPS CAGR: {Number.isFinite(eps5yCagr) ? `${eps5yCagr >= 0 ? '+' : ''}${(eps5yCagr * 100).toFixed(1)}%` : 'N/A'}
               </div>
             </div>
             <div className="p-3 rounded-lg border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-              <div className="text-[10px] uppercase tracking-wider mb-2 font-display" style={{ color: subtleText }}>FCF Growth</div>
+              <div className="text-[10px] uppercase tracking-wider mb-2 font-sans" style={{ color: subtleText }}>FCF Growth</div>
               <div className="text-xs leading-6" style={{ color: theme.text }}>
                 • TTM FCF Growth (YoY): {Number.isFinite(ttmFcfGrowth) ? `${ttmFcfGrowth >= 0 ? '+' : ''}${(ttmFcfGrowth * 100).toFixed(1)}%` : 'N/A'}<br />
                 • 5Y FCF CAGR: {Number.isFinite(fcf5yCagr) ? `${fcf5yCagr >= 0 ? '+' : ''}${(fcf5yCagr * 100).toFixed(1)}%` : 'N/A'}
@@ -636,8 +636,8 @@ function OverviewTab({ data, theme }) {
         </div>
       </div>
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Business Reality Check</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-4 tracking-tight font-sans" style={{ color: theme.textSecondary }}>Business Reality Check</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <MetricCard theme={theme} label="Net Margin" value={Number.isFinite(netMargin) ? `${(netMargin * 100).toFixed(2)}%` : 'N/A'} />
           <MetricCard theme={theme} label="ROIC" value={Number.isFinite(roic) ? `${(roic * 100).toFixed(2)}%` : 'N/A'} />
@@ -648,8 +648,8 @@ function OverviewTab({ data, theme }) {
         <div className="mt-4 text-xs leading-relaxed" style={{ color: subtleText }}>{businessRealityInterpretation}</div>
       </div>
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Valuation Context</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-4 tracking-tight font-sans" style={{ color: theme.textSecondary }}>Valuation Context</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <MetricCard theme={theme} label="P/E (TTM)" value={safeRatio(currentPE)} />
           <MetricCard theme={theme} label="Forward P/E" value={safeRatio(forwardPE)} />
@@ -660,15 +660,15 @@ function OverviewTab({ data, theme }) {
           Multiples reflect market expectations for future earnings growth and durability. High multiples are not inherently positive or negative.
         </div>
         <div className="mt-3 p-3 rounded-lg border text-[10px]" style={{ background: theme.bg, borderColor: theme.border, color: subtleText }}>
-          <span className="mr-2 px-2 py-0.5 rounded-full border text-[9px] tracking-wider uppercase font-display" style={{ borderColor: theme.border, color: subtleText }}>
+          <span className="mr-2 px-2 py-0.5 rounded-full border text-[9px] tracking-wider uppercase font-sans" style={{ borderColor: theme.border, color: subtleText }}>
             Heuristic
           </span>
           PEG: {safeRatio(data?.valuationRatios?.current?.pegRatio)} | PSG: {safeRatio(data?.valuationRatios?.current?.psgRatio)}
         </div>
       </div>
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Scenario Sensitivity</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-4 tracking-tight font-sans" style={{ color: theme.textSecondary }}>Scenario Sensitivity</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <MetricCard theme={theme} label={scenarios.base.label} value={safeMoney(scenarios.base.value)} />
           <MetricCard theme={theme} label={scenarios.stress.label} value={safeMoney(scenarios.stress.value)} />
@@ -679,9 +679,9 @@ function OverviewTab({ data, theme }) {
         </div>
       </div>
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Model-Based References</h3>
+          <h3 className="text-xs font-semibold tracking-tight font-sans" style={{ color: theme.textSecondary }}>Model-Based References</h3>
           <button
             onClick={() => setShowReferences((v) => !v)}
             className="px-3 py-2 rounded-lg text-[10px] font-semibold tracking-wider border"
@@ -701,7 +701,7 @@ function OverviewTab({ data, theme }) {
         )}
       </div>
 
-      <div className="p-5 rounded-2xl border text-xs leading-relaxed" style={{ background: theme.bgCard, borderColor: theme.border, color: subtleText }}>
+      <div className="p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5 text-xs leading-relaxed" style={{ background: theme.bgCard, borderColor: theme.border, color: subtleText }}>
         At today&apos;s price, investors are assuming sustained high earnings growth over many years; returns will depend primarily on whether that growth persists.
       </div>
     </div>
@@ -1065,12 +1065,12 @@ function ValuationTab({ data, theme }) {
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-valuation" aria-labelledby="tab-valuation">
 
       {/* A. Valuation Verdict */}
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold tracking-widest uppercase mb-5 font-display" style={{ color: theme.textSecondary }}>Valuation Verdict</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold tracking-tight mb-5 font-sans" style={{ color: theme.textSecondary }}>Valuation Verdict</h3>
         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4">
           {/* Left — Fair Value Range */}
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: valuationSubtleText }}>Fair Value Range (Revenue → FCF)</div>
+            <div className="text-[10px] tracking-tight mb-1 font-sans" style={{ color: valuationSubtleText }}>Fair Value Range (Revenue → FCF)</div>
             <div className="text-xl font-bold" style={{ color: theme.text }}>
               {safeMoney(fpRangeLow)} – {safeMoney(fpRangeHigh)}
             </div>
@@ -1086,7 +1086,7 @@ function ValuationTab({ data, theme }) {
           {/* Center — Verdict Badge */}
           <div className="flex flex-col items-center justify-center px-4">
             <div
-              className="px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase font-display"
+              className="px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase font-sans"
               style={{ background: verdictColor + '18', color: verdictColor, border: `1px solid ${verdictColor}33` }}
             >
               {verdictLabel}
@@ -1097,7 +1097,7 @@ function ValuationTab({ data, theme }) {
           </div>
           {/* Right — Margin of Safety */}
           <div className="flex-1 min-w-0 text-right">
-            <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: valuationSubtleText }}>Margin of Safety</div>
+            <div className="text-[10px] tracking-tight mb-1 font-sans" style={{ color: valuationSubtleText }}>Margin of Safety</div>
             <div className="text-xl font-bold" style={{ color: theme.accent }}>{safeMoney(marginOfSafetyPrice)}</div>
             <div className="text-[10px] mt-1" style={{ color: valuationSubtleText }}>Buy below this for 20% cushion</div>
           </div>
@@ -1128,8 +1128,8 @@ function ValuationTab({ data, theme }) {
       </div>
 
       {/* B. Valuation Assumptions (First-Principles) */}
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold tracking-widest uppercase mb-1 font-display" style={{ color: theme.textSecondary }}>Valuation Assumptions</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold tracking-tight mb-1 font-sans" style={{ color: theme.textSecondary }}>Valuation Assumptions</h3>
         <div className="text-[10px] mb-5" style={{ color: valuationSubtleText }}>Revenue → FCF margin → perpetuity exit. All three inputs are researchable. Drag to stress-test.</div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
@@ -1186,8 +1186,8 @@ function ValuationTab({ data, theme }) {
 
       {/* C. Valuation Range — Football Field */}
       {footballFieldData.length > 0 && (
-        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h3 className="text-xs font-semibold tracking-widest uppercase mb-4 font-display" style={{ color: theme.textSecondary }}>Valuation Range</h3>
+        <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h3 className="text-xs font-semibold tracking-tight mb-4 font-sans" style={{ color: theme.textSecondary }}>Valuation Range</h3>
           <ResponsiveContainer width="100%" height={Math.max(280, footballFieldData.length * 32)}>
             <BarChart layout="vertical" data={footballFieldData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} horizontal={false} />
@@ -1209,7 +1209,7 @@ function ValuationTab({ data, theme }) {
               />
               <Tooltip
                 formatter={(value) => [`$${value?.toFixed(2)}`, 'Value']}
-                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                contentStyle={{ fontSize: 11, borderRadius: '0', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
                 cursor={{ fill: theme.cursorFill }}
               />
               {Number.isFinite(currentPrice) && (
@@ -1250,8 +1250,8 @@ function ValuationTab({ data, theme }) {
       )}
 
       {/* D. What Does the Market Imply? (Reverse DCF) */}
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold tracking-widest uppercase mb-2 font-display" style={{ color: theme.textSecondary }}>What Does the Market Imply?</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold tracking-tight mb-2 font-sans" style={{ color: theme.textSecondary }}>What Does the Market Imply?</h3>
         <div className="text-xs mb-4" style={{ color: valuationSubtleText }}>
           Given your assumptions, what revenue growth or FCF margin does today&apos;s price require?
         </div>
@@ -1259,7 +1259,7 @@ function ValuationTab({ data, theme }) {
         {/* Implied metrics — 2-column */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
           <div className="p-4 rounded-xl border" style={{ background: theme.bg, borderColor: theme.border }}>
-            <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: valuationSubtleText }}>Implied Revenue CAGR</div>
+            <div className="text-[10px] tracking-tight mb-1 font-sans" style={{ color: valuationSubtleText }}>Implied Revenue CAGR</div>
             <div className="text-lg font-bold" style={{ color: Number.isFinite(impliedRevGrowth) && impliedRevGrowth <= assumptionRevGrowth ? theme.positive : theme.warning }}>
               {Number.isFinite(impliedRevGrowth) ? `${impliedRevGrowth.toFixed(1)}%` : 'N/A'}
             </div>
@@ -1268,7 +1268,7 @@ function ValuationTab({ data, theme }) {
             </div>
           </div>
           <div className="p-4 rounded-xl border" style={{ background: theme.bg, borderColor: theme.border }}>
-            <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: valuationSubtleText }}>Implied Target FCF Margin</div>
+            <div className="text-[10px] tracking-tight mb-1 font-sans" style={{ color: valuationSubtleText }}>Implied Target FCF Margin</div>
             <div className="text-lg font-bold" style={{ color: Number.isFinite(impliedTargetMargin) && impliedTargetMargin <= assumptionTargetFcfMargin ? theme.positive : theme.warning }}>
               {Number.isFinite(impliedTargetMargin) ? `${impliedTargetMargin.toFixed(1)}%` : 'N/A'}
             </div>
@@ -1279,7 +1279,7 @@ function ValuationTab({ data, theme }) {
         </div>
 
         {/* Sensitivity grid */}
-        <div className="text-[10px] mb-2 font-display" style={{ color: valuationSubtleText }}>Sensitivity: Fair Value by Growth × FCF Margin</div>
+        <div className="text-[10px] mb-2 font-sans" style={{ color: valuationSubtleText }}>Sensitivity: Fair Value by Growth × FCF Margin</div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
@@ -1326,8 +1326,8 @@ function ValuationTab({ data, theme }) {
 
       {/* E. FCF Waterfall — Year-by-Year Value Breakdown */}
       {fpWaterfallData.length > 0 && (
-        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h3 className="text-xs font-semibold tracking-widest uppercase mb-1 font-display" style={{ color: theme.textSecondary }}>FCF Waterfall</h3>
+        <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h3 className="text-xs font-semibold tracking-tight mb-1 font-sans" style={{ color: theme.textSecondary }}>FCF Waterfall</h3>
           <div className="text-[10px] mb-4" style={{ color: valuationSubtleText }}>Projected free cash flow per share and its present value, year by year. Terminal = perpetuity value of all cash flows beyond year 10.</div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={fpWaterfallData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
@@ -1336,7 +1336,7 @@ function ValuationTab({ data, theme }) {
               <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} tickFormatter={(v) => `$${v}`} axisLine={false} tickLine={false} />
               <Tooltip
                 formatter={(value, name) => [`$${value.toFixed(2)}`, name]}
-                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                contentStyle={{ fontSize: 11, borderRadius: '0', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
                 cursor={{ fill: theme.cursorFill }}
               />
               <Legend wrapperStyle={{ fontSize: 10, color: theme.textSecondary }} />
@@ -1348,10 +1348,10 @@ function ValuationTab({ data, theme }) {
       )}
 
       {/* F. Scenario Analysis (First-Principles) */}
-      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+      <div className="p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: valuationSubtleText }}>Scenario Analysis</div>
+            <div className="text-[10px] tracking-tight mb-1 font-sans" style={{ color: valuationSubtleText }}>Scenario Analysis</div>
             <div className="text-xl font-bold" style={{ color: theme.text }}>
               {safeMoney(fpRangeLow)} – {safeMoney(fpRangeHigh)}
             </div>
@@ -1384,8 +1384,8 @@ function ValuationTab({ data, theme }) {
       </div>
 
       {/* G. Multiples Dashboard (reworked with percentile bars) */}
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold tracking-widest uppercase mb-4 font-display" style={{ color: theme.textSecondary }}>Multiples Dashboard</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold tracking-tight mb-4 font-sans" style={{ color: theme.textSecondary }}>Multiples Dashboard</h3>
 
         {/* Percentile range bars */}
         {percentileMetrics.length > 0 && (
@@ -1441,7 +1441,7 @@ function ValuationTab({ data, theme }) {
         )}
 
         <div className="mt-4 p-3 rounded-lg border text-[10px]" style={{ background: theme.bg, borderColor: theme.border, color: valuationSubtleText }}>
-          <span className="mr-2 px-2 py-0.5 rounded-full border text-[9px] tracking-wider uppercase font-display" style={{ borderColor: theme.border, color: valuationSubtleText }}>
+          <span className="mr-2 px-2 py-0.5 rounded-full border text-[9px] tracking-wider uppercase font-sans" style={{ borderColor: theme.border, color: valuationSubtleText }}>
             Heuristic
           </span>
           {!hasPositiveEarnings ? 'Company has negative earnings — P/E-based metrics show N/M (not meaningful). Valuation relies on P/FCF and P/S.' : 'PEG and PSG ratios can break when growth exceeds ~30-40% or margins are shifting.'}
@@ -1449,18 +1449,18 @@ function ValuationTab({ data, theme }) {
       </div>
 
       {/* H. Expanded Synthesis */}
-      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <div className="text-[10px] tracking-widest uppercase mb-2 font-display" style={{ color: theme.textSecondary }}>Synthesis</div>
+      <div className="p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="text-[10px] tracking-tight mb-2 font-sans" style={{ color: theme.textSecondary }}>Synthesis</div>
         <div className="text-xs leading-relaxed" style={{ color: valuationSubtleText }}>
           {expandedSynthesis}
         </div>
       </div>
 
       {/* I. Legacy / Advanced (unchanged) */}
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Legacy / Advanced</h3>
+            <h3 className="text-xs font-semibold tracking-tight font-sans" style={{ color: theme.textSecondary }}>Legacy / Advanced</h3>
             <div className="text-[10px] mt-1" style={{ color: valuationSubtleText }}>
               Composite (Legacy) blends DCF + historical anchors + analyst target. Assumption-sensitive.
             </div>
@@ -1511,7 +1511,7 @@ function ValuationTab({ data, theme }) {
                   />
                   <Tooltip
                     formatter={(value) => [`$${value?.toFixed(2)}`, 'Model Value']}
-                    contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                    contentStyle={{ fontSize: 11, borderRadius: '0', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
                     cursor={{ fill: theme.cursorFill }}
                   />
                   <ReferenceLine
@@ -1544,7 +1544,7 @@ function ValuationTab({ data, theme }) {
       </div>
 
       {/* J. Transparency Disclaimer (unchanged) */}
-      <div className="p-5 rounded-2xl border text-[10px] leading-relaxed" style={{ background: theme.warningBg, borderColor: theme.warningBorder, color: theme.warningText }}>
+      <div className="p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5 text-[10px] leading-relaxed" style={{ background: theme.warningBg, borderColor: theme.warningBorder, color: theme.warningText }}>
         <span className="font-semibold" style={{ color: theme.warningStrong }}>Transparency:</span> Core valuation uses a first-principles DCF: Revenue → FCF margin convergence → perpetuity exit at 2.5% terminal growth.
         All three inputs (required return, revenue growth, target FCF margin) are researchable. Legacy composite methods remain available under Legacy/Advanced.
       </div>
@@ -1555,7 +1555,7 @@ function FinancialsTab({ data, theme, formatPercent, formatRatio }) {
   if (!data?.ratios?.length) {
     return (
       <div className="animate-fadeIn" role="tabpanel" id="tabpanel-financials" aria-labelledby="tab-financials">
-        <div className="p-6 rounded-2xl border text-center" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5 text-center" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <p className="text-xs" style={{ color: theme.textTertiary }}>No financial ratio data available.</p>
         </div>
       </div>
@@ -1564,8 +1564,8 @@ function FinancialsTab({ data, theme, formatPercent, formatRatio }) {
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-financials" aria-labelledby="tab-financials">
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-5 tracking-tight font-sans" style={{ color: theme.textSecondary }}>
           Historical Financial Ratios
         </h3>
         <div className="overflow-x-auto">
@@ -1812,8 +1812,8 @@ function OperatingMetricsTab({ data, theme }) {
   const ttmCcc = efficiencyRows.find((r) => r.label === 'Cash Conversion Cycle')?.current;
 
   const renderTable = (title, rows) => (
-    <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-      <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>{title}</h3>
+    <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+      <h3 className="text-xs font-semibold mb-5 tracking-tight font-sans" style={{ color: theme.textSecondary }}>{title}</h3>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -1847,8 +1847,8 @@ function OperatingMetricsTab({ data, theme }) {
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-operating-metrics" aria-labelledby="tab-operating-metrics">
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Profitability Ratios</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-5 tracking-tight font-sans" style={{ color: theme.textSecondary }}>Profitability Ratios</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           <MetricCard theme={theme} label="Gross Profit Margin (TTM)" value={formatCell(ttmGross, 'percent')} />
           <MetricCard theme={theme} label="Gross Profit Margin (5-year Average)" value={formatCell(gross5yAvg, 'percent')} />
@@ -1866,8 +1866,8 @@ function OperatingMetricsTab({ data, theme }) {
       {renderTable('Profitability Ratios (Historical)', profitabilityRows)}
       {renderTable('Debt & Liquidity Ratios', debtLiquidityRows)}
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Efficiency Ratios</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-5 tracking-tight font-sans" style={{ color: theme.textSecondary }}>Efficiency Ratios</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           <MetricCard theme={theme} label="Asset Turnover Ratio (TTM)" value={formatCell(ttmAssetTurnover, 'ratio')} />
           <MetricCard theme={theme} label="CapEx to Operating Cash Flow (TTM)" value={formatCell(ttmCapexToOcf, 'ratio')} />
@@ -1884,8 +1884,8 @@ function OperatingMetricsTab({ data, theme }) {
       {renderTable('Efficiency Ratios (Historical)', efficiencyRows)}
       {renderTable('Price Ratios', priceRatioRows)}
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-5 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Growth</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-5 tracking-tight font-sans" style={{ color: theme.textSecondary }}>Growth</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
@@ -1948,19 +1948,19 @@ function ChartsTab({ theme, viewMode, setViewMode, marginData, returnData, incom
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-charts" aria-labelledby="tab-charts">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Financial Charts</h3>
+        <h3 className="text-xs font-semibold tracking-tight font-sans" style={{ color: theme.textSecondary }}>Financial Charts</h3>
         <div className="flex rounded-lg p-1 border" style={{ background: theme.bg, borderColor: theme.border }}>
           <button
             onClick={() => setViewMode('annual')}
             className="px-4 py-2 text-[10px] font-semibold tracking-wider rounded-md transition-all"
-            style={viewMode === 'annual' ? { background: '#2563eb', color: '#fff' } : { color: theme.textTertiary }}
+            style={viewMode === 'annual' ? { background: theme.accent, color: '#000' } : { color: theme.textTertiary }}
           >
             ANNUAL
           </button>
           <button
             onClick={() => setViewMode('quarterly')}
             className="px-4 py-2 text-[10px] font-semibold tracking-wider rounded-md transition-all"
-            style={viewMode === 'quarterly' ? { background: '#2563eb', color: '#fff' } : { color: theme.textTertiary }}
+            style={viewMode === 'quarterly' ? { background: theme.accent, color: '#000' } : { color: theme.textTertiary }}
           >
             QUARTERLY
           </button>
@@ -1987,8 +1987,8 @@ function ProfileTab({ data, theme }) {
 
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-profile" aria-labelledby="tab-profile">
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold mb-4 tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Company Profile</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold mb-4 tracking-tight font-sans" style={{ color: theme.textSecondary }}>Company Profile</h3>
         <p className="text-xs leading-relaxed" style={{ color: theme.textSecondary }}>
           {data?.profile?.description?.slice(0, 600)}
           {data?.profile?.description?.length > 600 ? '...' : ''}
@@ -2010,7 +2010,7 @@ function ProfileTab({ data, theme }) {
       </div>
 
       {/* Disclaimer */}
-      <div className="p-5 rounded-2xl border text-xs leading-relaxed" style={{ background: theme.warningBg, borderColor: theme.warningBorder, color: theme.warningText }}>
+      <div className="p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5 text-xs leading-relaxed" style={{ background: theme.warningBg, borderColor: theme.warningBorder, color: theme.warningText }}>
         <span className="font-semibold" style={{ color: theme.warningStrong }}>Disclaimer:</span> This calculator provides estimates based on publicly
         available financial data and standard valuation models (DCF, Graham Number, multiples).
         It should not be considered financial advice. Always conduct your own due diligence and
@@ -2113,8 +2113,8 @@ function InsiderActivityTab({ data, theme }) {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h3 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Monthly Buy vs Sell Value</h3>
+        <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h3 className="text-xs font-semibold tracking-tight mb-3" style={{ color: theme.textSecondary }}>Monthly Buy vs Sell Value</h3>
           <div className="text-[10px] mb-3" style={{ color: theme.textMuted }}>
             Monthly buy vs sell volume by dollar value
           </div>
@@ -2124,7 +2124,7 @@ function InsiderActivityTab({ data, theme }) {
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} tickFormatter={(v) => formatMoneyCompact(v)} />
               <Tooltip
-                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                contentStyle={{ fontSize: 11, borderRadius: '0', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
                 formatter={(v, key) => [formatMoney(v), key === 'buyValue' ? 'Buy Value' : 'Sell Value']}
               />
               <Legend wrapperStyle={{ fontSize: 10 }} />
@@ -2134,8 +2134,8 @@ function InsiderActivityTab({ data, theme }) {
           </ResponsiveContainer>
         </div>
 
-        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h3 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Monthly Net Insider Flow</h3>
+        <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h3 className="text-xs font-semibold tracking-tight mb-3" style={{ color: theme.textSecondary }}>Monthly Net Insider Flow</h3>
           <div className="text-[10px] mb-3" style={{ color: theme.textMuted }}>
             Net flow = buys minus sells per month
           </div>
@@ -2145,7 +2145,7 @@ function InsiderActivityTab({ data, theme }) {
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} tickFormatter={(v) => formatMoneyCompact(v)} />
               <Tooltip
-                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                contentStyle={{ fontSize: 11, borderRadius: '0', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
                 formatter={(v) => [formatMoney(v), 'Net Flow']}
               />
               <ReferenceLine y={0} stroke={theme.borderStrong} />
@@ -2159,8 +2159,8 @@ function InsiderActivityTab({ data, theme }) {
         </div>
       </div>
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h3 className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: theme.textSecondary }}>Top Insider Net Activity (6M)</h3>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h3 className="text-xs font-semibold tracking-tight mb-4" style={{ color: theme.textSecondary }}>Top Insider Net Activity (6M)</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
           {topInsiders.length > 0 ? topInsiders.map((insider) => (
             <MetricCard
@@ -2177,9 +2177,9 @@ function InsiderActivityTab({ data, theme }) {
         </div>
       </div>
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-start justify-between gap-3 mb-4">
-          <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Recent Insider Transactions (6M)</h3>
+          <h3 className="text-xs font-semibold tracking-tight font-sans" style={{ color: theme.textSecondary }}>Recent Insider Transactions (6M)</h3>
           <div className="text-[10px]" style={{ color: theme.textMuted }}>Most recent filings in the last 6 months</div>
         </div>
 
@@ -2305,8 +2305,8 @@ function InstitutionalOwnershipTab({ data, theme }) {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h3 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Largest Holders by Reported Value</h3>
+        <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h3 className="text-xs font-semibold tracking-tight mb-3" style={{ color: theme.textSecondary }}>Largest Holders by Reported Value</h3>
           <div className="text-[10px] mb-3" style={{ color: theme.textMuted }}>
             Position size by reported market value
           </div>
@@ -2316,7 +2316,7 @@ function InstitutionalOwnershipTab({ data, theme }) {
               <XAxis type="number" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} tickFormatter={(v) => formatMoney(v)} />
               <YAxis dataKey="holder" type="category" width={170} tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
               <Tooltip
-                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                contentStyle={{ fontSize: 11, borderRadius: '0', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
                 formatter={(v, _, row) => [formatMoney(v), `${row?.payload?.source || 'Holder'} Value`]}
               />
               <Bar dataKey="value" name="Reported Value" radius={[0, 4, 4, 0]}>
@@ -2328,8 +2328,8 @@ function InstitutionalOwnershipTab({ data, theme }) {
           </ResponsiveContainer>
         </div>
 
-        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h3 className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: theme.textSecondary }}>Holder Action Distribution</h3>
+        <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h3 className="text-xs font-semibold tracking-tight mb-3" style={{ color: theme.textSecondary }}>Holder Action Distribution</h3>
           <div className="text-[10px] mb-3" style={{ color: theme.textMuted }}>
             Buying, selling, or unchanged based on reported delta
           </div>
@@ -2339,7 +2339,7 @@ function InstitutionalOwnershipTab({ data, theme }) {
               <XAxis dataKey="action" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} />
               <Tooltip
-                contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
+                contentStyle={{ fontSize: 11, borderRadius: '0', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }}
                 formatter={(v) => [v, 'Holder Count']}
               />
               <ReferenceLine y={0} stroke={theme.borderStrong} />
@@ -2353,9 +2353,9 @@ function InstitutionalOwnershipTab({ data, theme }) {
         </div>
       </div>
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-start justify-between gap-3 mb-4">
-          <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Largest Institutional and Fund Holders</h3>
+          <h3 className="text-xs font-semibold tracking-tight font-sans" style={{ color: theme.textSecondary }}>Largest Institutional and Fund Holders</h3>
           <div className="text-[10px]" style={{ color: theme.textMuted }}>Sorted by reported position value</div>
         </div>
         {holders.length > 0 ? (
@@ -2901,7 +2901,7 @@ function TradingTab({ data, theme }) {
 
   if (!analysis) {
     return (
-      <div className="animate-fadeIn p-6 rounded-2xl border text-xs" style={{ background: theme.bgCard, borderColor: theme.border, color: theme.textTertiary }}>
+      <div className="animate-fadeIn p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5 text-xs" style={{ background: theme.bgCard, borderColor: theme.border, color: theme.textTertiary }}>
         Trading section needs at least ~220 daily candles for this ticker.
       </div>
     );
@@ -3094,10 +3094,10 @@ function TradingTab({ data, theme }) {
   return (
     <div className="animate-fadeIn space-y-6" role="tabpanel" id="tabpanel-trading" aria-labelledby="tab-trading">
       {signal && (
-        <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
             <div>
-              <div className="text-[10px] tracking-widest uppercase mb-1" style={{ color: theme.textTertiary }}>Optimal Entry Engine</div>
+              <div className="text-[10px] tracking-tight mb-1" style={{ color: theme.textTertiary }}>Optimal Entry Engine</div>
               <div className="text-lg font-bold" style={{ color: actionTone }}>{signal.action || 'WAIT'}</div>
               <div className="text-xs mt-1" style={{ color: theme.textSecondary }}>
                 {signal.regime || 'UNKNOWN'} regime • {signal.meanType || 'Mean not available'}
@@ -3140,7 +3140,7 @@ function TradingTab({ data, theme }) {
             Price position: <b>{zScoreMeaning}</b> — how far the current price is from its recent average
           </div>
           <div className="mt-4">
-            <div className="text-[10px] tracking-widest uppercase mb-2 font-display" style={{ color: theme.textTertiary }}>Price vs Recent Average</div>
+            <div className="text-[10px] tracking-tight mb-2 font-sans" style={{ color: theme.textTertiary }}>Price vs Recent Average</div>
             <div className="relative h-10 rounded-lg border overflow-hidden" style={{ borderColor: theme.border }}>
               <div
                 className="absolute inset-0"
@@ -3166,7 +3166,7 @@ function TradingTab({ data, theme }) {
                 {zScoreForLadder === null ? 'N/A' : `${zScoreForLadder.toFixed(2)}σ`}
               </div>
             </div>
-            <div className="mt-1.5 flex justify-between text-[9px] font-display" style={{ color: theme.textTertiary }}>
+            <div className="mt-1.5 flex justify-between text-[9px] font-sans" style={{ color: theme.textTertiary }}>
               <span style={{ color: theme.positive }}>Cheap</span>
               <span>Below Avg</span>
               <span>Fair Value</span>
@@ -3184,9 +3184,9 @@ function TradingTab({ data, theme }) {
         </div>
       )}
 
-      <div className="p-6 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+      <div className="p-6 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-          <h3 className="text-xs font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Price Chart & Key Levels</h3>
+          <h3 className="text-xs font-semibold tracking-tight font-sans" style={{ color: theme.textSecondary }}>Price Chart & Key Levels</h3>
           <div className="flex items-center gap-2">
             {['6M', '1Y', '2Y'].map((tf) => (
               <button
@@ -3223,7 +3223,7 @@ function TradingTab({ data, theme }) {
             ))}
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} minTickGap={28} />
             <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} domain={['auto', 'auto']} />
-            <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} />
+            <Tooltip contentStyle={{ fontSize: 11, borderRadius: '0', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} />
             {/* Tier 1: Price — bold and dominant */}
             <Line type="monotone" dataKey="close" stroke={tradePalette.price} dot={false} strokeWidth={2.5} name="Close" />
             {/* Tier 2: Key moving averages — clear and visible */}
@@ -3301,7 +3301,7 @@ function TradingTab({ data, theme }) {
         {/* Trend shading legend */}
         {trendSegments.length > 0 && (
           <div className="mt-2 pt-2 border-t flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px]" style={{ borderColor: theme.border, color: theme.textTertiary }}>
-            <span className="font-display font-semibold tracking-wider uppercase" style={{ color: theme.textSecondary }}>Trend</span>
+            <span className="font-sans font-semibold tracking-wider uppercase" style={{ color: theme.textSecondary }}>Trend</span>
             <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#22c55e', opacity: 0.35 }} />Uptrend</span>
             <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444', opacity: 0.2 }} />Price &lt; 200 DMA</span>
             <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#ef4444', opacity: 0.45 }} />Death Cross</span>
@@ -3320,9 +3320,9 @@ function TradingTab({ data, theme }) {
 
       {/* Volume Profile */}
       {volumeProfileData.length > 0 && (
-        <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Volume Profile (1Y)</h4>
+            <h4 className="text-[11px] font-semibold tracking-tight font-sans" style={{ color: theme.textSecondary }}>Volume Profile (1Y)</h4>
             <div className="flex items-center gap-3 text-[10px]" style={{ color: theme.textTertiary }}>
               <span className="flex items-center gap-1"><span className="inline-block w-8 h-2.5 rounded-sm" style={{ background: 'linear-gradient(90deg, #0ea5e922, #10b981cc)' }} />Low → High volume</span>
               <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: theme.accent }} />POC</span>
@@ -3336,7 +3336,7 @@ function TradingTab({ data, theme }) {
               <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 9, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} interval={1} angle={-35} textAnchor="end" height={45} />
               <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Number(v).toFixed(1)}%`} />
-              <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v, k, p) => [`${Number(v).toFixed(1)}% of volume (${(p.payload.vol / 1e6).toFixed(1)}M shares)`, p.payload.fullLabel]} />
+              <Tooltip contentStyle={{ fontSize: 11, borderRadius: '0', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v, k, p) => [`${Number(v).toFixed(1)}% of volume (${(p.payload.vol / 1e6).toFixed(1)}M shares)`, p.payload.fullLabel]} />
               {currentPriceBinLabel && (
                 <ReferenceLine x={currentPriceBinLabel} stroke={tradePalette.price} strokeWidth={2} strokeDasharray="4 3" label={{ value: 'Price', position: 'top', fill: tradePalette.price, fontSize: 10 }} />
               )}
@@ -3355,8 +3355,8 @@ function TradingTab({ data, theme }) {
       )}
 
       {/* Price Action Zones */}
-      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-        <h4 className="text-[11px] font-semibold tracking-widest uppercase mb-3 font-display" style={{ color: theme.textSecondary }}>Price Action Zones</h4>
+      <div className="p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <h4 className="text-[11px] font-semibold tracking-tight mb-3 font-sans" style={{ color: theme.textSecondary }}>Price Action Zones</h4>
         <div className="mb-4 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
           Where the current price sits relative to key volume-based levels. Based on 1 year of trading data.
         </div>
@@ -3405,8 +3405,8 @@ function TradingTab({ data, theme }) {
           <div className="lg:col-span-2 space-y-3">
             {/* Main action card */}
             <div className="p-4 rounded-xl border" style={{ background: `${actionZone.color}10`, borderColor: `${actionZone.color}33` }}>
-              <div className="text-[10px] tracking-widest uppercase mb-1 font-display" style={{ color: theme.textTertiary }}>Current Zone</div>
-              <div className="text-lg font-bold mb-2 font-display" style={{ color: actionZone.color }}>{actionZone.actionLabel}</div>
+              <div className="text-[10px] tracking-tight mb-1 font-sans" style={{ color: theme.textTertiary }}>Current Zone</div>
+              <div className="text-lg font-bold mb-2 font-sans" style={{ color: actionZone.color }}>{actionZone.actionLabel}</div>
               <div className="text-xs leading-relaxed" style={{ color: theme.textSecondary }}>{actionZone.guidance}</div>
             </div>
             {/* Key levels summary */}
@@ -3423,9 +3423,9 @@ function TradingTab({ data, theme }) {
       {/* Z-Score Heat Map + Sigma Price Ladder */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         {/* Z-Score with sigma bands */}
-        <div className="xl:col-span-2 p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+        <div className="xl:col-span-2 p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
           <div className="flex items-center justify-between mb-3">
-            <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>Price Deviation (60-Day Z-Score)</h4>
+            <h4 className="text-[11px] font-semibold tracking-tight font-sans" style={{ color: theme.textSecondary }}>Price Deviation (60-Day Z-Score)</h4>
             {Number.isFinite(signal?.zScore) && (
               <div className="text-[10px] font-semibold px-2 py-1 rounded border" style={{ color: actionTone, borderColor: `${actionTone}55`, background: `${actionTone}14` }}>
                 Current: {signal.zScore.toFixed(2)}σ
@@ -3446,7 +3446,7 @@ function TradingTab({ data, theme }) {
               <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} minTickGap={28} />
               <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} domain={[-3.5, 3.5]} />
-              <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v) => [Number.isFinite(v) ? `${v.toFixed(2)}σ` : 'N/A', 'Price Deviation']} />
+              <Tooltip contentStyle={{ fontSize: 11, borderRadius: '0', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v) => [Number.isFinite(v) ? `${v.toFixed(2)}σ` : 'N/A', 'Price Deviation']} />
               {/* ±1σ band - blue (normal) */}
               <ReferenceArea y1={-1} y2={1} fill="#3b82f6" fillOpacity={0.12} />
               {/* ±2σ band - orange (stretched) */}
@@ -3462,8 +3462,8 @@ function TradingTab({ data, theme }) {
         </div>
 
         {/* Sigma Price Ladder */}
-        <div className="xl:col-span-1 p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h4 className="text-[11px] font-semibold tracking-widest uppercase mb-3 font-display" style={{ color: theme.textSecondary }}>Price Targets by Deviation</h4>
+        <div className="xl:col-span-1 p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h4 className="text-[11px] font-semibold tracking-tight mb-3 font-sans" style={{ color: theme.textSecondary }}>Price Targets by Deviation</h4>
           <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
             What price each deviation level translates to. Green = buying opportunities. Red = consider selling.
           </div>
@@ -3485,7 +3485,7 @@ function TradingTab({ data, theme }) {
                   >
                     <div className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: level.color }} />
-                      <span className="text-[11px] font-semibold font-display" style={{ color: level.color }}>{level.label}</span>
+                      <span className="text-[11px] font-semibold font-sans" style={{ color: level.color }}>{level.label}</span>
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-bold" style={{ color: isCurrentZone ? level.color : theme.text }}>{formatPx(level.price)}</div>
@@ -3496,7 +3496,7 @@ function TradingTab({ data, theme }) {
               })}
               {Number.isFinite(signal?.zScore) && (
                 <div className="mt-3 p-2.5 rounded-lg border text-center" style={{ borderColor: `${actionTone}44`, background: `${actionTone}0a` }}>
-                  <div className="text-[9px] uppercase tracking-wider mb-0.5 font-display" style={{ color: theme.textTertiary }}>Current Position</div>
+                  <div className="text-[9px] uppercase tracking-wider mb-0.5 font-sans" style={{ color: theme.textTertiary }}>Current Position</div>
                   <div className="text-base font-bold" style={{ color: actionTone }}>{signal.zScore.toFixed(2)}σ = {formatPx(currentPrice)}</div>
                 </div>
               )}
@@ -3508,9 +3508,9 @@ function TradingTab({ data, theme }) {
       </div>
 
       {/* How Far from the Trend? */}
-      <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
+      <div className="p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
         <div className="flex items-center justify-between mb-3">
-          <h4 className="text-[11px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>How Far from the Trend?</h4>
+          <h4 className="text-[11px] font-semibold tracking-tight font-sans" style={{ color: theme.textSecondary }}>How Far from the Trend?</h4>
           <div className="text-[10px] font-semibold px-2 py-1 rounded border" style={{ color: actionTone, borderColor: `${actionTone}55`, background: `${actionTone}14` }}>
             {Number.isFinite(analysis.latestDeviationPct) ? `${analysis.latestDeviationPct >= 0 ? '+' : ''}${analysis.latestDeviationPct.toFixed(1)}% from 50DMA` : 'N/A'}
           </div>
@@ -3541,7 +3541,7 @@ function TradingTab({ data, theme }) {
             <CartesianGrid strokeDasharray="3 3" stroke={theme.chartGrid} vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 10, fill: theme.text, fontWeight: 500 }} axisLine={{ stroke: theme.chartGrid }} tickLine={false} interval={0} />
             <YAxis tick={{ fontSize: 10, fill: theme.textTertiary }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Number(v).toFixed(0)}%`} />
-            <Tooltip contentStyle={{ fontSize: 11, borderRadius: '8px', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v, k, p) => [`${Number(v).toFixed(1)}% of trading days (${p.payload.count} days)`, '']} />
+            <Tooltip contentStyle={{ fontSize: 11, borderRadius: '0', background: theme.chartTooltipBg, border: `1px solid ${theme.chartTooltipBorder}`, color: theme.text }} formatter={(v, k, p) => [`${Number(v).toFixed(1)}% of trading days (${p.payload.count} days)`, '']} />
             {analysis.currentDeviationBinLabel && (
               <ReferenceLine x={analysis.currentDeviationBinLabel} stroke={actionTone} strokeWidth={2} strokeDasharray="4 3" label={{ value: 'You', position: 'top', fill: actionTone, fontSize: 10, fontWeight: 700 }} />
             )}
@@ -3637,8 +3637,8 @@ function TradingTab({ data, theme }) {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h4 className="text-[11px] font-semibold tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>Decision Tree (Auto)</h4>
+        <div className="p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h4 className="text-[11px] font-semibold tracking-tight mb-2" style={{ color: theme.textSecondary }}>Decision Tree (Auto)</h4>
           <ul className="space-y-1.5 text-xs" style={{ color: theme.textSecondary }}>
             <li>• Bullish if: above Yearly VWAP, VAH held, HH/HL, strong weekly close.</li>
             <li>• Bearish if: below Yearly VWAP, VAH rejection, LH/LL.</li>
@@ -3646,8 +3646,8 @@ function TradingTab({ data, theme }) {
           </ul>
           <div className="mt-3 text-[11px] font-semibold" style={{ color: regimeTone }}>Current Classification: {analysis.regime}</div>
         </div>
-        <div className="p-5 rounded-2xl border" style={{ background: theme.bgCard, borderColor: theme.border }}>
-          <h4 className="text-[11px] font-semibold tracking-widest uppercase mb-2" style={{ color: theme.textSecondary }}>Principle Mapping</h4>
+        <div className="p-5 rounded-3xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+          <h4 className="text-[11px] font-semibold tracking-tight mb-2" style={{ color: theme.textSecondary }}>Principle Mapping</h4>
           <ul className="space-y-1.5 text-xs" style={{ color: theme.textSecondary }}>
             <li>• Anchored VWAPs: Yearly, Cycle-Low, ATH, Regime anchor are auto-drawn.</li>
             <li>• Liquidity rails: Yearly High/Low are auto-drawn.</li>
@@ -3892,158 +3892,176 @@ export default function StockValuationCalculator() {
   };
 
   return (
-    <div className="min-h-screen transition-colors duration-300 noise-overlay relative" style={{ background: t.bg, color: t.text }}>
-      {/* Top Navigation Bar */}
+    <div className="min-h-screen font-sans text-sm pb-20 stager-children" style={{ background: t.bg, color: t.text }}>
+      {/* ═══ BLOOMBERG TOP BAR ═══ */}
       <header
-        className="sticky top-0 z-50 glass border-b transition-colors duration-300"
+        className="sticky top-0 z-50 border-b"
         style={{ background: t.headerBg, borderColor: t.border }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-13">
-            {/* Logo / Brand */}
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: t.positive }} />
-                <span className="text-[11px] font-bold tracking-[0.2em] uppercase font-display" style={{ color: t.text }}>SVC</span>
-              </div>
-              <div className="hidden sm:block h-3.5 w-px" style={{ background: t.border }} />
-              <span className="hidden sm:block text-[10px] tracking-wider font-display" style={{ color: t.textTertiary }}>
-                Stock Valuation
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-10">
+            {/* Terminal ID */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold tracking-[0.15em]" style={{ color: t.accent }}>SVC</span>
+              <span className="text-[10px]" style={{ color: t.border }}>│</span>
+              <span className="hidden sm:inline text-[10px]" style={{ color: t.textTertiary }}>
+                STOCK VALUATION TERMINAL
+              </span>
+              <span className="hidden sm:inline text-[10px]" style={{ color: t.border }}>│</span>
+              <span className="hidden sm:inline text-[10px] animate-pulse" style={{ color: t.positive }}>
+                ● LIVE
               </span>
             </div>
 
-            {/* Search Bar */}
-            <div className="flex items-center gap-2.5">
-              <div className="flex items-center rounded-lg border overflow-hidden" style={{ borderColor: t.border, background: t.bgInput }}>
+            {/* Command Input */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center border overflow-hidden" style={{ borderColor: t.border, background: t.bgInput }}>
+                <span className="px-2 py-1.5 text-[10px] border-r" style={{ color: t.accent, borderColor: t.border, background: t.bgCard }}>{'>'}</span>
                 <input
                   type="text"
                   value={ticker}
                   onChange={(e) => setTicker(e.target.value.toUpperCase())}
                   onKeyDown={(e) => e.key === 'Enter' && fetchStockData()}
-                  placeholder="Ticker..."
+                  placeholder="TICKER"
                   aria-label="Stock ticker symbol"
-                  className="w-24 sm:w-36 px-3 py-2 text-xs bg-transparent border-none focus:ring-0 focus:shadow-none"
-                  style={{ color: t.text, outline: 'none', boxShadow: 'none' }}
+                  className="w-20 sm:w-32 px-2 py-1.5 text-[11px] bg-transparent border-none focus:ring-0 focus:shadow-none tracking-wider"
+                  style={{ color: t.accent, outline: 'none', boxShadow: 'none' }}
                 />
                 <button
                   onClick={fetchStockData}
                   disabled={loading}
-                  className="px-4 py-2 text-[10px] font-semibold tracking-wider transition-all font-display border-l"
+                  className="px-3 py-1.5 text-[10px] font-bold tracking-wider border-l"
                   style={loading
                     ? { background: t.bgElevated, color: t.textTertiary, cursor: 'not-allowed', borderColor: t.border }
-                    : { background: '#2563eb', color: '#fff', borderColor: 'transparent' }
+                    : { background: t.accent, color: '#000000', borderColor: t.border }
                   }
                 >
-                  {loading ? '...' : 'GO'}
+                  {loading ? '···' : 'GO'}
                 </button>
               </div>
 
               {/* Theme Toggle */}
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded-lg border transition-all"
-                style={{ borderColor: t.border, color: t.textSecondary, background: t.bgCard }}
+                className="px-2 py-1.5 border text-[10px] tracking-wider"
+                style={{ borderColor: t.border, color: t.textTertiary, background: t.bgCard }}
                 aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
                 title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               >
-                {isDark ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-                  </svg>
-                ) : (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                  </svg>
-                )}
+                {isDark ? 'I' : 'II'}
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Error Message */}
+      {/* ─── ERROR ─── */}
       {error && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 animate-fadeIn">
-          <div className="p-3 rounded-xl text-xs border flex items-center gap-2" role="alert" style={{ background: t.negativeBg, color: t.negative, borderColor: t.negativeBorder }}>
-            <span className="text-base">!</span> {error}
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-3 animate-fadeIn">
+          <div className="p-2 text-[11px] border flex items-center gap-2" role="alert" style={{ background: t.negativeBg, color: t.negative, borderColor: t.negativeBorder }}>
+            <span style={{ color: t.negative }}>ERR&gt;</span> {error}
           </div>
         </div>
       )}
 
-      {/* Loading State */}
+      {/* ─── LOADING ─── */}
       {loading && (
         <div className="text-center py-36 animate-fadeIn">
-          <div className="inline-flex flex-col items-center gap-5">
-            <div className="relative w-12 h-12">
-              <div className="absolute inset-0 border-2 rounded-full animate-spin" style={{ borderColor: t.border, borderTopColor: t.accent }} />
-              <div className="absolute inset-2 border-2 rounded-full animate-spin" style={{ borderColor: t.border, borderTopColor: t.accentAlt, animationDirection: 'reverse', animationDuration: '0.8s' }} />
+          <div className="inline-flex flex-col items-center gap-4">
+            <div className="text-[11px] tracking-widest" style={{ color: t.accent }}>
+              ╔══════════════════════════╗
             </div>
-            <div className="text-xs tracking-widest uppercase font-display" style={{ color: t.textTertiary }}>Analyzing...</div>
+            <div className="text-[11px] tracking-wider" style={{ color: t.textSecondary }}>
+              FETCHING DATA<span className="animate-pulse" style={{ color: t.accent }}>...</span>
+            </div>
+            <div className="text-[11px] tracking-widest" style={{ color: t.accent }}>
+              ╚══════════════════════════╝
+            </div>
           </div>
         </div>
       )}
 
-      {/* Empty / Landing State */}
+      {/* ═══ TERMINAL LANDING ═══ */}
       {!data && !loading && (
         <div className="flex items-center justify-center min-h-[75vh]">
-          <div className="text-center max-w-lg px-6 animate-fadeIn">
-            <div className="mb-6">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] tracking-widest uppercase font-display mb-6" style={{ borderColor: t.border, color: t.textTertiary, background: t.bgCard }}>
-                <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: t.positive }} />
-                Live Data
-              </div>
+          <div className="text-center max-w-xl px-6 animate-fadeIn">
+            <div className="mb-8 text-[10px]" style={{ color: t.border }}>
+              ╔════════════════════════════════════════════════╗
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-4 font-display" style={{ color: t.text }}>
-              Stock Valuation<br/>
-              <span style={{ color: t.accent }}>Calculator</span>
+            <div className="mb-2 text-[10px] tracking-widest" style={{ color: t.textTertiary }}>
+              ── SYSTEM READY ──
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-wider mb-3" style={{ color: t.accent }}>
+              SVC TERMINAL
             </h1>
-            <p className="text-sm leading-relaxed mb-8 font-display" style={{ color: t.textSecondary }}>
-              Professional fundamental analysis, intrinsic value estimation, and trading regime detection for any US-listed equity.
-            </p>
-            <div className="flex flex-wrap justify-center gap-2">
+            <div className="text-[11px] leading-relaxed mb-2" style={{ color: t.textSecondary }}>
+              Stock Valuation Calculator
+            </div>
+            <div className="text-[10px] leading-relaxed mb-8" style={{ color: t.textTertiary }}>
+              Fundamental analysis &middot; DCF valuation &middot; Trading signals
+            </div>
+            <div className="mb-6 text-[10px]" style={{ color: t.textTertiary }}>
+              ── SELECT EQUITY ──
+            </div>
+            <div className="flex flex-wrap justify-center gap-1">
               {['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'TSLA', 'AMZN'].map((sym) => (
                 <button
                   key={sym}
                   onClick={() => { setTicker(sym); }}
-                  className="px-3 py-1.5 rounded-lg text-[10px] font-semibold tracking-wider border transition-all font-display"
-                  style={{ color: t.textSecondary, borderColor: t.border, background: t.bgCard }}
+                  className="px-3 py-1.5 text-[11px] font-bold tracking-wider border"
+                  style={{ color: t.accent, borderColor: t.border, background: t.bgCard }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = t.accent; e.currentTarget.style.color = '#000000'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = t.bgCard; e.currentTarget.style.color = t.accent; }}
                 >
                   {sym}
                 </button>
               ))}
+            </div>
+            <div className="mt-8 text-[10px]" style={{ color: t.border }}>
+              ╚════════════════════════════════════════════════╝
             </div>
           </div>
         </div>
       )}
 
       {data && !loading && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {/* Company Header */}
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4">
+          {/* ═══ COMPANY HEADER ═══ */}
           <div
-            className="p-6 sm:p-8 rounded-2xl mb-6 relative overflow-hidden animate-fadeIn"
-            style={{ background: t.heroGradient }}
+            className="border mb-4 animate-fadeIn"
+            style={{ background: t.bgCard, borderColor: t.border }}
           >
-            <div className="absolute inset-0 opacity-20" aria-hidden="true" style={{ backgroundImage: 'radial-gradient(circle at 30% 40%, rgba(255,255,255,0.06) 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
-            <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+            {/* Top amber bar */}
+            <div className="px-4 py-1.5 border-b flex items-center justify-between" style={{ background: t.accent, borderColor: t.border }}>
+              <span className="text-[10px] font-bold tracking-wider" style={{ color: '#000000' }}>
+                {data?.profile?.symbol || 'N/A'} EQUITY
+              </span>
+              <span className="text-[10px] font-bold" style={{ color: '#000000' }}>
+                {data?.profile?.exchangeShortName || ''}
+              </span>
+            </div>
+            <div className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h2 className="text-xl sm:text-2xl font-bold mb-2.5 font-display" style={{ color: isDark ? '#fff' : t.text }}>{data?.profile?.companyName || 'Unknown'}</h2>
-                <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-                  {[data?.profile?.symbol, data?.profile?.exchangeShortName, data?.profile?.sector].filter(Boolean).map((tag) => (
-                    <span key={tag} className="px-2.5 py-1 rounded-full font-display tracking-wide" style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', color: isDark ? 'rgba(255,255,255,0.8)' : t.textSecondary }}>{tag}</span>
+                <h2 className="text-base sm:text-lg font-bold mb-1 tracking-wide" style={{ color: t.text }}>{data?.profile?.companyName || 'Unknown'}</h2>
+                <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                  {[data?.profile?.sector, data?.profile?.industry].filter(Boolean).map((tag) => (
+                    <span key={tag} className="px-2 py-0.5 border" style={{ borderColor: t.border, color: t.textSecondary }}>{tag}</span>
                   ))}
                 </div>
               </div>
               <div className="text-left sm:text-right">
-                <div className="text-3xl sm:text-5xl font-bold tracking-tight font-display" style={{ color: isDark ? '#fff' : t.text }}>
+                <div className="text-2xl sm:text-4xl font-bold tracking-tight" style={{ color: t.text }}>
                   ${data.quote?.price?.toFixed(2) ?? '\u2014'}
                 </div>
                 <div
-                  className="text-xs font-semibold mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-display"
+                  className="text-[11px] font-bold mt-1 inline-flex items-center gap-1 px-2 py-0.5 border"
                   style={{
-                    background: data.quote?.changesPercentage >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                    color: data.quote?.changesPercentage >= 0 ? (isDark ? '#6ee7b7' : '#059669') : (isDark ? '#fca5a5' : '#dc2626'),
+                    borderColor: data.quote?.changesPercentage >= 0 ? t.positiveBorder : t.negativeBorder,
+                    background: data.quote?.changesPercentage >= 0 ? t.positiveBg : t.negativeBg,
+                    color: data.quote?.changesPercentage >= 0 ? t.positive : t.negative,
                   }}
                 >
+                  {data.quote?.changesPercentage >= 0 ? '\u25B2' : '\u25BC'}{' '}
                   {data.quote?.changesPercentage >= 0 ? '+' : '-'}$
                   {Math.abs(data.quote?.change || 0).toFixed(2)} ({Math.abs(data.quote?.changesPercentage || 0).toFixed(2)}%)
                 </div>
@@ -4051,40 +4069,43 @@ export default function StockValuationCalculator() {
             </div>
           </div>
 
-          {/* Tab Navigation */}
+          {/* ═══ SEGMENTED CONTROL NAVIGATION ═══ */}
           <div className="mb-6">
-            <nav className="flex gap-1 overflow-x-auto pb-0.5 -mx-1 px-1" role="tablist" aria-label="Analysis sections">
-              {NAV_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  id={`tab-${tab.id}`}
-                  role="tab"
-                  aria-selected={activeTab === tab.id}
-                  aria-controls={`tabpanel-${tab.id}`}
-                  onClick={() => setActiveTab(tab.id)}
-                  className="px-3.5 py-2 text-[10px] font-semibold tracking-wider uppercase whitespace-nowrap transition-all rounded-lg font-display flex items-center gap-1.5"
-                  style={{
-                    color: activeTab === tab.id ? (isDark ? '#fff' : t.text) : t.textTertiary,
-                    background: activeTab === tab.id ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)') : 'transparent',
-                  }}
-                  onMouseEnter={(e) => { if (activeTab !== tab.id) { e.currentTarget.style.color = t.textSecondary; e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.025)'; } }}
-                  onMouseLeave={(e) => { if (activeTab !== tab.id) { e.currentTarget.style.color = t.textTertiary; e.currentTarget.style.background = 'transparent'; } }}
-                >
-                  <span className="text-[9px] opacity-60">{tab.icon}</span>
-                  {tab.label}
-                </button>
-              ))}
+            <nav className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar" role="tablist" aria-label="Analysis sections">
+              {NAV_TABS.map((tab) => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    id={`tab-${tab.id}`}
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-controls={`tabpanel-${tab.id}`}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`px-4 py-2 text-xs font-semibold tracking-tight whitespace-nowrap flex items-center gap-1.5 rounded-full transition-all duration-300 ${isActive ? 'shadow-sm' : ''}`}
+                    style={{
+                      color: isActive ? t.text : t.textSecondary,
+                      background: isActive ? t.bgCard : 'transparent',
+                      border: isActive ? `1px solid ${t.borderHover}` : '1px solid transparent',
+                    }}
+                    onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.color = t.text; e.currentTarget.style.background = t.bgElevated; } }}
+                    onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.color = t.textSecondary; e.currentTarget.style.background = 'transparent'; } }}
+                  >
+                    <span className="opacity-50 text-[10px]">{tab.icon}</span>
+                    {tab.label}
+                  </button>
+                );
+              })}
             </nav>
-            <div className="h-px mt-1" style={{ background: t.border }} />
           </div>
 
           {/* Active Tab Content */}
           {renderTab()}
 
-          {/* Footer */}
-          <div className="mt-12 pt-6 pb-8 text-center" style={{ borderTop: `1px solid ${t.border}` }}>
-            <div className="text-[10px] tracking-wider font-display" style={{ color: t.textMuted }}>
-              SEC EDGAR & Yahoo Finance | Next.js & Recharts
+          {/* ═══ FOOTER ═══ */}
+          <div className="mt-8 pt-4 pb-6 text-center border-t" style={{ borderColor: t.border }}>
+            <div className="text-[10px] tracking-wider" style={{ color: t.textMuted }}>
+              ── SEC EDGAR │ Yahoo Finance │ SVC Terminal ──
             </div>
           </div>
         </div>
