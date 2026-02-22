@@ -2416,6 +2416,7 @@ function InstitutionalOwnershipTab({ data, theme }) {
 
 function TradingTab({ data, theme }) {
   const [timeframe, setTimeframe] = useState('1Y');
+  const [showGuide, setShowGuide] = useState(false);
 
   const analysis = useMemo(() => {
     const raw = Array.isArray(data?.priceHistory) ? data.priceHistory : [];
@@ -2832,6 +2833,402 @@ function TradingTab({ data, theme }) {
       ? (deviationVals.filter((v) => v <= latestDeviationPct).length / nDev) * 100
       : 0;
 
+    // ---- Institutional Price Action Pattern Detection ----
+    // Swing point detection (local highs and lows over lookback window)
+    const swingLookback = 5;
+    const swingHighs = [];
+    const swingLows = [];
+    for (let i = swingLookback; i < history.length - swingLookback; i++) {
+      let isHigh = true;
+      let isLow = true;
+      for (let j = 1; j <= swingLookback; j++) {
+        if (history[i].high <= history[i - j].high || history[i].high <= history[i + j].high) isHigh = false;
+        if (history[i].low >= history[i - j].low || history[i].low >= history[i + j].low) isLow = false;
+      }
+      if (isHigh) swingHighs.push({ idx: i, price: history[i].high, date: history[i].date });
+      if (isLow) swingLows.push({ idx: i, price: history[i].low, date: history[i].date });
+    }
+
+    // Merge swings into chronological sequence for pattern matching
+    const allSwings = [
+      ...swingHighs.map((s) => ({ ...s, type: 'H' })),
+      ...swingLows.map((s) => ({ ...s, type: 'L' })),
+    ].sort((a, b) => a.idx - b.idx);
+
+    // Label swings as HH, HL, LH, LL based on previous same-type swing
+    const labeledSwings = [];
+    let lastHigh = null;
+    let lastLow = null;
+    for (const swing of allSwings) {
+      if (swing.type === 'H') {
+        const label = lastHigh === null ? 'H' : swing.price > lastHigh.price ? 'HH' : 'LH';
+        labeledSwings.push({ ...swing, label });
+        lastHigh = swing;
+      } else {
+        const label = lastLow === null ? 'L' : swing.price > lastLow.price ? 'HL' : 'LL';
+        labeledSwings.push({ ...swing, label });
+        lastLow = swing;
+      }
+    }
+
+    const ipaPatterns = [];
+    const recentWindow = Math.max(0, history.length - 120); // scan last ~120 bars
+    const atrNow = atr14[atr14.length - 1] || 1;
+    const tolerance = atrNow * 0.3;
+
+    // 1. QM (Quasimodo) Detection — bearish: HH then break of prior LL; bullish: LL then break of prior HH
+    for (let i = 3; i < labeledSwings.length; i++) {
+      const s = labeledSwings;
+      if (s[i].idx < recentWindow) continue;
+      // Bearish QM: H, L, HH, LL (higher high followed by lower low)
+      if (s[i - 3].type === 'H' && s[i - 2].type === 'L' && s[i - 1].type === 'H' && s[i].type === 'L' &&
+          s[i - 1].price > s[i - 3].price && s[i].price < s[i - 2].price) {
+        ipaPatterns.push({
+          name: 'QM (Quasimodo)',
+          type: 'bearish',
+          date: s[i].date,
+          idx: s[i].idx,
+          level: s[i - 2].price,
+          desc: `HH at ${s[i - 1].price.toFixed(2)} then broke prior low ${s[i - 2].price.toFixed(2)} — bearish QM`,
+          category: 'reversal',
+        });
+      }
+      // Bullish QM: L, H, LL, HH (lower low followed by higher high)
+      if (s[i - 3].type === 'L' && s[i - 2].type === 'H' && s[i - 1].type === 'L' && s[i].type === 'H' &&
+          s[i - 1].price < s[i - 3].price && s[i].price > s[i - 2].price) {
+        ipaPatterns.push({
+          name: 'QM (Quasimodo)',
+          type: 'bullish',
+          date: s[i].date,
+          idx: s[i].idx,
+          level: s[i - 2].price,
+          desc: `LL at ${s[i - 1].price.toFixed(2)} then broke prior high ${s[i - 2].price.toFixed(2)} — bullish QM`,
+          category: 'reversal',
+        });
+      }
+    }
+
+    // 2. Liquidity Grab / Stop Hunt — wick beyond key level then close back inside
+    const keyLevels = [
+      { price: vah, name: 'VAH' },
+      { price: val, name: 'VAL' },
+      { price: poc, name: 'POC' },
+      { price: yearlyHigh, name: '52W High' },
+      { price: yearlyLow, name: '52W Low' },
+    ].filter((l) => Number.isFinite(l.price));
+
+    for (let i = Math.max(1, recentWindow); i < history.length; i++) {
+      const bar = history[i];
+      const prevBar = history[i - 1];
+      for (const lvl of keyLevels) {
+        // Upside liquidity grab: wick above level, close below it, prior close also below
+        if (bar.high > lvl.price + tolerance && bar.close < lvl.price && prevBar.close < lvl.price) {
+          ipaPatterns.push({
+            name: 'Liquidity Grab',
+            type: 'bearish',
+            date: bar.date,
+            idx: i,
+            level: lvl.price,
+            desc: `Wick swept above ${lvl.name} (${lvl.price.toFixed(2)}) then closed back below — stop hunt above`,
+            category: 'liquidity',
+          });
+        }
+        // Downside liquidity grab: wick below level, close above it, prior close also above
+        if (bar.low < lvl.price - tolerance && bar.close > lvl.price && prevBar.close > lvl.price) {
+          ipaPatterns.push({
+            name: 'Liquidity Grab',
+            type: 'bullish',
+            date: bar.date,
+            idx: i,
+            level: lvl.price,
+            desc: `Wick swept below ${lvl.name} (${lvl.price.toFixed(2)}) then closed back above — stop hunt below`,
+            category: 'liquidity',
+          });
+        }
+      }
+    }
+
+    // 3. Fakeout Detection — break above/below range then reversal within 3 bars
+    const range60High = Math.max(...history.slice(-60).map((r) => r.high));
+    const range60Low = Math.min(...history.slice(-60).map((r) => r.low));
+    for (let i = Math.max(recentWindow, 3); i < history.length - 2; i++) {
+      // Bearish fakeout: close above range, then 2 bars later close back inside
+      if (history[i].close > range60High && history[i + 1].close < range60High && history[i + 2].close < range60High) {
+        ipaPatterns.push({
+          name: 'Fakeout',
+          type: 'bearish',
+          date: history[i].date,
+          idx: i,
+          level: range60High,
+          desc: `Broke above 60-bar range (${range60High.toFixed(2)}) then failed — bearish fakeout`,
+          category: 'fakeout',
+        });
+      }
+      // Bullish fakeout: close below range, then 2 bars later close back inside
+      if (history[i].close < range60Low && history[i + 1].close > range60Low && history[i + 2].close > range60Low) {
+        ipaPatterns.push({
+          name: 'Fakeout',
+          type: 'bullish',
+          date: history[i].date,
+          idx: i,
+          level: range60Low,
+          desc: `Broke below 60-bar range (${range60Low.toFixed(2)}) then reclaimed — bullish fakeout`,
+          category: 'fakeout',
+        });
+      }
+    }
+
+    // 4. SR Flip / RS Flip — old support becomes resistance or vice versa
+    for (let i = 2; i < labeledSwings.length; i++) {
+      if (labeledSwings[i].idx < recentWindow) continue;
+      const curr = labeledSwings[i];
+      // SR Flip: old support (swing low) now acts as resistance (price approaches from below and reverses)
+      if (curr.type === 'H') {
+        for (let j = 0; j < i - 1; j++) {
+          if (labeledSwings[j].type === 'L' && Math.abs(curr.price - labeledSwings[j].price) < tolerance * 2 &&
+              curr.idx - labeledSwings[j].idx > 15 && curr.idx - labeledSwings[j].idx < 100) {
+            ipaPatterns.push({
+              name: 'SR Flip',
+              type: 'bearish',
+              date: curr.date,
+              idx: curr.idx,
+              level: labeledSwings[j].price,
+              desc: `Old support at ${labeledSwings[j].price.toFixed(2)} (${labeledSwings[j].date}) now acting as resistance`,
+              category: 'flip',
+            });
+            break;
+          }
+        }
+      }
+      // RS Flip: old resistance (swing high) now acts as support
+      if (curr.type === 'L') {
+        for (let j = 0; j < i - 1; j++) {
+          if (labeledSwings[j].type === 'H' && Math.abs(curr.price - labeledSwings[j].price) < tolerance * 2 &&
+              curr.idx - labeledSwings[j].idx > 15 && curr.idx - labeledSwings[j].idx < 100) {
+            ipaPatterns.push({
+              name: 'RS Flip',
+              type: 'bullish',
+              date: curr.date,
+              idx: curr.idx,
+              level: labeledSwings[j].price,
+              desc: `Old resistance at ${labeledSwings[j].price.toFixed(2)} (${labeledSwings[j].date}) now acting as support`,
+              category: 'flip',
+            });
+            break;
+          }
+        }
+      }
+    }
+
+    // 5. Compression → Expansion — narrowing ATR followed by expansion
+    const compressionPatterns = [];
+    for (let i = Math.max(recentWindow, 30); i < history.length - 5; i++) {
+      const atrSlice = atr14.slice(i - 10, i).filter((v) => Number.isFinite(v));
+      const atrAfter = atr14.slice(i, i + 5).filter((v) => Number.isFinite(v));
+      if (atrSlice.length < 8 || atrAfter.length < 3) continue;
+      const avgAtrBefore = atrSlice.reduce((a, b) => a + b, 0) / atrSlice.length;
+      const avgAtrAfter = atrAfter.reduce((a, b) => a + b, 0) / atrAfter.length;
+      const rangeSlice = history.slice(i - 10, i);
+      const rangeWidth = Math.max(...rangeSlice.map((r) => r.high)) - Math.min(...rangeSlice.map((r) => r.low));
+      const prevRangeSlice = history.slice(i - 20, i - 10);
+      const prevRangeWidth = prevRangeSlice.length > 5 ? Math.max(...prevRangeSlice.map((r) => r.high)) - Math.min(...prevRangeSlice.map((r) => r.low)) : rangeWidth;
+      // Compression: range narrowing + ATR contracting, then expansion
+      if (rangeWidth < prevRangeWidth * 0.65 && avgAtrAfter > avgAtrBefore * 1.4) {
+        const expansionDir = history[i + 4].close > history[i].close ? 'bullish' : 'bearish';
+        compressionPatterns.push({
+          name: 'Compression → Expansion',
+          type: expansionDir,
+          date: history[i].date,
+          idx: i,
+          level: history[i].close,
+          desc: `Range compressed ${((1 - rangeWidth / prevRangeWidth) * 100).toFixed(0)}% then ATR expanded ${((avgAtrAfter / avgAtrBefore - 1) * 100).toFixed(0)}% — ${expansionDir} breakout`,
+          category: 'compression',
+        });
+      }
+    }
+    // Keep only last 3 compression patterns to avoid noise
+    ipaPatterns.push(...compressionPatterns.slice(-3));
+
+    // 6. Supply/Demand Zones — strong impulse moves (large body candles with volume)
+    const supplyDemandZones = [];
+    for (let i = Math.max(recentWindow, 1); i < history.length; i++) {
+      const bar = history[i];
+      const body = Math.abs(bar.close - bar.open);
+      const range = bar.high - bar.low;
+      if (range <= 0) continue;
+      const bodyRatio = body / range;
+      const isLargeMove = body > atrNow * 1.5;
+      const isHighVolume = Number.isFinite(avgVolume20) && bar.volume > avgVolume20 * 1.5;
+      if (isLargeMove && bodyRatio > 0.6 && isHighVolume) {
+        if (bar.close > bar.open) {
+          supplyDemandZones.push({
+            name: 'Demand Zone',
+            type: 'bullish',
+            date: bar.date,
+            idx: i,
+            level: bar.low,
+            levelHigh: bar.open,
+            desc: `Strong bullish impulse candle — demand zone at ${bar.low.toFixed(2)}-${bar.open.toFixed(2)}`,
+            category: 'supply_demand',
+          });
+        } else {
+          supplyDemandZones.push({
+            name: 'Supply Zone',
+            type: 'bearish',
+            date: bar.date,
+            idx: i,
+            level: bar.open,
+            levelHigh: bar.high,
+            desc: `Strong bearish impulse candle — supply zone at ${bar.open.toFixed(2)}-${bar.high.toFixed(2)}`,
+            category: 'supply_demand',
+          });
+        }
+      }
+    }
+    ipaPatterns.push(...supplyDemandZones.slice(-5));
+
+    // 7. 3 Drive Pattern — three pushes to a high or low with diminishing momentum
+    for (let i = 4; i < labeledSwings.length; i++) {
+      if (labeledSwings[i].idx < recentWindow) continue;
+      // Bearish 3 drive: 3 consecutive higher highs with decreasing distance between them
+      if (labeledSwings[i].type === 'H' && labeledSwings[i].label === 'HH') {
+        const h3 = labeledSwings[i];
+        // Find 2 prior HH
+        const priorHHs = labeledSwings.slice(0, i).filter((s) => s.type === 'H').slice(-2);
+        if (priorHHs.length === 2 && priorHHs[0].price < priorHHs[1].price && priorHHs[1].price < h3.price) {
+          const push1 = priorHHs[1].price - priorHHs[0].price;
+          const push2 = h3.price - priorHHs[1].price;
+          if (push2 < push1 * 0.8 && push2 > 0) {
+            ipaPatterns.push({
+              name: '3 Drive',
+              type: 'bearish',
+              date: h3.date,
+              idx: h3.idx,
+              level: h3.price,
+              desc: `Three pushes to highs with diminishing momentum (${priorHHs[0].price.toFixed(2)} → ${priorHHs[1].price.toFixed(2)} → ${h3.price.toFixed(2)}) — exhaustion`,
+              category: 'reversal',
+            });
+          }
+        }
+      }
+      // Bullish 3 drive: 3 consecutive lower lows with decreasing distance
+      if (labeledSwings[i].type === 'L' && labeledSwings[i].label === 'LL') {
+        const l3 = labeledSwings[i];
+        const priorLLs = labeledSwings.slice(0, i).filter((s) => s.type === 'L').slice(-2);
+        if (priorLLs.length === 2 && priorLLs[0].price > priorLLs[1].price && priorLLs[1].price > l3.price) {
+          const push1 = priorLLs[0].price - priorLLs[1].price;
+          const push2 = priorLLs[1].price - l3.price;
+          if (push2 < push1 * 0.8 && push2 > 0) {
+            ipaPatterns.push({
+              name: '3 Drive',
+              type: 'bullish',
+              date: l3.date,
+              idx: l3.idx,
+              level: l3.price,
+              desc: `Three pushes to lows with diminishing momentum (${priorLLs[0].price.toFixed(2)} → ${priorLLs[1].price.toFixed(2)} → ${l3.price.toFixed(2)}) — exhaustion`,
+              category: 'reversal',
+            });
+          }
+        }
+      }
+    }
+
+    // 8. Flag Pattern — consolidation after impulse move
+    for (let i = Math.max(recentWindow, 15); i < history.length - 5; i++) {
+      // Check for impulse: 5 bars with strong directional move
+      const impulseSlice = history.slice(i - 5, i);
+      const impulseMove = impulseSlice[impulseSlice.length - 1].close - impulseSlice[0].close;
+      const impulseAbs = Math.abs(impulseMove);
+      if (impulseAbs < atrNow * 2.5) continue;
+      // Check for consolidation: next 5-10 bars with narrow range
+      const consolSlice = history.slice(i, Math.min(i + 10, history.length));
+      if (consolSlice.length < 5) continue;
+      const consolRange = Math.max(...consolSlice.map((r) => r.high)) - Math.min(...consolSlice.map((r) => r.low));
+      if (consolRange < impulseAbs * 0.5) {
+        ipaPatterns.push({
+          name: 'Flag',
+          type: impulseMove > 0 ? 'bullish' : 'bearish',
+          date: history[i].date,
+          idx: i,
+          level: history[i].close,
+          desc: `${impulseMove > 0 ? 'Bull' : 'Bear'} flag — ${impulseAbs.toFixed(2)} impulse followed by ${consolRange.toFixed(2)} range consolidation`,
+          category: 'continuation',
+        });
+      }
+    }
+
+    // 9. Double SSR (Support/Resistance) — price tests same level twice
+    for (let i = 1; i < swingLows.length; i++) {
+      if (swingLows[i].idx < recentWindow) continue;
+      if (Math.abs(swingLows[i].price - swingLows[i - 1].price) < tolerance * 1.5 &&
+          swingLows[i].idx - swingLows[i - 1].idx > 10 && swingLows[i].idx - swingLows[i - 1].idx < 80) {
+        ipaPatterns.push({
+          name: 'Double Support',
+          type: 'bullish',
+          date: swingLows[i].date,
+          idx: swingLows[i].idx,
+          level: (swingLows[i].price + swingLows[i - 1].price) / 2,
+          desc: `Price tested support at ~${((swingLows[i].price + swingLows[i - 1].price) / 2).toFixed(2)} twice (${swingLows[i - 1].date} & ${swingLows[i].date})`,
+          category: 'support_resistance',
+        });
+      }
+    }
+    for (let i = 1; i < swingHighs.length; i++) {
+      if (swingHighs[i].idx < recentWindow) continue;
+      if (Math.abs(swingHighs[i].price - swingHighs[i - 1].price) < tolerance * 1.5 &&
+          swingHighs[i].idx - swingHighs[i - 1].idx > 10 && swingHighs[i].idx - swingHighs[i - 1].idx < 80) {
+        ipaPatterns.push({
+          name: 'Double Resistance',
+          type: 'bearish',
+          date: swingHighs[i].date,
+          idx: swingHighs[i].idx,
+          level: (swingHighs[i].price + swingHighs[i - 1].price) / 2,
+          desc: `Price tested resistance at ~${((swingHighs[i].price + swingHighs[i - 1].price) / 2).toFixed(2)} twice (${swingHighs[i - 1].date} & ${swingHighs[i].date})`,
+          category: 'support_resistance',
+        });
+      }
+    }
+
+    // Sort patterns by date (most recent first) and deduplicate nearby patterns
+    ipaPatterns.sort((a, b) => b.idx - a.idx);
+    const dedupedPatterns = [];
+    for (const pat of ipaPatterns) {
+      const isDupe = dedupedPatterns.some((p) => p.name === pat.name && p.type === pat.type && Math.abs(p.idx - pat.idx) < 5);
+      if (!isDupe) dedupedPatterns.push(pat);
+    }
+
+    // Compute summary stats for institutional patterns
+    const bullishPatterns = dedupedPatterns.filter((p) => p.type === 'bullish');
+    const bearishPatterns = dedupedPatterns.filter((p) => p.type === 'bearish');
+    const recentPatterns = dedupedPatterns.filter((p) => p.idx >= history.length - 20);
+    const ipaCategories = {};
+    for (const p of dedupedPatterns) {
+      if (!ipaCategories[p.category]) ipaCategories[p.category] = [];
+      ipaCategories[p.category].push(p);
+    }
+
+    // Active supply/demand zones (zones that haven't been revisited)
+    const activeSDZones = supplyDemandZones.filter((z) => {
+      const lvl = z.type === 'bullish' ? z.level : z.levelHigh || z.level;
+      const barsAfter = history.slice(z.idx + 1);
+      const broken = barsAfter.some((b) => z.type === 'bullish' ? b.close < z.level : b.close > (z.levelHigh || z.level));
+      return !broken;
+    }).slice(-4);
+
+    // Current market structure bias from swing labels
+    const last5Swings = labeledSwings.slice(-5);
+    const structureBias = (() => {
+      const hhCount = last5Swings.filter((s) => s.label === 'HH').length;
+      const hlCount = last5Swings.filter((s) => s.label === 'HL').length;
+      const lhCount = last5Swings.filter((s) => s.label === 'LH').length;
+      const llCount = last5Swings.filter((s) => s.label === 'LL').length;
+      const bullScore = hhCount + hlCount;
+      const bearScore = lhCount + llCount;
+      if (bullScore >= 3) return { label: 'Bullish Structure', tone: 'positive', swings: last5Swings };
+      if (bearScore >= 3) return { label: 'Bearish Structure', tone: 'negative', swings: last5Swings };
+      return { label: 'Mixed Structure', tone: 'neutral', swings: last5Swings };
+    })();
+
     return {
       chartRows,
       zScoreRows,
@@ -2896,6 +3293,15 @@ function TradingTab({ data, theme }) {
       notes: {
         oiFunding: 'Not available for most equities via this feed; using price/volume behavior instead.',
       },
+      // Institutional Price Action
+      ipaPatterns: dedupedPatterns,
+      ipaBullish: bullishPatterns,
+      ipaBearish: bearishPatterns,
+      ipaRecent: recentPatterns,
+      ipaCategories,
+      ipaActiveSDZones: activeSDZones,
+      ipaStructureBias: structureBias,
+      ipaSwings: labeledSwings.slice(-20),
     };
   }, [data, timeframe]);
 
@@ -3658,6 +4064,246 @@ function TradingTab({ data, theme }) {
           </ul>
         </div>
       </div>
+
+      {/* Institutional Price Action Scanner */}
+      {analysis.ipaPatterns && (
+        <div className="space-y-6">
+          {/* IPA Header Card */}
+          <div className="p-6 rounded-2xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+              <div>
+                <h3 className="text-[10px] font-semibold tracking-widest uppercase mb-2 font-display" style={{ color: theme.textSecondary }}>Institutional Price Action</h3>
+                <div className="text-[10px] font-display" style={{ color: theme.textTertiary }}>
+                  QM, liquidity grabs, fakeouts, SR flips, compression, supply/demand, flags, 3-drive
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-1.5 rounded-full text-[10px] font-semibold border" style={{
+                  color: analysis.ipaStructureBias.tone === 'positive' ? theme.positive : analysis.ipaStructureBias.tone === 'negative' ? theme.negative : theme.warning,
+                  borderColor: `${analysis.ipaStructureBias.tone === 'positive' ? theme.positive : analysis.ipaStructureBias.tone === 'negative' ? theme.negative : theme.warning}55`,
+                  background: `${analysis.ipaStructureBias.tone === 'positive' ? theme.positive : analysis.ipaStructureBias.tone === 'negative' ? theme.negative : theme.warning}14`,
+                }}>
+                  {analysis.ipaStructureBias.label}
+                </div>
+              </div>
+            </div>
+
+            {/* Swing Structure Visualization */}
+            {analysis.ipaSwings.length > 0 && (
+              <div className="mb-4">
+                <div className="text-[10px] font-semibold tracking-widest uppercase mb-3 font-display" style={{ color: theme.textTertiary }}>Market Structure</div>
+                <div className="flex items-end gap-1.5 overflow-x-auto pb-1">
+                  {analysis.ipaSwings.map((swing, i) => {
+                    const isHH = swing.label === 'HH';
+                    const isHL = swing.label === 'HL';
+                    const isLH = swing.label === 'LH';
+                    const isLL = swing.label === 'LL';
+                    const color = (isHH || isHL) ? theme.positive : (isLH || isLL) ? theme.negative : theme.textTertiary;
+                    return (
+                      <div key={`swing-${i}`} className="flex flex-col items-center min-w-[48px]">
+                        <div className="text-[9px] font-bold" style={{ color }}>{swing.label}</div>
+                        <div className={`w-0.5 ${swing.type === 'H' ? 'h-6' : 'h-3'}`} style={{ background: color }} />
+                        <div className="w-2 h-2 rounded-full" style={{ background: color }} />
+                        <div className="text-[9px] mt-0.5" style={{ color: theme.textTertiary }}>{swing.price.toFixed(0)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Summary Stats Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <MetricCard
+                theme={theme}
+                label="Total Patterns"
+                value={`${analysis.ipaPatterns.length}`}
+                subtext={`${analysis.ipaRecent.length} in last 20 bars`}
+                helpText="Total institutional patterns detected in the scanning window (~120 bars)."
+              />
+              <MetricCard
+                theme={theme}
+                label="Bullish Signals"
+                value={`${analysis.ipaBullish.length}`}
+                tone={analysis.ipaBullish.length > analysis.ipaBearish.length ? 'positive' : 'neutral'}
+                helpText="Patterns suggesting institutional buying interest or demand."
+              />
+              <MetricCard
+                theme={theme}
+                label="Bearish Signals"
+                value={`${analysis.ipaBearish.length}`}
+                tone={analysis.ipaBearish.length > analysis.ipaBullish.length ? 'negative' : 'neutral'}
+                helpText="Patterns suggesting institutional selling interest or supply."
+              />
+              <MetricCard
+                theme={theme}
+                label="Bias"
+                value={analysis.ipaBullish.length > analysis.ipaBearish.length ? 'Bullish' : analysis.ipaBearish.length > analysis.ipaBullish.length ? 'Bearish' : 'Neutral'}
+                tone={analysis.ipaBullish.length > analysis.ipaBearish.length ? 'positive' : analysis.ipaBearish.length > analysis.ipaBullish.length ? 'negative' : 'neutral'}
+                helpText="Net institutional bias from detected patterns."
+              />
+            </div>
+          </div>
+
+          {/* Active Supply/Demand Zones */}
+          {analysis.ipaActiveSDZones.length > 0 && (
+            <div className="p-5 rounded-2xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+              <h4 className="text-[10px] font-semibold tracking-widest uppercase mb-3 font-display" style={{ color: theme.textSecondary }}>Active Institutional Zones</h4>
+              <div className="mb-3 text-[10px] rounded-lg border px-3 py-2" style={{ color: theme.textSecondary, borderColor: theme.border, background: theme.bgElevated }}>
+                Unfilled supply/demand zones where institutional orders may still be sitting. Price tends to revisit these zones.
+              </div>
+              <div className="space-y-2">
+                {analysis.ipaActiveSDZones.map((zone, i) => {
+                  const isActive = Math.abs(analysis.latest.close - zone.level) / zone.level < 0.03;
+                  return (
+                    <div
+                      key={`sd-${i}`}
+                      className="flex items-center justify-between p-3 rounded-xl border"
+                      style={{
+                        borderColor: isActive ? `${zone.type === 'bullish' ? theme.positive : theme.negative}55` : theme.border,
+                        background: isActive ? `${zone.type === 'bullish' ? theme.positive : theme.negative}08` : 'transparent',
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-8 rounded-full" style={{ background: zone.type === 'bullish' ? theme.positive : theme.negative }} />
+                        <div>
+                          <div className="text-[11px] font-semibold" style={{ color: zone.type === 'bullish' ? theme.positive : theme.negative }}>
+                            {zone.name} {isActive ? '(Price Nearby)' : ''}
+                          </div>
+                          <div className="text-[10px]" style={{ color: theme.textTertiary }}>
+                            ${zone.level.toFixed(2)}{zone.levelHigh ? ` - $${zone.levelHigh.toFixed(2)}` : ''} • {zone.date}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] font-semibold" style={{ color: theme.textSecondary }}>
+                          {((Math.abs(analysis.latest.close - zone.level) / zone.level) * 100).toFixed(1)}% away
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Pattern Feed — categorized */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {/* Recent Patterns (last 20 bars) */}
+            <div className="p-5 rounded-2xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+              <h4 className="text-[10px] font-semibold tracking-widest uppercase mb-3 font-display" style={{ color: theme.textSecondary }}>Recent Patterns</h4>
+              {analysis.ipaRecent.length === 0 ? (
+                <div className="text-[10px] p-6 rounded-xl border border-dashed text-center" style={{ color: theme.textTertiary, borderColor: theme.border }}>No patterns detected in the last 20 bars. Clean price action or consolidation phase.</div>
+              ) : (
+                <div className="space-y-2 max-h-[360px] overflow-y-auto">
+                  {analysis.ipaRecent.map((pat, i) => (
+                    <div
+                      key={`recent-${i}`}
+                      className="flex items-stretch gap-0 rounded-lg border overflow-hidden"
+                      style={{ borderColor: theme.border, background: theme.bgElevated }}
+                    >
+                      <div className="w-[3px] flex-shrink-0" style={{ background: pat.type === 'bullish' ? theme.positive : theme.negative }} />
+                      <div className="flex-1 min-w-0 p-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-semibold" style={{ color: pat.type === 'bullish' ? theme.positive : theme.negative }}>{pat.name}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded border font-medium" style={{ color: theme.textSecondary, borderColor: theme.borderHover, background: theme.bgElevated }}>{pat.category}</span>
+                        </div>
+                        <div className="text-[10px] mt-1" style={{ color: theme.textSecondary }}>{pat.desc}</div>
+                        <div className="text-[9px] mt-1" style={{ color: theme.textTertiary }}>{pat.date} • Level: ${pat.level.toFixed(2)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* All Patterns by Category */}
+            <div className="p-5 rounded-2xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+              <h4 className="text-[10px] font-semibold tracking-widest uppercase mb-3 font-display" style={{ color: theme.textSecondary }}>Patterns by Category</h4>
+              {analysis.ipaPatterns.length === 0 ? (
+                <div className="text-[10px] p-6 rounded-xl border border-dashed text-center" style={{ color: theme.textTertiary, borderColor: theme.border }}>No patterns detected in the scanning window.</div>
+              ) : (
+                <div className="space-y-3 max-h-[360px] overflow-y-auto">
+                  {Object.entries(analysis.ipaCategories).map(([cat, pats]) => {
+                    const catLabels = {
+                      reversal: { label: 'Reversal', icon: 'QM / 3 Drive' },
+                      liquidity: { label: 'Liquidity', icon: 'Stop Hunts / Grabs' },
+                      fakeout: { label: 'Fakeout', icon: 'Range Breaks' },
+                      flip: { label: 'SR/RS Flip', icon: 'Level Polarity' },
+                      compression: { label: 'Compression', icon: 'Squeeze → Expansion' },
+                      supply_demand: { label: 'Supply / Demand', icon: 'Institutional Zones' },
+                      continuation: { label: 'Continuation', icon: 'Flags / Pennants' },
+                      support_resistance: { label: 'Double SSR', icon: 'Level Tests' },
+                    };
+                    const catInfo = catLabels[cat] || { label: cat, icon: '' };
+                    const bullCount = pats.filter((p) => p.type === 'bullish').length;
+                    const bearCount = pats.filter((p) => p.type === 'bearish').length;
+                    return (
+                      <div key={cat}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold" style={{ color: theme.text }}>{catInfo.label}</span>
+                            <span className="text-[9px]" style={{ color: theme.textTertiary }}>{catInfo.icon}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[9px]">
+                            {bullCount > 0 && <span style={{ color: theme.positive }}>{bullCount} bull</span>}
+                            {bearCount > 0 && <span style={{ color: theme.negative }}>{bearCount} bear</span>}
+                          </div>
+                        </div>
+                        {pats.slice(0, 3).map((pat, j) => (
+                          <div
+                            key={`cat-${cat}-${j}`}
+                            className="flex items-center gap-2 py-1.5 px-2 rounded border-b last:border-b-0 text-[10px]"
+                            style={{ borderColor: theme.border }}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: pat.type === 'bullish' ? theme.positive : theme.negative }} />
+                            <span className="flex-1 truncate" style={{ color: theme.textSecondary }}>{pat.desc}</span>
+                            <span className="flex-shrink-0 text-[9px]" style={{ color: theme.textTertiary }}>{pat.date}</span>
+                          </div>
+                        ))}
+                        {pats.length > 3 && (
+                          <div className="text-[9px] pl-5 mt-0.5" style={{ color: theme.textTertiary }}>+{pats.length - 3} more</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* IPA Interpretation Guide */}
+          <div className="p-5 rounded-2xl shadow-sm border border-black/5 dark:border-white/5" style={{ background: theme.bgCard, borderColor: theme.border }}>
+            <button
+              onClick={() => setShowGuide((v) => !v)}
+              className="w-full flex items-center justify-between"
+            >
+              <h4 className="text-[10px] font-semibold tracking-widest uppercase font-display" style={{ color: theme.textSecondary }}>How Institutions Move Price</h4>
+              <span className="text-[10px] transition-transform duration-200" style={{ color: theme.textTertiary, transform: showGuide ? 'rotate(180deg)' : 'rotate(0deg)' }}>&#9662;</span>
+            </button>
+            {showGuide && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10px] mt-4 animate-fadeIn" style={{ color: theme.textSecondary }}>
+                <div className="p-3 rounded-lg border" style={{ borderColor: theme.border, background: theme.bgElevated }}>
+                  <div className="font-semibold mb-1" style={{ color: theme.text }}>Liquidity Grabs</div>
+                  Price sweeps above/below key levels to trigger stop losses, then reverses. The wick beyond the level is the grab — smart money filling orders where retail gets stopped out.
+                </div>
+                <div className="p-3 rounded-lg border" style={{ borderColor: theme.border, background: theme.bgElevated }}>
+                  <div className="font-semibold mb-1" style={{ color: theme.text }}>QM (Quasimodo)</div>
+                  A higher high followed by a lower low break (bearish), or lower low followed by higher high break (bullish). Shows the exact point where one side gets trapped and smart money reverses direction.
+                </div>
+                <div className="p-3 rounded-lg border" style={{ borderColor: theme.border, background: theme.bgElevated }}>
+                  <div className="font-semibold mb-1" style={{ color: theme.text }}>Supply/Demand</div>
+                  Strong impulse candles with high volume mark zones where institutions placed large orders. Price tends to revisit unfilled zones. These are where the real orders sit.
+                </div>
+                <div className="p-3 rounded-lg border" style={{ borderColor: theme.border, background: theme.bgElevated }}>
+                  <div className="font-semibold mb-1" style={{ color: theme.text }}>Compression</div>
+                  Narrowing range and declining volatility signal institutions accumulating before a move. The squeeze resolves into expansion — the tighter the squeeze, the bigger the move.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
