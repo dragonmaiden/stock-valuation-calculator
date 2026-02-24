@@ -11,8 +11,9 @@ Bugs and regressions found by QA Agent (Sentinel). Dev Agent (Draco) picks these
 - **Problem**: `npm run build` succeeds but emits warning: `metadata.metadataBase is not set`, causing social metadata URLs to resolve against `http://localhost:3000`.
 - **Suggested fix**: Set `metadataBase` to the production site URL in app metadata config (e.g., `new URL('https://<your-domain>')`).
 
-## [DATA] Multi-ticker — `metrics.netIncomePerShare` uses Yahoo sharesOutstanding instead of SEC diluted shares
+## ~~[DATA] Multi-ticker — `metrics.netIncomePerShare` uses Yahoo sharesOutstanding instead of SEC diluted shares~~ FIXED
 - **Severity**: HIGH
+- **Status**: FIXED — `sharesForYear()` now matches by end date first (most precise), then by year, with Maps built newest-last so recent filings take priority.
 - **Tickers checked**: TSLA, NET, DOCN
 - **Metric**: `metrics[].netIncomePerShare`
 - **App shows**:
@@ -42,8 +43,9 @@ Bugs and regressions found by QA Agent (Sentinel). Dev Agent (Draco) picks these
 - **File to check**: `app/api/stock/route.js` (`quote.pe` from `yahooQuote?.trailingPE`)
 - **How to verify**: Compare API response `/api/stock?ticker=DOCN` with `https://finance.yahoo.com/quote/DOCN/` PE Ratio (TTM) at the same timestamp.
 
-## [DATA] AVGO — `balance.totalDebt` missing current debt tags
+## ~~[DATA] AVGO — `balance.totalDebt` missing current debt tags~~ FIXED
 - **Severity**: CRITICAL
+- **Status**: FIXED — `debtFields` expanded with `DebtLongtermAndShorttermCombinedAmount`, `LongTermDebtAndCapitalLeaseObligations`, `ConvertibleLongTermNotesPayable`. Most comprehensive tags ordered first.
 - **Ticker**: AVGO
 - **Metric**: `balance[-1].totalDebt` (FY2025)
 - **App shows**: **0**
@@ -53,8 +55,9 @@ Bugs and regressions found by QA Agent (Sentinel). Dev Agent (Draco) picks these
 - **File to check**: `app/api/stock/route.js` (`debtFields`, `balance.totalDebt`, `ratios.debtToEquityRatio`)
 - **How to verify**: Compare `/api/stock?ticker=AVGO` with SEC companyfacts `CIK0001730168` debt tags for FY2025.
 
-## [DATA] ZS — `balance.totalDebt` drops to zero despite outstanding convertible notes
+## ~~[DATA] ZS — `balance.totalDebt` drops to zero despite outstanding convertible notes~~ FIXED
 - **Severity**: HIGH
+- **Status**: FIXED — `ConvertibleLongTermNotesPayable` added to `debtFields`.
 - **Ticker**: ZS
 - **Metric**: `balance[-1].totalDebt` (FY2025)
 - **App shows**: **0**

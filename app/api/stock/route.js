@@ -459,7 +459,13 @@ export async function GET(request) {
       'PropertyPlantAndEquipmentAndSoftwareNet',
     ];
     const cashFields = ['CashAndCashEquivalentsAtCarryingValue', 'Cash'];
-    const debtFields = ['LongTermDebt', 'LongTermDebtNoncurrent'];
+    const debtFields = [
+      'DebtLongtermAndShorttermCombinedAmount',   // most comprehensive — includes all debt
+      'LongTermDebtAndCapitalLeaseObligations',   // long-term + leases
+      'LongTermDebt',                              // standard long-term debt
+      'LongTermDebtNoncurrent',                    // non-current portion
+      'ConvertibleLongTermNotesPayable',           // convertible notes (ZS, etc.)
+    ];
     const operatingCashFlowFields = ['NetCashProvidedByUsedInOperatingActivities'];
     const capexFields = [
       'PaymentsToAcquirePropertyPlantAndEquipment',
@@ -1145,9 +1151,18 @@ export async function GET(request) {
       : null;
     const currentPrice = Number.isFinite(quote.price) && quote.price > 0 ? quote.price : null;
 
-    const dilutedSharesByYear = new Map(sharesDilutedAnnual.map((s) => [String(s.fy), s.val]));
-    const basicSharesByYear = new Map(sharesBasicAnnual.map((s) => [String(s.fy), s.val]));
-    const sharesForYear = (year) => {
+    // Build shares maps keyed by end date (most precise) and by year (fallback).
+    // Iterate in reverse (oldest first) so newest entries win per key.
+    const dilutedSharesByEnd = new Map(sharesDilutedAnnual.slice().reverse().map((s) => [s.end, s.val]));
+    const basicSharesByEnd = new Map(sharesBasicAnnual.slice().reverse().map((s) => [s.end, s.val]));
+    const dilutedSharesByYear = new Map(sharesDilutedAnnual.slice().reverse().map((s) => [String(s.fy), s.val]));
+    const basicSharesByYear = new Map(sharesBasicAnnual.slice().reverse().map((s) => [String(s.fy), s.val]));
+    const sharesForYear = (year, endDate) => {
+      // Try exact end-date match first (most accurate)
+      if (endDate) {
+        const byEnd = dilutedSharesByEnd.get(endDate) || basicSharesByEnd.get(endDate);
+        if (Number.isFinite(byEnd) && byEnd > 0) return byEnd;
+      }
       const yearVal = dilutedSharesByYear.get(String(year)) || basicSharesByYear.get(String(year));
       if (Number.isFinite(yearVal) && yearVal > 0) return yearVal;
       return sharesOutstanding;
@@ -1185,7 +1200,7 @@ export async function GET(request) {
     for (let i = 0; i < metrics.length; i++) {
       const inc = income[i] || {};
       const bal = balance[i] || {};
-      const metricShares = sharesForYear(inc.calendarYear);
+      const metricShares = sharesForYear(inc.calendarYear, inc.date);
       metrics[i].netIncomePerShare = metricShares && Number.isFinite(inc.netIncome) ? inc.netIncome / metricShares : null;
       metrics[i].bookValuePerShare = metricShares && Number.isFinite(bal.totalEquity) ? bal.totalEquity / metricShares : null;
     }
@@ -1461,7 +1476,7 @@ export async function GET(request) {
     const valuationRatios = income.map((inc, i) => {
       const bal = balanceByYear.get(String(inc.calendarYear)) || {};
       const year = inc.calendarYear;
-      const yearShares = sharesForYear(year);
+      const yearShares = sharesForYear(year, inc.date);
       const historicalPrice = historicalPriceAtOrBefore(inc.date);
 
       // EPS and per-share metrics
@@ -1471,7 +1486,7 @@ export async function GET(request) {
 
       // Calculate growth rates for PEG/PSG
       const prevIncome = income[i - 1];
-      const prevYearShares = prevIncome ? sharesForYear(prevIncome.calendarYear) : null;
+      const prevYearShares = prevIncome ? sharesForYear(prevIncome.calendarYear, prevIncome.date) : null;
       const prevEps = prevIncome && prevYearShares > 0 ? (prevIncome.netIncome / prevYearShares) : null;
       const epsGrowth = prevEps && prevEps !== 0
         ? (eps - prevEps) / prevEps
@@ -1634,8 +1649,10 @@ export async function GET(request) {
 
     const latestIncomeYear = income[income.length - 1]?.calendarYear;
     const prevIncomeYear = income[income.length - 2]?.calendarYear;
-    const latestSharesForGrowth = latestIncomeYear ? sharesForYear(latestIncomeYear) : currentShares;
-    const prevSharesForGrowth = prevIncomeYear ? sharesForYear(prevIncomeYear) : currentShares;
+    const latestIncomeDate = income[income.length - 1]?.date;
+    const prevIncomeDate = income[income.length - 2]?.date;
+    const latestSharesForGrowth = latestIncomeYear ? sharesForYear(latestIncomeYear, latestIncomeDate) : currentShares;
+    const prevSharesForGrowth = prevIncomeYear ? sharesForYear(prevIncomeYear, prevIncomeDate) : currentShares;
     const latestEps = latestSharesForGrowth ? latestNetIncome / latestSharesForGrowth : null;
     const prevNetIncome = income[income.length - 2]?.netIncome;
     const prevEps = prevSharesForGrowth && prevNetIncome ? prevNetIncome / prevSharesForGrowth : null;
